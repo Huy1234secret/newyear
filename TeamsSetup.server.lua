@@ -106,7 +106,13 @@ local roundStateRemote = getOrCreateRemote("RoundState")
 local mapsFolder = ReplicatedStorage:FindFirstChild("Maps")
 local skyboxFolder = ReplicatedStorage:FindFirstChild("Skybox")
 local gearsFolder = ReplicatedStorage:FindFirstChild("PVPGears")
-local stormTemplate = ReplicatedStorage:FindFirstChild("StormPart") :: BasePart?
+local stormMeshTemplate: MeshPart? = nil
+do
+    local templateCandidate = ReplicatedStorage:FindFirstChild("StormPart")
+    if templateCandidate and templateCandidate:IsA("MeshPart") then
+        stormMeshTemplate = templateCandidate
+    end
+end
 
 ReplicatedStorage.ChildAdded:Connect(function(child)
     if child.Name == "Maps" and child:IsA("Folder") then
@@ -115,8 +121,8 @@ ReplicatedStorage.ChildAdded:Connect(function(child)
         skyboxFolder = child
     elseif child.Name == "PVPGears" and child:IsA("Folder") then
         gearsFolder = child
-    elseif child.Name == "StormPart" and child:IsA("BasePart") then
-        stormTemplate = child
+    elseif child.Name == "StormPart" and child:IsA("MeshPart") then
+        stormMeshTemplate = child
     end
 end)
 
@@ -127,8 +133,8 @@ ReplicatedStorage.ChildRemoved:Connect(function(child)
         skyboxFolder = nil
     elseif child == gearsFolder then
         gearsFolder = nil
-    elseif child == stormTemplate then
-        stormTemplate = nil
+    elseif child == stormMeshTemplate then
+        stormMeshTemplate = nil
     end
 end)
 
@@ -789,8 +795,8 @@ local function beginDeathMatch(roundId: number)
 
     local stormPart: BasePart
     local usedTemplate = false
-    if stormTemplate and stormTemplate:IsA("BasePart") then
-        stormPart = stormTemplate:Clone()
+    if stormMeshTemplate then
+        stormPart = stormMeshTemplate:Clone()
         usedTemplate = true
     else
         stormPart = Instance.new("Part")
@@ -803,10 +809,10 @@ local function beginDeathMatch(roundId: number)
     stormPart.CanTouch = false
     stormPart.Anchored = true
     stormPart.CastShadow = false
-    stormPart.Transparency = 0.5
-    stormPart.Color = Color3.fromRGB(255, 0, 0)
 
     if not usedTemplate then
+        stormPart.Transparency = 0.5
+        stormPart.Color = Color3.fromRGB(255, 0, 0)
         stormPart.Material = Enum.Material.Neon
         stormPart.Size = Vector3.new(600, 1000, 600)
     end
