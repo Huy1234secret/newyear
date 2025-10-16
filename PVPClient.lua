@@ -6,6 +6,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
+local ContextActionService = game:GetService("ContextActionService")
+local UserInputService = game:GetService("UserInputService")
 
 local localPlayer = Players.LocalPlayer
 if not localPlayer then
@@ -83,13 +85,122 @@ labelStroke.Thickness = 2
 labelStroke.Transparency = 0.3
 labelStroke.Parent = statusLabel
 
+local sprintContainer = Instance.new("Frame")
+sprintContainer.Name = "SprintEnergyContainer"
+sprintContainer.Size = UDim2.new(1, 0, 0, 48)
+sprintContainer.Position = UDim2.new(0.5, 0, 1, 0)
+sprintContainer.AnchorPoint = Vector2.new(0.5, 1)
+sprintContainer.BackgroundTransparency = 1
+sprintContainer.ZIndex = 5
+sprintContainer.Parent = screenGui
+
+local sprintPadding = Instance.new("UIPadding")
+sprintPadding.PaddingLeft = UDim.new(0, 32)
+sprintPadding.PaddingRight = UDim.new(0, 32)
+sprintPadding.PaddingBottom = UDim.new(0, 12)
+sprintPadding.Parent = sprintContainer
+
+local sprintBackground = Instance.new("Frame")
+sprintBackground.Name = "EnergyBackground"
+sprintBackground.Size = UDim2.new(1, 0, 1, -12)
+sprintBackground.Position = UDim2.new(0, 0, 0, 0)
+sprintBackground.BackgroundColor3 = Color3.fromRGB(20, 24, 35)
+sprintBackground.BackgroundTransparency = 0.2
+sprintBackground.Parent = sprintContainer
+
+local sprintBackgroundCorner = Instance.new("UICorner")
+sprintBackgroundCorner.CornerRadius = UDim.new(0, 14)
+sprintBackgroundCorner.Parent = sprintBackground
+
+local sprintBackgroundStroke = Instance.new("UIStroke")
+sprintBackgroundStroke.Thickness = 1.5
+sprintBackgroundStroke.Transparency = 0.35
+sprintBackgroundStroke.Color = Color3.fromRGB(80, 100, 150)
+sprintBackgroundStroke.Parent = sprintBackground
+
+local energyFillContainer = Instance.new("Frame")
+energyFillContainer.Name = "EnergyFill"
+energyFillContainer.AnchorPoint = Vector2.new(0, 0.5)
+energyFillContainer.Position = UDim2.new(0, 8, 0.5, 0)
+energyFillContainer.Size = UDim2.new(1, -120, 0, 18)
+energyFillContainer.BackgroundTransparency = 1
+energyFillContainer.ClipsDescendants = true
+energyFillContainer.Parent = sprintBackground
+
+local energyFillBackground = Instance.new("Frame")
+energyFillBackground.Name = "EnergyFillBackground"
+energyFillBackground.Size = UDim2.new(1, 0, 1, 0)
+energyFillBackground.BackgroundColor3 = Color3.fromRGB(45, 52, 70)
+energyFillBackground.BackgroundTransparency = 0.4
+energyFillBackground.Parent = energyFillContainer
+
+local energyFillBackgroundCorner = Instance.new("UICorner")
+energyFillBackgroundCorner.CornerRadius = UDim.new(0, 9)
+energyFillBackgroundCorner.Parent = energyFillBackground
+
+energyBarFill = Instance.new("Frame")
+energyBarFill.Name = "EnergyFillValue"
+energyBarFill.AnchorPoint = Vector2.new(0, 0.5)
+energyBarFill.Position = UDim2.new(0, 0, 0.5, 0)
+energyBarFill.Size = UDim2.new(1, 0, 1, 0)
+energyBarFill.BackgroundColor3 = Color3.fromRGB(80, 190, 255)
+energyBarFill.Parent = energyFillBackground
+
+local energyFillCorner = Instance.new("UICorner")
+energyFillCorner.CornerRadius = UDim.new(0, 9)
+energyFillCorner.Parent = energyBarFill
+
+local energyFillGradient = Instance.new("UIGradient")
+energyFillGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 190, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 240, 200)),
+})
+energyFillGradient.Parent = energyBarFill
+
+energyTextLabel = Instance.new("TextLabel")
+energyTextLabel.Name = "EnergyText"
+energyTextLabel.AnchorPoint = Vector2.new(1, 0.5)
+energyTextLabel.Position = UDim2.new(1, -12, 0.5, 0)
+energyTextLabel.Size = UDim2.new(0, 96, 0, 24)
+energyTextLabel.BackgroundTransparency = 1
+energyTextLabel.Font = Enum.Font.GothamSemibold
+energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
+energyTextLabel.TextScaled = false
+energyTextLabel.TextSize = 18
+energyTextLabel.TextXAlignment = Enum.TextXAlignment.Right
+energyTextLabel.TextYAlignment = Enum.TextYAlignment.Center
+energyTextLabel.Text = "Energy 100%"
+energyTextLabel.Parent = sprintBackground
+
+if UserInputService.TouchEnabled then
+    mobileCursorImage = Instance.new("ImageLabel")
+    mobileCursorImage.Name = "ShiftLockCursor"
+    mobileCursorImage.BackgroundTransparency = 1
+    mobileCursorImage.AnchorPoint = Vector2.new(0.5, 0.5)
+    mobileCursorImage.Position = UDim2.fromScale(0.5, 0.5)
+    mobileCursorImage.Size = UDim2.fromOffset(48, 48)
+    mobileCursorImage.Image = cursorImageAsset
+    mobileCursorImage.ZIndex = 50
+    mobileCursorImage.Visible = false
+    mobileCursorImage.Parent = screenGui
+end
 local defaultColor = statusLabel.TextColor3
 local countdownColor = Color3.fromRGB(245, 245, 255)
 local matchColor = Color3.fromRGB(210, 235, 255)
 local deathMatchBackground = Color3.fromRGB(60, 10, 10)
 local deathMatchStroke = Color3.fromRGB(255, 90, 90)
-local neutralOutlineColor = Color3.fromRGB(255, 70, 70)
-local spectateOutlineColor = Color3.fromRGB(255, 255, 255)
+local highlightStyles = {
+    Spectate = {
+        outlineColor = Color3.fromRGB(255, 255, 255),
+        fillColor = Color3.fromRGB(255, 255, 255),
+        fillTransparency = 0.5,
+    },
+    DeathMatch = {
+        outlineColor = Color3.fromRGB(255, 0, 0),
+        fillColor = Color3.fromRGB(255, 0, 0),
+        fillTransparency = 0.5,
+    },
+}
 
 local baseFramePosition = statusFrame.Position
 local baseLabelPosition = statusLabel.Position
@@ -104,14 +215,62 @@ local transitionState = {
 
 type HighlightConnections = {RBXScriptConnection}
 
+type HighlightStyle = {
+    outlineColor: Color3,
+    fillColor: Color3,
+    fillTransparency: number,
+}
+
 local highlightState = {
     active = false,
-    color = nil :: Color3?,
+    context = nil :: string?,
+    style = nil :: HighlightStyle?,
     highlights = {} :: {[Player]: Highlight},
     playerConnections = {} :: {[Player]: HighlightConnections},
     playerAddedConn = nil :: RBXScriptConnection?,
     playerRemovingConn = nil :: RBXScriptConnection?,
 }
+
+type SprintState = {
+    energy: number,
+    isSprinting: boolean,
+    sprintIntent: boolean,
+    rechargeBlockedUntil: number,
+    originalWalkSpeed: number,
+    speedTween: Tween?,
+    cameraTween: Tween?,
+    originalCameraFov: number?,
+}
+
+local MAX_SPRINT_ENERGY = 100
+local SPRINT_DRAIN_RATE = 10
+local SPRINT_RECHARGE_RATE = 20
+local SPRINT_RECHARGE_DELAY = 2
+local SPRINT_SPEED = 28
+local SPRINT_TWEEN_TIME = 1
+local SPRINT_FOV_OFFSET = 8
+
+local sprintState: SprintState = {
+    energy = MAX_SPRINT_ENERGY,
+    isSprinting = false,
+    sprintIntent = false,
+    rechargeBlockedUntil = 0,
+    originalWalkSpeed = 16,
+    speedTween = nil,
+    cameraTween = nil,
+    originalCameraFov = nil,
+}
+
+local currentHumanoid: Humanoid? = nil
+local humanoidSpeedChangedConn: RBXScriptConnection? = nil
+
+local energyBarFill: Frame? = nil
+local energyTextLabel: TextLabel? = nil
+
+local cursorImageAsset = "rbxassetid://9925913476"
+local mouse = if UserInputService.TouchEnabled then nil else localPlayer:GetMouse()
+local mobileCursorImage: ImageLabel? = nil
+local applyingMouseIcon = false
 
 local function removeHighlightForPlayer(targetPlayer: Player)
     local highlight = highlightState.highlights[targetPlayer]
@@ -131,17 +290,17 @@ local function clearConnectionsForPlayer(targetPlayer: Player)
     end
 end
 
-local function getOutlineColorForLocalPlayer(): Color3?
+local function getHighlightStyleForLocalPlayer(): HighlightStyle?
     local team = localPlayer.Team
     if not team then
         return nil
     end
 
     local teamName = team.Name
-    if teamName == "Neutral" then
-        return neutralOutlineColor
-    elseif teamName == "Spectate" then
-        return spectateOutlineColor
+    if teamName == "Spectate" then
+        return highlightStyles.Spectate
+    elseif teamName == "Neutral" and highlightState.context == "DeathMatch" then
+        return highlightStyles.DeathMatch
     end
 
     return nil
@@ -155,7 +314,7 @@ local function updateHighlightForPlayer(targetPlayer: Player)
 
     local highlight = highlightState.highlights[targetPlayer]
     local shouldShow = highlightState.active
-        and highlightState.color ~= nil
+        and highlightState.style ~= nil
         and targetPlayer.Team ~= nil
         and targetPlayer.Team.Name == "Neutral"
 
@@ -177,25 +336,29 @@ local function updateHighlightForPlayer(targetPlayer: Player)
 
     if not highlight then
         highlight = Instance.new("Highlight")
-        highlight.Name = "DeathMatchTransitionOutline"
+        highlight.Name = "DeathMatchTransitionHighlight"
         highlight.FillTransparency = 1
         highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         highlightState.highlights[targetPlayer] = highlight
     end
 
-    highlight.OutlineColor = highlightState.color or neutralOutlineColor
+    local style = highlightState.style or highlightStyles.DeathMatch
+    highlight.OutlineColor = style.outlineColor
+    highlight.FillColor = style.fillColor
+    highlight.FillTransparency = style.fillTransparency
+    highlight.OutlineTransparency = 0
     highlight.Adornee = character
     highlight.Parent = character
 end
 
-local function refreshLocalOutlineColor()
+local function refreshHighlightStyle()
     if not highlightState.active then
         return
     end
 
-    local newColor = getOutlineColorForLocalPlayer()
-    if not newColor then
-        highlightState.color = nil
+    local newStyle = getHighlightStyleForLocalPlayer()
+    if not newStyle then
+        highlightState.style = nil
         for player, highlight in highlightState.highlights do
             highlight:Destroy()
         end
@@ -203,10 +366,12 @@ local function refreshLocalOutlineColor()
         return
     end
 
-    highlightState.color = newColor
+    highlightState.style = newStyle
 
     for _, highlight in highlightState.highlights do
-        highlight.OutlineColor = newColor
+        highlight.OutlineColor = newStyle.outlineColor
+        highlight.FillColor = newStyle.fillColor
+        highlight.FillTransparency = newStyle.fillTransparency
     end
 
     for _, player in Players:GetPlayers() do
@@ -238,7 +403,8 @@ local function disableDeathMatchTransitionVisuals()
     table.clear(highlightState.highlights)
 
     highlightState.active = false
-    highlightState.color = nil
+    highlightState.context = nil
+    highlightState.style = nil
 end
 
 local function trackPlayerForHighlights(targetPlayer: Player)
@@ -271,18 +437,20 @@ end
 
 local function enableDeathMatchTransitionVisuals()
     if highlightState.active then
-        refreshLocalOutlineColor()
+        refreshHighlightStyle()
         return
     end
 
-    local outlineColor = getOutlineColorForLocalPlayer()
-    if not outlineColor then
+    highlightState.context = "DeathMatch"
+
+    local style = getHighlightStyleForLocalPlayer()
+    if not style then
         disableDeathMatchTransitionVisuals()
         return
     end
 
     highlightState.active = true
-    highlightState.color = outlineColor
+    highlightState.style = style
 
     for _, player in Players:GetPlayers() do
         trackPlayerForHighlights(player)
@@ -299,7 +467,170 @@ local function enableDeathMatchTransitionVisuals()
         removeHighlightForPlayer(player)
     end)
 
-    refreshLocalOutlineColor()
+    refreshHighlightStyle()
+end
+
+local function updateEnergyUI()
+    if not energyBarFill or not energyTextLabel then
+        return
+    end
+
+    local normalized = math.clamp(sprintState.energy / MAX_SPRINT_ENERGY, 0, 1)
+    if normalized <= 0 then
+        energyBarFill.Visible = false
+    else
+        energyBarFill.Visible = true
+        energyBarFill.Size = UDim2.new(normalized, 0, 1, 0)
+    end
+
+    local percent = math.clamp(math.floor(normalized * 100 + 0.5), 0, 100)
+    energyTextLabel.Text = string.format("Energy %d%%", percent)
+
+    if percent <= 15 then
+        energyTextLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
+    elseif sprintState.isSprinting then
+        energyTextLabel.TextColor3 = Color3.fromRGB(180, 255, 220)
+    else
+        energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
+    end
+end
+
+local function tweenHumanoidSpeed(targetSpeed: number, instant: boolean)
+    local humanoid = currentHumanoid
+    if not humanoid then
+        return
+    end
+
+    if sprintState.speedTween then
+        sprintState.speedTween:Cancel()
+        sprintState.speedTween = nil
+    end
+
+    if instant then
+        humanoid.WalkSpeed = targetSpeed
+        return
+    end
+
+    local tween = TweenService:Create(humanoid, TweenInfo.new(SPRINT_TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        WalkSpeed = targetSpeed,
+    })
+    sprintState.speedTween = tween
+    tween.Completed:Connect(function()
+        if sprintState.speedTween == tween then
+            sprintState.speedTween = nil
+        end
+    end)
+    tween:Play()
+end
+
+local function tweenCameraFov(targetFov: number, instant: boolean)
+    local camera = Workspace.CurrentCamera
+    if not camera then
+        return
+    end
+
+    if sprintState.cameraTween then
+        sprintState.cameraTween:Cancel()
+        sprintState.cameraTween = nil
+    end
+
+    if instant then
+        camera.FieldOfView = targetFov
+        return
+    end
+
+    local tween = TweenService:Create(camera, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        FieldOfView = targetFov,
+    })
+    sprintState.cameraTween = tween
+    tween.Completed:Connect(function()
+        if sprintState.cameraTween == tween then
+            sprintState.cameraTween = nil
+        end
+    end)
+    tween:Play()
+end
+
+local function stopSprinting(instant: boolean)
+    local wasSprinting = sprintState.isSprinting
+    sprintState.isSprinting = false
+
+    if wasSprinting then
+        sprintState.rechargeBlockedUntil = os.clock() + SPRINT_RECHARGE_DELAY
+    end
+
+    if currentHumanoid then
+        tweenHumanoidSpeed(sprintState.originalWalkSpeed, instant)
+    end
+
+    if sprintState.originalCameraFov then
+        tweenCameraFov(sprintState.originalCameraFov, instant)
+        sprintState.originalCameraFov = nil
+    end
+
+    updateEnergyUI()
+end
+
+local function startSprinting()
+    if sprintState.isSprinting then
+        return
+    end
+
+    if sprintState.energy <= 0 then
+        return
+    end
+
+    local humanoid = currentHumanoid
+    if not humanoid then
+        return
+    end
+
+    sprintState.isSprinting = true
+    sprintState.originalWalkSpeed = humanoid.WalkSpeed
+
+    tweenHumanoidSpeed(SPRINT_SPEED, false)
+
+    local camera = Workspace.CurrentCamera
+    if camera then
+        if not sprintState.originalCameraFov then
+            sprintState.originalCameraFov = camera.FieldOfView
+        end
+        local targetFov = math.clamp(sprintState.originalCameraFov + SPRINT_FOV_OFFSET, 5, 120)
+        tweenCameraFov(targetFov, false)
+    end
+
+    updateEnergyUI()
+end
+
+local function resetSprintState()
+    stopSprinting(true)
+    sprintState.sprintIntent = false
+    sprintState.energy = MAX_SPRINT_ENERGY
+    sprintState.rechargeBlockedUntil = 0
+    sprintState.speedTween = nil
+    sprintState.cameraTween = nil
+    sprintState.originalCameraFov = nil
+    updateEnergyUI()
+end
+
+local function applyDesktopCursorIcon()
+    if not mouse then
+        return
+    end
+
+    if mouse.Icon ~= cursorImageAsset then
+        applyingMouseIcon = true
+        mouse.Icon = cursorImageAsset
+        applyingMouseIcon = false
+    end
+end
+
+local function updateMobileCursorVisibility()
+    if not mobileCursorImage then
+        return
+    end
+
+    mobileCursorImage.Visible = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
 end
 
 local function playDeathMatchCameraSequence()
@@ -355,7 +686,139 @@ local function startDeathMatchTransition(duration: number?)
 end
 
 localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
-    refreshLocalOutlineColor()
+    refreshHighlightStyle()
+end)
+
+if mouse then
+    UserInputService.MouseIconEnabled = true
+    UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.ForceShow
+    applyDesktopCursorIcon()
+
+    mouse:GetPropertyChangedSignal("Icon"):Connect(function()
+        if not applyingMouseIcon then
+            applyDesktopCursorIcon()
+        end
+    end)
+end
+
+UserInputService:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
+    if mouse then
+        applyDesktopCursorIcon()
+    end
+    updateMobileCursorVisibility()
+end)
+
+UserInputService.WindowFocusReleased:Connect(function()
+    sprintState.sprintIntent = false
+    stopSprinting(true)
+end)
+
+updateMobileCursorVisibility()
+updateEnergyUI()
+
+local function onHumanoidAdded(humanoid: Humanoid)
+    if humanoidSpeedChangedConn then
+        humanoidSpeedChangedConn:Disconnect()
+        humanoidSpeedChangedConn = nil
+    end
+
+    currentHumanoid = humanoid
+    sprintState.originalWalkSpeed = humanoid.WalkSpeed
+
+    humanoidSpeedChangedConn = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+        if not sprintState.isSprinting then
+            sprintState.originalWalkSpeed = humanoid.WalkSpeed
+        end
+    end)
+
+    humanoid.Died:Connect(function()
+        sprintState.sprintIntent = false
+        stopSprinting(true)
+    end)
+end
+
+local function onCharacterAdded(character: Model)
+    resetSprintState()
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        onHumanoidAdded(humanoid)
+    else
+        local pendingConn: RBXScriptConnection?
+        pendingConn = character.ChildAdded:Connect(function(child)
+            if child:IsA("Humanoid") then
+                if pendingConn then
+                    pendingConn:Disconnect()
+                    pendingConn = nil
+                end
+                onHumanoidAdded(child)
+            end
+        end)
+    end
+end
+
+localPlayer.CharacterAdded:Connect(onCharacterAdded)
+
+localPlayer.CharacterRemoving:Connect(function()
+    sprintState.sprintIntent = false
+    stopSprinting(true)
+    if humanoidSpeedChangedConn then
+        humanoidSpeedChangedConn:Disconnect()
+        humanoidSpeedChangedConn = nil
+    end
+    currentHumanoid = nil
+end)
+
+if localPlayer.Character then
+    onCharacterAdded(localPlayer.Character)
+else
+    resetSprintState()
+end
+
+local function sprintAction(_: string, inputState: Enum.UserInputState, _inputObject: InputObject?): Enum.ContextActionResult
+    if inputState == Enum.UserInputState.Begin then
+        sprintState.sprintIntent = true
+        if sprintState.energy > 0 then
+            startSprinting()
+        end
+        return Enum.ContextActionResult.Sink
+    elseif inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
+        sprintState.sprintIntent = false
+        stopSprinting(false)
+        return Enum.ContextActionResult.Sink
+    end
+
+    return Enum.ContextActionResult.Pass
+end
+
+ContextActionService:BindAction("SprintAction", sprintAction, true, Enum.KeyCode.LeftShift, Enum.KeyCode.RightShift, Enum.KeyCode.ButtonL3)
+ContextActionService:SetTitle("SprintAction", "Sprint")
+ContextActionService:SetImage("SprintAction", cursorImageAsset)
+
+RunService.Heartbeat:Connect(function(deltaTime)
+    local dt = math.max(deltaTime, 0)
+    local now = os.clock()
+
+    if sprintState.sprintIntent and not sprintState.isSprinting and sprintState.energy > 0 then
+        startSprinting()
+    end
+
+    if sprintState.isSprinting then
+        sprintState.energy = math.max(0, sprintState.energy - dt * SPRINT_DRAIN_RATE)
+        sprintState.rechargeBlockedUntil = now + SPRINT_RECHARGE_DELAY
+        if sprintState.energy <= 0 then
+            sprintState.energy = 0
+            stopSprinting(false)
+        end
+    elseif sprintState.energy < MAX_SPRINT_ENERGY and now >= sprintState.rechargeBlockedUntil then
+        sprintState.energy = math.min(MAX_SPRINT_ENERGY, sprintState.energy + dt * SPRINT_RECHARGE_RATE)
+    end
+
+    updateEnergyUI()
+
+    if mouse and not applyingMouseIcon and mouse.Icon ~= cursorImageAsset then
+        applyDesktopCursorIcon()
+    end
 end)
 
 local function resetFrameVisual()
