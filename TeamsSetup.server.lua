@@ -605,6 +605,10 @@ local function giveParticipantGear(record: ParticipantRecord)
 end
 
 local function disableParticipantHealing(record: ParticipantRecord)
+    if record.player.Team ~= neutralTeam then
+        return
+    end
+
     local humanoid = record.humanoid
     if not humanoid then
         local character = record.player.Character
@@ -711,7 +715,7 @@ local function prepareParticipant(record: ParticipantRecord, spawnPart: BasePart
                 setParticipantFrozen(record, false)
                 giveParticipantGear(record)
 
-                if deathMatchActive then
+                if deathMatchActive and record.player.Team == neutralTeam then
                     disableParticipantHealing(record)
                 end
             end)
@@ -874,7 +878,7 @@ local function beginDeathMatch(roundId: number)
     currentStormPart = stormPart
 
     for _, record in participantRecords do
-        if record.roundId == roundId then
+        if record.roundId == roundId and record.player.Team == neutralTeam then
             disableParticipantHealing(record)
         end
     end
@@ -1175,7 +1179,7 @@ local function startRound(player: Player, mapId: string)
             setParticipantFrozen(record, false)
             giveParticipantGear(record)
 
-            if deathMatchActive then
+            if deathMatchActive and record.player.Team == neutralTeam then
                 disableParticipantHealing(record)
             end
         end
