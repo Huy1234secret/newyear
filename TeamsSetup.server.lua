@@ -36,6 +36,7 @@ local PREP_COUNTDOWN_DURATION = 2
 local INTERMISSION_MUSIC_ID = "15689444712"
 local DEFAULT_MUSIC_VOLUME = 0.5
 local DEATHMATCH_TRANSITION_DURATION = 3
+local DEATHMATCH_MUSIC_ID = "117047384857700"
 
 local function isGameOwner(player: Player): boolean
     if allowedUserIds[player.UserId] then
@@ -657,6 +658,8 @@ local function beginDeathMatch(roundId: number)
     end
 
     deathMatchActive = true
+
+    playMusic(DEATHMATCH_MUSIC_ID)
 
     sendStatusUpdate({
         action = "DeathMatch",

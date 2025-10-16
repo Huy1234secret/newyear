@@ -24,6 +24,11 @@ end
 
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
+local DEFAULT_BACKGROUND_COLOR = Color3.fromRGB(28, 32, 45)
+local DEFAULT_BACKGROUND_TRANSPARENCY = 0.15
+local DEFAULT_TEXT_SIZE = 26
+local EMPHASIZED_TEXT_SIZE = 32
+
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PVPStatusGui"
 screenGui.ResetOnSpawn = false
@@ -35,8 +40,8 @@ statusFrame.Name = "StatusFrame"
 statusFrame.Size = UDim2.fromOffset(260, 56)
 statusFrame.Position = UDim2.new(0.5, 0, 0, 32)
 statusFrame.AnchorPoint = Vector2.new(0.5, 0)
-statusFrame.BackgroundColor3 = Color3.fromRGB(28, 32, 45)
-statusFrame.BackgroundTransparency = 0.15
+statusFrame.BackgroundColor3 = DEFAULT_BACKGROUND_COLOR
+statusFrame.BackgroundTransparency = DEFAULT_BACKGROUND_TRANSPARENCY
 statusFrame.Visible = false
 statusFrame.ZIndex = 10
 statusFrame.Parent = screenGui
@@ -61,9 +66,11 @@ local statusLabel = Instance.new("TextLabel")
 statusLabel.Name = "StatusLabel"
 statusLabel.Size = UDim2.new(1, 0, 1, 0)
 statusLabel.BackgroundTransparency = 1
+statusLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+statusLabel.Position = UDim2.fromScale(0.5, 0.5)
 statusLabel.Font = Enum.Font.GothamBold
 statusLabel.Text = ""
-statusLabel.TextSize = 26
+statusLabel.TextSize = DEFAULT_TEXT_SIZE
 statusLabel.TextColor3 = Color3.fromRGB(245, 245, 255)
 statusLabel.TextXAlignment = Enum.TextXAlignment.Center
 statusLabel.TextYAlignment = Enum.TextYAlignment.Center
@@ -85,6 +92,7 @@ local neutralOutlineColor = Color3.fromRGB(255, 70, 70)
 local spectateOutlineColor = Color3.fromRGB(255, 255, 255)
 
 local baseFramePosition = statusFrame.Position
+local baseLabelPosition = statusLabel.Position
 local currentRemaining = 0
 local flashConnection: RBXScriptConnection? = nil
 local shakeConnection: RBXScriptConnection? = nil
@@ -351,11 +359,16 @@ localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
 end)
 
 local function resetFrameVisual()
-    statusFrame.BackgroundColor3 = Color3.fromRGB(28, 32, 45)
+    statusFrame.BackgroundColor3 = DEFAULT_BACKGROUND_COLOR
+    statusFrame.BackgroundTransparency = DEFAULT_BACKGROUND_TRANSPARENCY
     frameStroke.Color = Color3.fromRGB(120, 135, 200)
     frameStroke.Transparency = 0.35
     statusFrame.Position = baseFramePosition
     statusLabel.TextColor3 = defaultColor
+    statusLabel.TextSize = DEFAULT_TEXT_SIZE
+    statusLabel.Position = baseLabelPosition
+    statusLabel.Rotation = 0
+    labelStroke.Transparency = 0.3
 end
 
 local function stopFlash()
@@ -391,10 +404,10 @@ local function stopShake()
     end
 
     statusFrame.Position = baseFramePosition
-    statusFrame.BackgroundColor3 = Color3.fromRGB(28, 32, 45)
-    frameStroke.Color = Color3.fromRGB(120, 135, 200)
-    frameStroke.Transparency = 0.35
+    statusLabel.Position = baseLabelPosition
+    statusLabel.Rotation = 0
     statusLabel.TextColor3 = defaultColor
+    statusLabel.TextSize = DEFAULT_TEXT_SIZE
 end
 
 local function startDeathMatchEffect()
@@ -404,13 +417,22 @@ local function startDeathMatchEffect()
     statusFrame.BackgroundColor3 = deathMatchBackground
     frameStroke.Color = deathMatchStroke
     frameStroke.Transparency = 0
+    statusFrame.BackgroundTransparency = 1
+    statusLabel.TextSize = EMPHASIZED_TEXT_SIZE
+    labelStroke.Transparency = 0
 
     shakeConnection = RunService.RenderStepped:Connect(function()
         local now = os.clock()
-        local amplitude = 3 + math.abs(math.sin(now * 3)) * 5
-        local offsetX = math.sin(now * 12) * amplitude
-        local offsetY = math.cos(now * 9) * amplitude * 0.6
+        local frameMagnitude = 1 + math.abs(math.sin(now * 5)) * 1.4
+        local offsetX = math.noise(now * 8, 0, 0) * frameMagnitude * 4
+        local offsetY = math.noise(now * 9, 1, 0) * frameMagnitude * 3
         statusFrame.Position = baseFramePosition + UDim2.fromOffset(offsetX, offsetY)
+
+        local textMagnitude = 0.5 + math.abs(math.sin(now * 12)) * 1.5
+        local textOffsetX = math.noise(now * 20, 2, 0) * textMagnitude * 4
+        local textOffsetY = math.noise(now * 18, 3, 0) * textMagnitude * 3
+        statusLabel.Position = baseLabelPosition + UDim2.fromOffset(textOffsetX, textOffsetY)
+        statusLabel.Rotation = math.noise(now * 14, 4, 0) * 8
 
         local pulse = (math.sin(now * 6) + 1) / 2
         local colorOffset = math.floor(40 * pulse)
@@ -450,9 +472,12 @@ statusRemote.OnClientEvent:Connect(function(payload)
         stopShake()
         stopFlash()
         resetFrameVisual()
+        statusFrame.BackgroundTransparency = 1
         statusFrame.Visible = true
         statusLabel.TextColor3 = countdownColor
+        statusLabel.TextSize = EMPHASIZED_TEXT_SIZE
         statusLabel.Text = formatCountdown(currentRemaining)
+        labelStroke.Transparency = 0.1
     elseif action == "MatchTimer" then
         currentRemaining = math.max(0, math.floor(tonumber(payload.remaining) or 0))
         statusFrame.Visible = true
@@ -473,7 +498,10 @@ statusRemote.OnClientEvent:Connect(function(payload)
         frameStroke.Color = deathMatchStroke
         frameStroke.Transparency = 0
         statusLabel.TextColor3 = matchColor
+        statusLabel.TextSize = EMPHASIZED_TEXT_SIZE
         statusLabel.Text = "Death Match"
+        statusFrame.BackgroundTransparency = 1
+        labelStroke.Transparency = 0
 
         local duration = tonumber(payload.duration) or 3
         startDeathMatchTransition(duration)
