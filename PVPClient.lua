@@ -638,7 +638,7 @@ local function tweenHumanoidSpeed(targetSpeed: number, instant: boolean)
     tween:Play()
 end
 
-local function tweenCameraFov(targetFov: number, instant: boolean)
+local function tweenCameraFov(targetFov: number, instant: boolean, onComplete: (() -> ())?)
     local camera = Workspace.CurrentCamera
     if not camera then
         return
@@ -651,6 +651,9 @@ local function tweenCameraFov(targetFov: number, instant: boolean)
 
     if instant then
         camera.FieldOfView = targetFov
+        if onComplete then
+            onComplete()
+        end
         return
     end
 
@@ -658,9 +661,12 @@ local function tweenCameraFov(targetFov: number, instant: boolean)
         FieldOfView = targetFov,
     })
     sprintState.cameraTween = tween
-    tween.Completed:Connect(function()
+    tween.Completed:Connect(function(playbackState)
         if sprintState.cameraTween == tween then
             sprintState.cameraTween = nil
+        end
+        if playbackState == Enum.PlaybackState.Completed and onComplete then
+            onComplete()
         end
     end)
     tween:Play()
@@ -679,8 +685,15 @@ local function stopSprinting(instant: boolean)
     end
 
     if sprintState.originalCameraFov then
-        tweenCameraFov(sprintState.originalCameraFov, instant)
-        sprintState.originalCameraFov = nil
+        local targetFov = sprintState.originalCameraFov
+        if instant then
+            tweenCameraFov(targetFov, true)
+            sprintState.originalCameraFov = nil
+        else
+            tweenCameraFov(targetFov, false, function()
+                sprintState.originalCameraFov = nil
+            end)
+        end
     end
 
     updateEnergyUI()
