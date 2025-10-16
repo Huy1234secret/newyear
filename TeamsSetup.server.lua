@@ -3,6 +3,7 @@
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
 local TeamsService = game:GetService("Teams")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
@@ -31,6 +32,9 @@ local allowedUserIds = {
     [347735445] = true,
 }
 
+local PREP_COUNTDOWN_DURATION = 2
+local INTERMISSION_MUSIC_ID = "15689444712"
+
 local function isGameOwner(player: Player): boolean
     if allowedUserIds[player.UserId] then
         return true
@@ -57,6 +61,7 @@ type MapConfig = {
     modelName: string,
     spawnContainer: string,
     skyboxName: string,
+    musicId: string?,
 }
 
 local mapConfigurations: {[string]: MapConfig} = {
@@ -66,6 +71,7 @@ local mapConfigurations: {[string]: MapConfig} = {
         modelName = "Crossroad",
         spawnContainer = "CrossroadSpawns",
         skyboxName = "CrossroadSky",
+        musicId = "95137069632101",
     },
 }
 
@@ -163,6 +169,79 @@ end
 local function sendStatusUpdate(data: {})
     statusUpdateRemote:FireAllClients(data)
 end
+
+local currentMusic: Sound? = nil
+local currentMusicId: string? = nil
+
+local function normalizeSoundId(assetId: string | number | nil): string?
+    local idType = typeof(assetId)
+    if idType == "number" then
+        assetId = tostring(assetId :: number)
+    elseif idType ~= "string" then
+        return nil
+    end
+
+    if assetId == "" then
+        return nil
+    end
+
+    if string.find(assetId, "rbxassetid://", 1, true) then
+        return assetId
+    end
+
+    return "rbxassetid://" .. assetId
+end
+
+local function stopCurrentMusic()
+    if currentMusic then
+        currentMusic:Stop()
+        currentMusic:Destroy()
+        currentMusic = nil
+        currentMusicId = nil
+    end
+end
+
+local function playMusic(assetId: string | number | nil)
+    local normalizedId = normalizeSoundId(assetId)
+    if not normalizedId then
+        stopCurrentMusic()
+        return
+    end
+
+    if currentMusic and currentMusicId == normalizedId then
+        if not currentMusic.IsPlaying then
+            currentMusic:Play()
+        end
+        return
+    end
+
+    stopCurrentMusic()
+
+    local sound = Instance.new("Sound")
+    sound.Name = "PVPBackgroundMusic"
+    sound.SoundId = normalizedId
+    sound.Looped = true
+    sound.Volume = 0.5
+    sound.Parent = SoundService
+    sound:Play()
+
+    currentMusic = sound
+    currentMusicId = normalizedId
+end
+
+local function playIntermissionMusic()
+    playMusic(INTERMISSION_MUSIC_ID)
+end
+
+local function playMapMusic(config: MapConfig)
+    if config.musicId then
+        playMusic(config.musicId)
+    else
+        playIntermissionMusic()
+    end
+end
+
+playIntermissionMusic()
 
 local function clearStorm()
     if currentStormPart then
@@ -561,6 +640,7 @@ endRound = function(roundId: number)
 
     sendStatusUpdate({action = "RoundEnded"})
     sendRoundState("Idle")
+    playIntermissionMusic()
 end
 
 local function beginDeathMatch(roundId: number)
@@ -711,6 +791,7 @@ local function startRound(player: Player, mapId: string)
     sendRoundState("Starting", {
         map = mapId,
     })
+    playMapMusic(config)
 
     local mapClone = mapTemplate:Clone()
     mapClone.Name = string.format("Active_%s", config.modelName)
@@ -779,13 +860,14 @@ local function startRound(player: Player, mapId: string)
         prepareParticipant(record, spawnPart, roundId)
     end
 
+    local countdownStart = math.max(0, PREP_COUNTDOWN_DURATION)
     sendStatusUpdate({
         action = "PrepCountdown",
-        remaining = 10,
+        remaining = countdownStart,
         map = mapId,
     })
 
-    for remaining = 9, 0, -1 do
+    for remaining = countdownStart - 1, 0, -1 do
         if not roundInProgress or currentRoundId ~= roundId then
             return
         end
