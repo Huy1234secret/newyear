@@ -32,7 +32,8 @@ local allowedUserIds = {
     [347735445] = true,
 }
 
-local PREP_COUNTDOWN_DURATION = 2
+local TELEPORT_FREEZE_DURATION = 2
+local PREP_COUNTDOWN_DURATION = 10
 local INTERMISSION_MUSIC_ID = "15689444712"
 local DEFAULT_MUSIC_VOLUME = 0.5
 local DEATHMATCH_TRANSITION_DURATION = 3
@@ -668,10 +669,12 @@ local function beginDeathMatch(roundId: number)
         stormPart = stormTemplate:Clone()
     else
         stormPart = Instance.new("Part")
-        stormPart.Material = Enum.Material.Neon
-        stormPart.Color = Color3.fromRGB(255, 45, 45)
         stormPart.Name = "StormPart"
     end
+
+    stormPart.Material = Enum.Material.Neon
+    stormPart.Color = Color3.fromRGB(255, 0, 0)
+    stormPart.Name = "StormPart"
 
     stormPart.CanCollide = false
     stormPart.CanTouch = false
@@ -680,8 +683,7 @@ local function beginDeathMatch(roundId: number)
     stormPart.Transparency = 0.5
     stormPart.Size = Vector3.new(600, 1000, 600)
 
-    local mapPivot = if activeMapModel then activeMapModel:GetPivot().Position else Vector3.zero
-    stormPart.CFrame = CFrame.new(mapPivot.X, mapPivot.Y + stormPart.Size.Y / 2, mapPivot.Z)
+    stormPart.CFrame = CFrame.new(0, 0, 0)
 
     stormPart.Parent = activeMapModel or Workspace
     currentStormPart = stormPart
@@ -709,7 +711,7 @@ local function beginDeathMatch(roundId: number)
             local halfSize = activeStorm.Size * 0.5
             local stormCFrame = activeStorm.CFrame
 
-            if halfSize.X <= 0 or halfSize.Z <= 0 then
+            if halfSize.X <= 0 or halfSize.Y <= 0 or halfSize.Z <= 0 then
                 continue
             end
 
@@ -733,7 +735,7 @@ local function beginDeathMatch(roundId: number)
                 record.humanoid = humanoid
 
                 local relative = stormCFrame:PointToObjectSpace(rootPart.Position)
-                if math.abs(relative.X) > halfSize.X or math.abs(relative.Z) > halfSize.Z then
+                if math.abs(relative.X) > halfSize.X or math.abs(relative.Y) > halfSize.Y or math.abs(relative.Z) > halfSize.Z then
                     humanoid:TakeDamage(1)
                 end
             end
@@ -941,6 +943,22 @@ local function startRound(player: Player, mapId: string)
     end
 
     local countdownStart = math.max(0, PREP_COUNTDOWN_DURATION)
+
+    if TELEPORT_FREEZE_DURATION > 0 then
+        task.wait(TELEPORT_FREEZE_DURATION)
+        if not roundInProgress or currentRoundId ~= roundId then
+            return
+        end
+    end
+
+    for playerKey, record in participantRecords do
+        if record.roundId == roundId then
+            record.countdownComplete = true
+            setParticipantFrozen(record, false)
+            giveParticipantGear(record)
+        end
+    end
+
     sendStatusUpdate({
         action = "PrepCountdown",
         remaining = countdownStart,
@@ -953,19 +971,15 @@ local function startRound(player: Player, mapId: string)
         end
 
         task.wait(1)
+        if not roundInProgress or currentRoundId ~= roundId then
+            return
+        end
+
         sendStatusUpdate({
             action = "PrepCountdown",
             remaining = remaining,
             map = mapId,
         })
-    end
-
-    for playerKey, record in participantRecords do
-        if record.roundId == roundId then
-            setParticipantFrozen(record, false)
-            giveParticipantGear(record)
-            record.countdownComplete = true
-        end
     end
 
     sendRoundState("Active", {
