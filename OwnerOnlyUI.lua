@@ -158,6 +158,30 @@ toggleButton.Parent = panel
 
 toggleButton.ZIndex = 3
 
+local quickPVPButton = Instance.new("TextButton")
+quickPVPButton.Name = "QuickPVPButton"
+quickPVPButton.Size = UDim2.fromOffset(buttonWidth, 36)
+quickPVPButton.AnchorPoint = Vector2.new(0, 0.5)
+quickPVPButton.Position = UDim2.new(0, panelWidth - buttonWidth, 0.5, -60)
+quickPVPButton.BackgroundColor3 = Color3.fromRGB(94, 108, 160)
+quickPVPButton.AutoButtonColor = false
+quickPVPButton.Font = Enum.Font.GothamBold
+quickPVPButton.Text = "PVP"
+quickPVPButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+quickPVPButton.TextSize = 16
+quickPVPButton.ZIndex = 3
+quickPVPButton.Parent = panel
+
+local quickPVPCorner = Instance.new("UICorner")
+quickPVPCorner.CornerRadius = UDim.new(0, 8)
+quickPVPCorner.Parent = quickPVPButton
+
+local quickPVPStroke = Instance.new("UIStroke")
+quickPVPStroke.Thickness = 1.5
+quickPVPStroke.Color = Color3.fromRGB(150, 160, 210)
+quickPVPStroke.Transparency = 0.3
+quickPVPStroke.Parent = quickPVPButton
+
 local buttonCorner = Instance.new("UICorner")
 buttonCorner.CornerRadius = UDim.new(1, 0)
 buttonCorner.Parent = toggleButton
@@ -297,7 +321,7 @@ end
 local toggleDebounce = false
 local pvpDebounce = false
 
-pvpButton.Activated:Connect(function()
+local function onPVPActivated()
     if pvpDebounce then
         return
     end
@@ -306,7 +330,10 @@ pvpButton.Activated:Connect(function()
     showPVPUI()
     task.wait(0.15)
     pvpDebounce = false
-end)
+end
+
+pvpButton.Activated:Connect(onPVPActivated)
+quickPVPButton.Activated:Connect(onPVPActivated)
 
 startButton.Activated:Connect(function()
     showPanelUI()
