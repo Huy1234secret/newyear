@@ -33,7 +33,9 @@ local DEFAULT_BACKGROUND_TRANSPARENCY = 0.15
 local DEFAULT_TEXT_SIZE = if isTouchDevice then 22 else 26
 local EMPHASIZED_TEXT_SIZE = if isTouchDevice then 28 else 32
 
-local cursorImageAsset = "rbxassetid://9925913476"
+local DEFAULT_CURSOR_IMAGE_ASSET = ""
+local GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
+local currentCursorImageAsset = DEFAULT_CURSOR_IMAGE_ASSET
 local DEFAULT_WALK_SPEED = 16
 
 local energyBarFill: Frame? = nil
@@ -193,7 +195,7 @@ centerCursorImage.BackgroundTransparency = 1
 centerCursorImage.AnchorPoint = Vector2.new(0.5, 0.5)
 centerCursorImage.Position = UDim2.fromScale(0.5, 0.5)
 centerCursorImage.Size = UDim2.fromOffset(isTouchDevice and 40 or 48, isTouchDevice and 40 or 48)
-centerCursorImage.Image = cursorImageAsset
+centerCursorImage.Image = GEAR_CURSOR_IMAGE_ASSET
 centerCursorImage.ZIndex = 50
 centerCursorImage.Visible = false
 centerCursorImage.Parent = screenGui
@@ -309,6 +311,25 @@ local humanoidSpeedChangedConn: RBXScriptConnection? = nil
 
 local mouse = if UserInputService.TouchEnabled then nil else localPlayer:GetMouse()
 local applyingMouseIcon = false
+
+type GearConnections = {
+    equipped: RBXScriptConnection?,
+    unequipped: RBXScriptConnection?,
+    ancestry: RBXScriptConnection?,
+    destroying: RBXScriptConnection?,
+}
+
+type GearTrackingInfo = {
+    tool: Tool,
+    isEquipped: boolean,
+    connections: GearConnections,
+}
+
+local trackedGearTools: {[Tool]: GearTrackingInfo} = {}
+local equippedGearCount = 0
+local currentBackpack: Backpack? = nil
+local backpackConnections: {RBXScriptConnection} = {}
+local characterGearConn: RBXScriptConnection? = nil
 
 local function removeHighlightForPlayer(targetPlayer: Player)
     local highlight = highlightState.highlights[targetPlayer]
@@ -718,14 +739,15 @@ local function applyDesktopCursorIcon()
         return
     end
 
-    if mouse.Icon ~= cursorImageAsset then
+    local iconAsset = currentCursorImageAsset
+    if mouse.Icon ~= iconAsset then
         applyingMouseIcon = true
-        mouse.Icon = cursorImageAsset
+        mouse.Icon = iconAsset
         applyingMouseIcon = false
     end
 
     if centerCursorImage then
-        centerCursorImage.Image = cursorImageAsset
+        centerCursorImage.Image = if iconAsset ~= "" then iconAsset else ""
     end
 end
 
@@ -735,10 +757,192 @@ local function updateCenterCursorVisibility()
     end
 
     local shouldShow = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
+        and currentCursorImageAsset ~= ""
     centerCursorImage.Visible = shouldShow
     if shouldShow then
-        centerCursorImage.Image = cursorImageAsset
+        centerCursorImage.Image = currentCursorImageAsset
     end
+end
+
+local function setCursorAsset(assetId: string)
+    if currentCursorImageAsset == assetId then
+        return
+    end
+
+    currentCursorImageAsset = assetId
+
+    if mouse then
+        applyDesktopCursorIcon()
+    end
+
+    updateCenterCursorVisibility()
+end
+
+local function updateCursorForGearState()
+    if equippedGearCount > 0 then
+        setCursorAsset(GEAR_CURSOR_IMAGE_ASSET)
+    else
+        setCursorAsset(DEFAULT_CURSOR_IMAGE_ASSET)
+    end
+end
+
+local function handleGearEquipped(info: GearTrackingInfo)
+    if info.isEquipped then
+        return
+    end
+
+    info.isEquipped = true
+    equippedGearCount += 1
+    updateCursorForGearState()
+end
+
+local function handleGearUnequipped(info: GearTrackingInfo)
+    if not info.isEquipped then
+        return
+    end
+
+    info.isEquipped = false
+    if equippedGearCount > 0 then
+        equippedGearCount -= 1
+    end
+    updateCursorForGearState()
+end
+
+local function clearBackpackConnections()
+    for _, connection in backpackConnections do
+        connection:Disconnect()
+    end
+    table.clear(backpackConnections)
+end
+
+local function untrackGearTool(tool: Tool)
+    local tracked = trackedGearTools[tool]
+    if not tracked then
+        return
+    end
+
+    trackedGearTools[tool] = nil
+    handleGearUnequipped(tracked)
+
+    for _, connection in tracked.connections do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+end
+
+local function isPVPGear(instance: Instance): boolean
+    if not instance:IsA("Tool") then
+        return false
+    end
+
+    return instance:GetAttribute("PVPGenerated") == true
+end
+
+local function trackGearTool(tool: Tool)
+    if trackedGearTools[tool] or not isPVPGear(tool) then
+        return
+    end
+
+    local info: GearTrackingInfo = {
+        tool = tool,
+        isEquipped = false,
+        connections = {} :: GearConnections,
+    }
+
+    trackedGearTools[tool] = info
+
+    info.connections.equipped = tool.Equipped:Connect(function()
+        handleGearEquipped(info)
+    end)
+
+    info.connections.unequipped = tool.Unequipped:Connect(function()
+        handleGearUnequipped(info)
+    end)
+
+    info.connections.ancestry = tool.AncestryChanged:Connect(function(_, parent)
+        if parent == localPlayer.Character then
+            handleGearEquipped(info)
+        else
+            handleGearUnequipped(info)
+            if parent == nil then
+                untrackGearTool(tool)
+            end
+        end
+    end)
+
+    info.connections.destroying = tool.Destroying:Connect(function()
+        untrackGearTool(tool)
+    end)
+
+    if tool.Parent == localPlayer.Character then
+        handleGearEquipped(info)
+    else
+        updateCursorForGearState()
+    end
+end
+
+local function trackToolsIn(container: Instance)
+    for _, child in container:GetChildren() do
+        if child:IsA("Tool") then
+            trackGearTool(child)
+        end
+    end
+end
+
+local function watchBackpack(backpack: Backpack?)
+    if currentBackpack == backpack then
+        return
+    end
+
+    clearBackpackConnections()
+    currentBackpack = backpack
+
+    if not backpack then
+        updateCursorForGearState()
+        return
+    end
+
+    trackToolsIn(backpack)
+
+    local addedConn = backpack.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            trackGearTool(child)
+        end
+    end)
+    table.insert(backpackConnections, addedConn)
+end
+
+local function watchCharacterTools(character: Model)
+    if characterGearConn then
+        characterGearConn:Disconnect()
+        characterGearConn = nil
+    end
+
+    trackToolsIn(character)
+
+    characterGearConn = character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            trackGearTool(child)
+        end
+    end)
+end
+
+local function initializeBackpackTracking()
+    local backpack = localPlayer:FindFirstChildOfClass("Backpack")
+    watchBackpack(backpack)
+
+    localPlayer.ChildAdded:Connect(function(child)
+        if child:IsA("Backpack") then
+            watchBackpack(child)
+        end
+    end)
+
+    localPlayer.ChildRemoved:Connect(function(child)
+        if child:IsA("Backpack") then
+            watchBackpack(nil)
+        end
+    end)
 end
 
 local function playDeathMatchCameraSequence()
@@ -797,6 +1001,9 @@ end
 localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
     updateHighlightActivation()
 end)
+
+initializeBackpackTracking()
+updateCursorForGearState()
 
 if mouse then
     UserInputService.MouseIconEnabled = true
@@ -867,6 +1074,7 @@ end
 
 local function onCharacterAdded(character: Model)
     resetSprintState()
+    watchCharacterTools(character)
 
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if humanoid then
@@ -897,6 +1105,11 @@ localPlayer.CharacterRemoving:Connect(function()
         humanoidSpeedChangedConn = nil
     end
     currentHumanoid = nil
+    if characterGearConn then
+        characterGearConn:Disconnect()
+        characterGearConn = nil
+    end
+    updateCursorForGearState()
 end)
 
 if localPlayer.Character then
@@ -927,7 +1140,7 @@ end
 
 ContextActionService:BindAction("SprintAction", sprintAction, true, Enum.KeyCode.LeftControl, Enum.KeyCode.RightControl, Enum.KeyCode.ButtonL3)
 ContextActionService:SetTitle("SprintAction", "Sprint")
-ContextActionService:SetImage("SprintAction", cursorImageAsset)
+ContextActionService:SetImage("SprintAction", GEAR_CURSOR_IMAGE_ASSET)
 
 if sprintButton then
     sprintButton.Activated:Connect(function()
@@ -976,7 +1189,7 @@ RunService.Heartbeat:Connect(function(deltaTime)
 
     updateEnergyUI()
 
-    if mouse and not applyingMouseIcon and mouse.Icon ~= cursorImageAsset then
+    if mouse and not applyingMouseIcon and mouse.Icon ~= currentCursorImageAsset then
         applyDesktopCursorIcon()
     end
 end)
@@ -1148,6 +1361,15 @@ statusRemote.OnClientEvent:Connect(function(payload)
         end
     elseif action == "RoundEnded" then
         deathMatchHighlightActive = false
-        hideStatus()
+        updateHighlightActivation()
+        stopDeathMatchTransition()
+        stopFlash()
+        stopShake()
+        resetFrameVisual()
+        statusFrame.Visible = true
+        statusLabel.TextColor3 = countdownColor
+        statusLabel.TextSize = DEFAULT_TEXT_SIZE
+        statusLabel.Text = "Intermission"
+        labelStroke.Transparency = 0.3
     end
 end)
