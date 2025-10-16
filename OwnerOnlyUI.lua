@@ -68,6 +68,8 @@ gradient.Color = ColorSequence.new({
 gradient.Rotation = 90
 gradient.Parent = panel
 
+panel.ZIndex = 2
+
 local shadow = Instance.new("ImageLabel")
 shadow.Name = "Shadow"
 shadow.Size = UDim2.new(1, 20, 1, 20)
@@ -93,27 +95,10 @@ title.TextSize = 22
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = panel
 
-local description = Instance.new("TextLabel")
-description.Name = "Description"
-description.Size = UDim2.new(1, -40, 0, 60)
-description.Position = UDim2.new(0, 20, 0, 60)
-description.BackgroundTransparency = 1
-description.Font = Enum.Font.Gotham
-description.Text = "Thêm nội dung dành riêng cho chủ game ở đây."
-description.TextWrapped = true
-description.TextColor3 = Color3.fromRGB(200, 205, 220)
-description.TextSize = 16
-description.TextXAlignment = Enum.TextXAlignment.Left
-description.TextYAlignment = Enum.TextYAlignment.Top
-description.Parent = panel
-
-description.ZIndex = 2
-panel.ZIndex = 2
-
 local buttonContainer = Instance.new("Frame")
 buttonContainer.Name = "ButtonContainer"
 buttonContainer.Size = UDim2.new(1, -40, 0, 48)
-buttonContainer.Position = UDim2.new(0, 20, 0, 130)
+buttonContainer.Position = UDim2.new(0, 20, 0, 80)
 buttonContainer.BackgroundTransparency = 1
 buttonContainer.Parent = panel
 
