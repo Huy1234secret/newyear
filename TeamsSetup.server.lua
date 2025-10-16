@@ -107,12 +107,17 @@ local mapsFolder = ReplicatedStorage:FindFirstChild("Maps")
 local skyboxFolder = ReplicatedStorage:FindFirstChild("Skybox")
 local gearsFolder = ReplicatedStorage:FindFirstChild("PVPGears")
 local stormMeshTemplate: MeshPart? = nil
-do
-    local templateCandidate = ReplicatedStorage:FindFirstChild("StormPart")
+
+local function updateStormTemplate()
+    local templateCandidate = ReplicatedStorage:FindFirstChild("StormPart", true)
     if templateCandidate and templateCandidate:IsA("MeshPart") then
         stormMeshTemplate = templateCandidate
+    else
+        stormMeshTemplate = nil
     end
 end
+
+updateStormTemplate()
 
 ReplicatedStorage.ChildAdded:Connect(function(child)
     if child.Name == "Maps" and child:IsA("Folder") then
@@ -121,8 +126,12 @@ ReplicatedStorage.ChildAdded:Connect(function(child)
         skyboxFolder = child
     elseif child.Name == "PVPGears" and child:IsA("Folder") then
         gearsFolder = child
-    elseif child.Name == "StormPart" and child:IsA("MeshPart") then
-        stormMeshTemplate = child
+    end
+end)
+
+ReplicatedStorage.DescendantAdded:Connect(function(descendant)
+    if descendant.Name == "StormPart" and descendant:IsA("MeshPart") then
+        stormMeshTemplate = descendant
     end
 end)
 
@@ -133,8 +142,12 @@ ReplicatedStorage.ChildRemoved:Connect(function(child)
         skyboxFolder = nil
     elseif child == gearsFolder then
         gearsFolder = nil
-    elseif child == stormMeshTemplate then
-        stormMeshTemplate = nil
+    end
+end)
+
+ReplicatedStorage.DescendantRemoving:Connect(function(descendant)
+    if descendant == stormMeshTemplate then
+        task.defer(updateStormTemplate)
     end
 end)
 
