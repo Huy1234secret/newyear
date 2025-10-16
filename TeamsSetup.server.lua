@@ -154,6 +154,10 @@ local storedNormalSky: Instance? = nil
 local storedNormalSkyParent: Instance? = nil
 local currentStormPart: BasePart? = nil
 local deathMatchActive = false
+local managedAtmosphere: Atmosphere? = nil
+local createdManagedAtmosphere = false
+local storedAtmosphereProps: {Density: number, Offset: number, Color: Color3, Decay: Color3, Glare: number, Haze: number}? = nil
+local activeAtmosphereTween: Tween? = nil
 
 local function performDeathMatchTransition(roundId: number)
     -- Forward declaration; defined later.
@@ -253,12 +257,126 @@ end
 
 playIntermissionMusic()
 
+local function cancelAtmosphereTween()
+    if activeAtmosphereTween then
+        activeAtmosphereTween:Cancel()
+        activeAtmosphereTween = nil
+    end
+end
+
+local function ensureManagedAtmosphere(): Atmosphere?
+    if managedAtmosphere and managedAtmosphere.Parent then
+        return managedAtmosphere
+    end
+
+    local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+    if atmosphere then
+        managedAtmosphere = atmosphere
+        createdManagedAtmosphere = false
+    else
+        atmosphere = Instance.new("Atmosphere")
+        atmosphere.Name = "PVPAtmosphere"
+        atmosphere.Parent = Lighting
+        managedAtmosphere = atmosphere
+        createdManagedAtmosphere = true
+    end
+
+    if atmosphere and not storedAtmosphereProps then
+        storedAtmosphereProps = {
+            Density = atmosphere.Density,
+            Offset = atmosphere.Offset,
+            Color = atmosphere.Color,
+            Decay = atmosphere.Decay,
+            Glare = atmosphere.Glare,
+            Haze = atmosphere.Haze,
+        }
+    end
+
+    return managedAtmosphere
+end
+
+local function restoreAtmosphere()
+    cancelAtmosphereTween()
+
+    local atmosphere = managedAtmosphere
+    local created = createdManagedAtmosphere
+
+    if not atmosphere or not atmosphere.Parent then
+        managedAtmosphere = nil
+        createdManagedAtmosphere = false
+        storedAtmosphereProps = nil
+        return
+    end
+
+    if storedAtmosphereProps then
+        atmosphere.Density = storedAtmosphereProps.Density
+        atmosphere.Offset = storedAtmosphereProps.Offset
+        atmosphere.Color = storedAtmosphereProps.Color
+        atmosphere.Decay = storedAtmosphereProps.Decay
+        atmosphere.Glare = storedAtmosphereProps.Glare
+        atmosphere.Haze = storedAtmosphereProps.Haze
+    end
+
+    if created then
+        atmosphere:Destroy()
+        managedAtmosphere = nil
+        createdManagedAtmosphere = false
+        storedAtmosphereProps = nil
+    end
+end
+
+local function tweenAtmosphereForDeathMatch()
+    local atmosphere = ensureManagedAtmosphere()
+    if not atmosphere then
+        return
+    end
+
+    cancelAtmosphereTween()
+
+    local tweenInfo = TweenInfo.new(DEATHMATCH_TRANSITION_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+    local goal = {
+        Density = 0.5,
+        Offset = 1,
+        Color = Color3.fromRGB(255, 0, 0),
+        Decay = Color3.fromRGB(255, 0, 0),
+        Glare = 0.5,
+        Haze = 5,
+    }
+
+    activeAtmosphereTween = TweenService:Create(atmosphere, tweenInfo, goal)
+    local thisTween = activeAtmosphereTween
+    thisTween:Play()
+
+    task.delay(DEATHMATCH_TRANSITION_DURATION, function()
+        if activeAtmosphereTween == thisTween then
+            activeAtmosphereTween = nil
+        end
+    end)
+end
+
+local function applyDeathMatchAtmosphere()
+    local atmosphere = ensureManagedAtmosphere()
+    if not atmosphere then
+        return
+    end
+
+    cancelAtmosphereTween()
+
+    atmosphere.Density = 0.5
+    atmosphere.Offset = 1
+    atmosphere.Color = Color3.fromRGB(255, 0, 0)
+    atmosphere.Decay = Color3.fromRGB(255, 0, 0)
+    atmosphere.Glare = 0.5
+    atmosphere.Haze = 5
+end
+
 local function clearStorm()
     if currentStormPart then
         currentStormPart:Destroy()
         currentStormPart = nil
     end
     deathMatchActive = false
+    restoreAtmosphere()
 end
 
 local function restoreSkybox()
@@ -667,16 +785,18 @@ local function beginDeathMatch(roundId: number)
         active = true,
     })
 
+    applyDeathMatchAtmosphere()
+
     local stormPart: BasePart
+    local usedTemplate = false
     if stormTemplate and stormTemplate:IsA("BasePart") then
         stormPart = stormTemplate:Clone()
+        usedTemplate = true
     else
         stormPart = Instance.new("Part")
         stormPart.Name = "StormPart"
     end
 
-    stormPart.Material = Enum.Material.Neon
-    stormPart.Color = Color3.fromRGB(255, 0, 0)
     stormPart.Name = "StormPart"
 
     stormPart.CanCollide = false
@@ -684,10 +804,14 @@ local function beginDeathMatch(roundId: number)
     stormPart.Anchored = true
     stormPart.CastShadow = false
     stormPart.Transparency = 0.5
-    stormPart.Size = Vector3.new(600, 1000, 600)
+    stormPart.Color = Color3.fromRGB(255, 0, 0)
+
+    if not usedTemplate then
+        stormPart.Material = Enum.Material.Neon
+        stormPart.Size = Vector3.new(600, 1000, 600)
+    end
 
     stormPart.CFrame = CFrame.new(0, 0, 0)
-
     stormPart.Parent = activeMapModel or Workspace
     currentStormPart = stormPart
 
@@ -756,6 +880,8 @@ performDeathMatchTransition = function(roundId: number)
         duration = DEATHMATCH_TRANSITION_DURATION,
     })
 
+    tweenAtmosphereForDeathMatch()
+
     local tweens: {Tween} = {}
 
     local activeMusic = currentMusic
@@ -775,6 +901,19 @@ performDeathMatchTransition = function(roundId: number)
         tweens = {speedTween, volumeTween}
     end
 
+    local function cancelTransition(shouldRestoreMusic: boolean)
+        for _, tween in tweens do
+            tween:Cancel()
+        end
+
+        if shouldRestoreMusic and activeMusic then
+            activeMusic.PlaybackSpeed = 1
+            activeMusic.Volume = DEFAULT_MUSIC_VOLUME
+        end
+
+        restoreAtmosphere()
+    end
+
     local elapsed = 0
     while elapsed < DEATHMATCH_TRANSITION_DURATION do
         local waitTime = task.wait(0.1)
@@ -784,15 +923,7 @@ performDeathMatchTransition = function(roundId: number)
         elapsed += waitTime
 
         if roundId ~= currentRoundId or not roundInProgress then
-            for _, tween in tweens do
-                tween:Cancel()
-            end
-
-            if activeMusic then
-                activeMusic.PlaybackSpeed = 1
-                activeMusic.Volume = DEFAULT_MUSIC_VOLUME
-            end
-
+            cancelTransition(true)
             return
         end
     end
@@ -802,10 +933,7 @@ performDeathMatchTransition = function(roundId: number)
     end
 
     if roundId ~= currentRoundId or not roundInProgress then
-        if activeMusic then
-            activeMusic.PlaybackSpeed = 1
-            activeMusic.Volume = DEFAULT_MUSIC_VOLUME
-        end
+        cancelTransition(true)
         return
     end
 

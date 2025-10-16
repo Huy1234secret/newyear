@@ -472,7 +472,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
         stopShake()
         stopFlash()
         resetFrameVisual()
-        statusFrame.BackgroundTransparency = 1
+        statusFrame.BackgroundTransparency = DEFAULT_BACKGROUND_TRANSPARENCY
         statusFrame.Visible = true
         statusLabel.TextColor3 = countdownColor
         statusLabel.TextSize = EMPHASIZED_TEXT_SIZE

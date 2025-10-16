@@ -489,6 +489,15 @@ local function showPanelUI()
     clearMessage()
 end
 
+local function closeAllUI()
+    pvpFrame.Visible = false
+    panel.Visible = true
+    opened = false
+    updateToggleVisual()
+    tweenPanel()
+    clearMessage()
+end
+
 local function showPVPUI()
     panel.Visible = false
     pvpFrame.Visible = true
@@ -528,11 +537,10 @@ startButton.Activated:Connect(function()
     end
 
     setStartButtonState(true, "Starting...")
-    clearMessage()
     startRoundRemote:FireServer({
         mapId = selectedMapId,
     })
-    showPanelUI()
+    closeAllUI()
 end)
 
 cancelButton.Activated:Connect(function()
