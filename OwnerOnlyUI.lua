@@ -7,7 +7,15 @@ local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 
+local allowedUserIds = {
+    [347735445] = true,
+}
+
 local function isGameOwner(): boolean
+    if allowedUserIds[player.UserId] then
+        return true
+    end
+
     local creatorId = game.CreatorId
     local creatorType = game.CreatorType
 
