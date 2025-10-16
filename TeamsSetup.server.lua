@@ -700,7 +700,7 @@ local function prepareParticipant(record: ParticipantRecord, spawnPart: BasePart
         end)
 
         record.player.Team = neutralTeam
-        record.player.Neutral = false
+        record.player.Neutral = true
 
         if record.countdownComplete then
             task.defer(function()
