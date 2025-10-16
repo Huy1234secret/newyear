@@ -107,14 +107,14 @@ local roundStateRemote = getOrCreateRemote("RoundState")
 local mapsFolder = ReplicatedStorage:FindFirstChild("Maps")
 local skyboxFolder = ReplicatedStorage:FindFirstChild("Skybox")
 local gearsFolder = ReplicatedStorage:FindFirstChild("PVPGears")
-local stormMeshTemplate: MeshPart? = nil
+local stormUnionTemplate: UnionOperation? = nil
 
 local function updateStormTemplate()
     local templateCandidate = ReplicatedStorage:FindFirstChild("StormPart", true)
-    if templateCandidate and templateCandidate:IsA("MeshPart") then
-        stormMeshTemplate = templateCandidate
+    if templateCandidate and templateCandidate:IsA("UnionOperation") then
+        stormUnionTemplate = templateCandidate
     else
-        stormMeshTemplate = nil
+        stormUnionTemplate = nil
     end
 end
 
@@ -131,8 +131,8 @@ ReplicatedStorage.ChildAdded:Connect(function(child)
 end)
 
 ReplicatedStorage.DescendantAdded:Connect(function(descendant)
-    if descendant.Name == "StormPart" and descendant:IsA("MeshPart") then
-        stormMeshTemplate = descendant
+    if descendant.Name == "StormPart" and descendant:IsA("UnionOperation") then
+        stormUnionTemplate = descendant
     end
 end)
 
@@ -147,7 +147,7 @@ ReplicatedStorage.ChildRemoved:Connect(function(child)
 end)
 
 ReplicatedStorage.DescendantRemoving:Connect(function(descendant)
-    if descendant == stormMeshTemplate then
+    if descendant == stormUnionTemplate then
         task.defer(updateStormTemplate)
     end
 end)
@@ -823,8 +823,8 @@ local function beginDeathMatch(roundId: number)
 
     local stormPart: BasePart
     local usedTemplate = false
-    if stormMeshTemplate then
-        stormPart = stormMeshTemplate:Clone()
+    if stormUnionTemplate then
+        stormPart = stormUnionTemplate:Clone()
         usedTemplate = true
     else
         stormPart = Instance.new("Part")
@@ -1086,19 +1086,24 @@ local function startRound(player: Player, mapId: string)
         return
     end
 
-    local spawnQueue = table.clone(spawnParts)
+    local shuffledSpawnParts = table.clone(spawnParts)
+    local rng = Random.new()
+    for shuffleIndex = #shuffledSpawnParts, 2, -1 do
+        local swapIndex = rng:NextInteger(1, shuffleIndex)
+        shuffledSpawnParts[shuffleIndex], shuffledSpawnParts[swapIndex] = shuffledSpawnParts[swapIndex], shuffledSpawnParts[shuffleIndex]
+    end
 
     local function nextSpawn(index: number): BasePart
-        if #spawnQueue == 0 then
-            spawnQueue = table.clone(spawnParts)
+        local spawnPart = shuffledSpawnParts[index]
+        if spawnPart then
+            return spawnPart
         end
 
-        if #spawnQueue == 0 then
+        if #shuffledSpawnParts == 0 then
             return spawnParts[((index - 1) % #spawnParts) + 1]
         end
 
-        local selectionIndex = ((index - 1) % #spawnQueue) + 1
-        return table.remove(spawnQueue, selectionIndex)
+        return shuffledSpawnParts[((index - 1) % #shuffledSpawnParts) + 1]
     end
 
     for index, targetPlayer in ipairs(readyPlayers) do
