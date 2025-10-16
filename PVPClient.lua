@@ -701,12 +701,18 @@ local function startSprinting()
     end
 
     sprintState.isSprinting = true
-    local baselineSpeed = humanoid.WalkSpeed
+
+    local baselineSpeed = sprintState.originalWalkSpeed
+    if not baselineSpeed or baselineSpeed <= 0 then
+        baselineSpeed = humanoid.WalkSpeed
+    end
+
     if math.abs(baselineSpeed - SPRINT_SPEED) < 0.001 then
         baselineSpeed = DEFAULT_WALK_SPEED
     elseif baselineSpeed <= 0 then
         baselineSpeed = DEFAULT_WALK_SPEED
     end
+
     sprintState.originalWalkSpeed = baselineSpeed
 
     tweenHumanoidSpeed(SPRINT_SPEED, false)
@@ -1059,16 +1065,22 @@ local function onHumanoidAdded(humanoid: Humanoid)
     sprintState.originalWalkSpeed = currentSpeed
 
     humanoidSpeedChangedConn = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-        if not sprintState.isSprinting then
-            local newSpeed = humanoid.WalkSpeed
-            if newSpeed <= 0 then
-                newSpeed = DEFAULT_WALK_SPEED
-            elseif math.abs(newSpeed - SPRINT_SPEED) < 0.001 then
-                newSpeed = DEFAULT_WALK_SPEED
-            end
-
-            sprintState.originalWalkSpeed = newSpeed
+        if sprintState.isSprinting then
+            return
         end
+
+        if sprintState.speedTween then
+            return
+        end
+
+        local newSpeed = humanoid.WalkSpeed
+        if newSpeed <= 0 then
+            newSpeed = DEFAULT_WALK_SPEED
+        elseif math.abs(newSpeed - SPRINT_SPEED) < 0.001 then
+            newSpeed = DEFAULT_WALK_SPEED
+        end
+
+        sprintState.originalWalkSpeed = newSpeed
     end)
 
     humanoid.Died:Connect(function()
@@ -1202,14 +1214,24 @@ end
 RunService.Heartbeat:Connect(function(deltaTime)
     local dt = math.max(deltaTime, 0)
     local now = os.clock()
+    local humanoid = currentHumanoid
+    local isMoving = false
+    if humanoid then
+        isMoving = humanoid.MoveDirection.Magnitude > 0.01
+    end
 
     if sprintState.sprintIntent and not sprintState.isSprinting and sprintState.energy > 0 then
         startSprinting()
     end
 
     if sprintState.isSprinting then
-        sprintState.energy = math.max(0, sprintState.energy - dt * SPRINT_DRAIN_RATE)
-        sprintState.rechargeBlockedUntil = now + SPRINT_RECHARGE_DELAY
+        if isMoving then
+            sprintState.energy = math.max(0, sprintState.energy - dt * SPRINT_DRAIN_RATE)
+            sprintState.rechargeBlockedUntil = now + SPRINT_RECHARGE_DELAY
+        else
+            sprintState.rechargeBlockedUntil = math.max(sprintState.rechargeBlockedUntil, now + SPRINT_RECHARGE_DELAY)
+        end
+
         if sprintState.energy <= 0 then
             sprintState.energy = 0
             if sprintState.touchIntent then
