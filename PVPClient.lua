@@ -354,15 +354,15 @@ local function getHighlightStyleForContext(context: string?): HighlightStyle?
         return nil
     end
 
-    local team = localPlayer.Team
-    if not team then
-        return nil
-    end
-
-    if context == "Spectate" and team.Name == "Spectate" then
-        return highlightStyles.Spectate
-    elseif context == "DeathMatch" and team.Name == "Neutral" then
-        return highlightStyles.DeathMatch
+    if context == "Spectate" then
+        local team = localPlayer.Team
+        if team and team.Name == "Spectate" then
+            return highlightStyles.Spectate
+        end
+    elseif context == "DeathMatch" then
+        if localPlayer.Neutral then
+            return highlightStyles.DeathMatch
+        end
     end
 
     return nil
@@ -377,8 +377,7 @@ local function updateHighlightForPlayer(targetPlayer: Player)
     local highlight = highlightState.highlights[targetPlayer]
     local shouldShow = highlightState.active
         and highlightState.style ~= nil
-        and targetPlayer.Team ~= nil
-        and targetPlayer.Team.Name == "Neutral"
+        and targetPlayer.Neutral
 
     if not shouldShow then
         if highlight then
@@ -479,6 +478,10 @@ local function trackPlayerForHighlights(targetPlayer: Player)
         updateHighlightForPlayer(targetPlayer)
     end)
 
+    connections[#connections + 1] = targetPlayer:GetPropertyChangedSignal("Neutral"):Connect(function()
+        updateHighlightForPlayer(targetPlayer)
+    end)
+
     connections[#connections + 1] = targetPlayer.CharacterAdded:Connect(function()
         task.defer(function()
             updateHighlightForPlayer(targetPlayer)
@@ -531,12 +534,12 @@ local function enableHighlights(context: string)
 end
 
 local function updateHighlightActivation()
-    local team = localPlayer.Team
     local desiredContext: string? = nil
 
+    local team = localPlayer.Team
     if team and team.Name == "Spectate" then
         desiredContext = "Spectate"
-    elseif deathMatchHighlightActive and team and team.Name == "Neutral" then
+    elseif deathMatchHighlightActive and localPlayer.Neutral then
         desiredContext = "DeathMatch"
     end
 
@@ -1002,6 +1005,10 @@ localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
     updateHighlightActivation()
 end)
 
+localPlayer:GetPropertyChangedSignal("Neutral"):Connect(function()
+    updateHighlightActivation()
+end)
+
 initializeBackpackTracking()
 updateCursorForGearState()
 
@@ -1118,20 +1125,48 @@ else
     resetSprintState()
 end
 
-local function sprintAction(_: string, inputState: Enum.UserInputState, _inputObject: InputObject?): Enum.ContextActionResult
-    if inputState == Enum.UserInputState.Begin then
-        sprintState.keyboardIntent = true
-        recomputeSprintIntent()
-        if sprintState.energy > 0 then
-            startSprinting()
-        end
-        return Enum.ContextActionResult.Sink
-    elseif inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
+local function toggleKeyboardSprintIntent()
+    if sprintState.keyboardIntent then
         sprintState.keyboardIntent = false
         recomputeSprintIntent()
         if not sprintState.sprintIntent then
             stopSprinting(false)
         end
+    else
+        sprintState.keyboardIntent = true
+        recomputeSprintIntent()
+        if sprintState.energy > 0 then
+            startSprinting()
+        end
+    end
+end
+
+local function sprintAction(_: string, inputState: Enum.UserInputState, inputObject: InputObject?): Enum.ContextActionResult
+    local keyCode = if inputObject then inputObject.KeyCode else nil
+
+    if keyCode == Enum.KeyCode.LeftControl or keyCode == Enum.KeyCode.RightControl then
+        if inputState == Enum.UserInputState.Begin then
+            toggleKeyboardSprintIntent()
+        end
+        return Enum.ContextActionResult.Sink
+    elseif keyCode == Enum.KeyCode.ButtonL3 then
+        if inputState == Enum.UserInputState.Begin then
+            sprintState.keyboardIntent = true
+            recomputeSprintIntent()
+            if sprintState.energy > 0 then
+                startSprinting()
+            end
+            return Enum.ContextActionResult.Sink
+        elseif inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
+            sprintState.keyboardIntent = false
+            recomputeSprintIntent()
+            if not sprintState.sprintIntent then
+                stopSprinting(false)
+            end
+            return Enum.ContextActionResult.Sink
+        end
+    elseif inputState == Enum.UserInputState.Begin and not inputObject then
+        toggleKeyboardSprintIntent()
         return Enum.ContextActionResult.Sink
     end
 

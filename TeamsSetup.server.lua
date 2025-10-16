@@ -23,10 +23,24 @@ local function getOrCreateTeam(name: string, color: Color3, autoAssignable: bool
 end
 
 local spectateTeam = getOrCreateTeam("Spectate", Color3.fromRGB(85, 170, 255), true)
-local neutralTeam = getOrCreateTeam("Neutral", Color3.fromRGB(255, 255, 255), false)
 
 spectateTeam.AutoAssignable = true
-neutralTeam.AutoAssignable = false
+
+do
+    local existingNeutralTeam = TeamsService:FindFirstChild("Neutral")
+    if existingNeutralTeam and existingNeutralTeam:IsA("Team") then
+        existingNeutralTeam:Destroy()
+    end
+end
+
+local function assignPlayerToNeutralState(player: Player)
+    player.Team = nil
+    player.Neutral = true
+end
+
+local function isPlayerInNeutralState(player: Player): boolean
+    return player.Team == nil and player.Neutral == true
+end
 
 local allowedUserIds = {
     [347735445] = true,
@@ -605,7 +619,7 @@ local function giveParticipantGear(record: ParticipantRecord)
 end
 
 local function disableParticipantHealing(record: ParticipantRecord)
-    if record.player.Team ~= neutralTeam then
+    if not isPlayerInNeutralState(record.player) then
         return
     end
 
@@ -703,8 +717,7 @@ local function prepareParticipant(record: ParticipantRecord, spawnPart: BasePart
             handleElimination(record.player, roundId)
         end)
 
-        record.player.Team = neutralTeam
-        record.player.Neutral = true
+        assignPlayerToNeutralState(record.player)
 
         if record.countdownComplete then
             task.defer(function()
@@ -715,7 +728,7 @@ local function prepareParticipant(record: ParticipantRecord, spawnPart: BasePart
                 setParticipantFrozen(record, false)
                 giveParticipantGear(record)
 
-                if deathMatchActive and record.player.Team == neutralTeam then
+                if deathMatchActive and isPlayerInNeutralState(record.player) then
                     disableParticipantHealing(record)
                 end
             end)
@@ -757,7 +770,7 @@ checkRoundCompletion = function(roundId: number)
     end
 
     for player, record in participantRecords do
-        if record.roundId == roundId and player.Team == neutralTeam then
+        if record.roundId == roundId and isPlayerInNeutralState(player) then
             local humanoid = record.humanoid
             if not humanoid then
                 local character = player.Character
@@ -878,7 +891,7 @@ local function beginDeathMatch(roundId: number)
     currentStormPart = stormPart
 
     for _, record in participantRecords do
-        if record.roundId == roundId and record.player.Team == neutralTeam then
+        if record.roundId == roundId and isPlayerInNeutralState(record.player) then
             disableParticipantHealing(record)
         end
     end
@@ -905,7 +918,7 @@ local function beginDeathMatch(roundId: number)
             end
 
             for player, record in participantRecords do
-                if record.roundId ~= roundId or player.Team ~= neutralTeam then
+                if record.roundId ~= roundId or not isPlayerInNeutralState(player) then
                     continue
                 end
 
@@ -1179,7 +1192,7 @@ local function startRound(player: Player, mapId: string)
             setParticipantFrozen(record, false)
             giveParticipantGear(record)
 
-            if deathMatchActive and record.player.Team == neutralTeam then
+            if deathMatchActive and isPlayerInNeutralState(record.player) then
                 disableParticipantHealing(record)
             end
         end
