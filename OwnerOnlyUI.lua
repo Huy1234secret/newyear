@@ -532,6 +532,7 @@ startButton.Activated:Connect(function()
     startRoundRemote:FireServer({
         mapId = selectedMapId,
     })
+    showPanelUI()
 end)
 
 cancelButton.Activated:Connect(function()
