@@ -1088,14 +1088,6 @@ local function startRound(player: Player, mapId: string)
         end
     end
 
-    for playerKey, record in participantRecords do
-        if record.roundId == roundId then
-            record.countdownComplete = true
-            setParticipantFrozen(record, false)
-            giveParticipantGear(record)
-        end
-    end
-
     sendStatusUpdate({
         action = "PrepCountdown",
         remaining = countdownStart,
@@ -1117,6 +1109,22 @@ local function startRound(player: Player, mapId: string)
             remaining = remaining,
             map = mapId,
         })
+    end
+
+    if not roundInProgress or currentRoundId ~= roundId then
+        return
+    end
+
+    for playerKey, record in participantRecords do
+        if record.roundId == roundId then
+            record.countdownComplete = true
+            setParticipantFrozen(record, false)
+            giveParticipantGear(record)
+
+            if deathMatchActive then
+                disableParticipantHealing(record)
+            end
+        end
     end
 
     sendRoundState("Active", {

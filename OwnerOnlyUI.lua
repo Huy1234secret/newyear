@@ -77,11 +77,18 @@ if not isGameOwner() then
     return
 end
 
+local playerGui = player:WaitForChild("PlayerGui")
+
+local existingScreenGui = playerGui:FindFirstChild("OwnerPanel")
+if existingScreenGui then
+    existingScreenGui:Destroy()
+end
+
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "OwnerPanel"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
-screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.Parent = playerGui
 
 local panelWidth = 240
 local panelHeight = 200
