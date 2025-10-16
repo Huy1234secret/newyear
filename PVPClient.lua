@@ -31,6 +31,13 @@ local DEFAULT_BACKGROUND_TRANSPARENCY = 0.15
 local DEFAULT_TEXT_SIZE = 26
 local EMPHASIZED_TEXT_SIZE = 32
 
+local cursorImageAsset = "rbxassetid://9925913476"
+
+local energyBarFill: Frame? = nil
+local energyTextLabel: TextLabel? = nil
+local sprintButton: TextButton? = nil
+local mobileCursorImage: ImageLabel? = nil
+
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PVPStatusGui"
 screenGui.ResetOnSpawn = false
@@ -183,6 +190,24 @@ if UserInputService.TouchEnabled then
     mobileCursorImage.ZIndex = 50
     mobileCursorImage.Visible = false
     mobileCursorImage.Parent = screenGui
+
+    sprintButton = Instance.new("TextButton")
+    sprintButton.Name = "SprintToggleButton"
+    sprintButton.AnchorPoint = Vector2.new(1, 1)
+    sprintButton.Position = UDim2.new(1, -40, 1, -120)
+    sprintButton.Size = UDim2.fromOffset(160, 60)
+    sprintButton.BackgroundColor3 = Color3.fromRGB(40, 48, 65)
+    sprintButton.AutoButtonColor = false
+    sprintButton.Text = "Sprint"
+    sprintButton.TextSize = 20
+    sprintButton.Font = Enum.Font.GothamSemibold
+    sprintButton.TextColor3 = Color3.fromRGB(210, 235, 255)
+    sprintButton.ZIndex = 20
+    sprintButton.Parent = screenGui
+
+    local sprintButtonCorner = Instance.new("UICorner")
+    sprintButtonCorner.CornerRadius = UDim.new(0, 14)
+    sprintButtonCorner.Parent = sprintButton
 end
 local defaultColor = statusLabel.TextColor3
 local countdownColor = Color3.fromRGB(245, 245, 255)
@@ -235,6 +260,8 @@ type SprintState = {
     energy: number,
     isSprinting: boolean,
     sprintIntent: boolean,
+    keyboardIntent: boolean,
+    touchIntent: boolean,
     rechargeBlockedUntil: number,
     originalWalkSpeed: number,
     speedTween: Tween?,
@@ -250,10 +277,16 @@ local SPRINT_SPEED = 28
 local SPRINT_TWEEN_TIME = 1
 local SPRINT_FOV_OFFSET = 8
 
+local SPRINT_BUTTON_DEFAULT_COLOR = Color3.fromRGB(40, 48, 65)
+local SPRINT_BUTTON_ACTIVE_COLOR = Color3.fromRGB(80, 190, 255)
+local SPRINT_BUTTON_DISABLED_COLOR = Color3.fromRGB(70, 76, 90)
+
 local sprintState: SprintState = {
     energy = MAX_SPRINT_ENERGY,
     isSprinting = false,
     sprintIntent = false,
+    keyboardIntent = false,
+    touchIntent = false,
     rechargeBlockedUntil = 0,
     originalWalkSpeed = 16,
     speedTween = nil,
@@ -264,12 +297,7 @@ local sprintState: SprintState = {
 local currentHumanoid: Humanoid? = nil
 local humanoidSpeedChangedConn: RBXScriptConnection? = nil
 
-local energyBarFill: Frame? = nil
-local energyTextLabel: TextLabel? = nil
-
-local cursorImageAsset = "rbxassetid://9925913476"
 local mouse = if UserInputService.TouchEnabled then nil else localPlayer:GetMouse()
-local mobileCursorImage: ImageLabel? = nil
 local applyingMouseIcon = false
 
 local function removeHighlightForPlayer(targetPlayer: Player)
@@ -470,6 +498,39 @@ local function enableDeathMatchTransitionVisuals()
     refreshHighlightStyle()
 end
 
+local function updateSprintButtonState()
+    if not sprintButton then
+        return
+    end
+
+    local hasEnergy = sprintState.energy > 0
+    local buttonActive = sprintState.touchIntent
+
+    if not hasEnergy and not buttonActive then
+        sprintButton.Text = "Rest"
+    elseif buttonActive then
+        sprintButton.Text = "Unsprint"
+    else
+        sprintButton.Text = "Sprint"
+    end
+
+    if not hasEnergy then
+        sprintButton.BackgroundColor3 = SPRINT_BUTTON_DISABLED_COLOR
+        sprintButton.TextColor3 = Color3.fromRGB(200, 210, 225)
+    elseif buttonActive then
+        sprintButton.BackgroundColor3 = SPRINT_BUTTON_ACTIVE_COLOR
+        sprintButton.TextColor3 = Color3.fromRGB(20, 30, 40)
+    else
+        sprintButton.BackgroundColor3 = SPRINT_BUTTON_DEFAULT_COLOR
+        sprintButton.TextColor3 = Color3.fromRGB(210, 235, 255)
+    end
+end
+
+local function recomputeSprintIntent()
+    sprintState.sprintIntent = sprintState.keyboardIntent or sprintState.touchIntent
+    updateSprintButtonState()
+end
+
 local function updateEnergyUI()
     if not energyBarFill or not energyTextLabel then
         return
@@ -493,6 +554,8 @@ local function updateEnergyUI()
     else
         energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
     end
+
+    updateSprintButtonState()
 end
 
 local function tweenHumanoidSpeed(targetSpeed: number, instant: boolean)
@@ -604,7 +667,9 @@ end
 
 local function resetSprintState()
     stopSprinting(true)
-    sprintState.sprintIntent = false
+    sprintState.keyboardIntent = false
+    sprintState.touchIntent = false
+    recomputeSprintIntent()
     sprintState.energy = MAX_SPRINT_ENERGY
     sprintState.rechargeBlockedUntil = 0
     sprintState.speedTween = nil
@@ -709,7 +774,9 @@ UserInputService:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
 end)
 
 UserInputService.WindowFocusReleased:Connect(function()
-    sprintState.sprintIntent = false
+    sprintState.keyboardIntent = false
+    sprintState.touchIntent = false
+    recomputeSprintIntent()
     stopSprinting(true)
 end)
 
@@ -732,7 +799,9 @@ local function onHumanoidAdded(humanoid: Humanoid)
     end)
 
     humanoid.Died:Connect(function()
-        sprintState.sprintIntent = false
+        sprintState.keyboardIntent = false
+        sprintState.touchIntent = false
+        recomputeSprintIntent()
         stopSprinting(true)
     end)
 end
@@ -760,7 +829,9 @@ end
 localPlayer.CharacterAdded:Connect(onCharacterAdded)
 
 localPlayer.CharacterRemoving:Connect(function()
-    sprintState.sprintIntent = false
+    sprintState.keyboardIntent = false
+    sprintState.touchIntent = false
+    recomputeSprintIntent()
     stopSprinting(true)
     if humanoidSpeedChangedConn then
         humanoidSpeedChangedConn:Disconnect()
@@ -777,23 +848,49 @@ end
 
 local function sprintAction(_: string, inputState: Enum.UserInputState, _inputObject: InputObject?): Enum.ContextActionResult
     if inputState == Enum.UserInputState.Begin then
-        sprintState.sprintIntent = true
+        sprintState.keyboardIntent = true
+        recomputeSprintIntent()
         if sprintState.energy > 0 then
             startSprinting()
         end
         return Enum.ContextActionResult.Sink
     elseif inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
-        sprintState.sprintIntent = false
-        stopSprinting(false)
+        sprintState.keyboardIntent = false
+        recomputeSprintIntent()
+        if not sprintState.sprintIntent then
+            stopSprinting(false)
+        end
         return Enum.ContextActionResult.Sink
     end
 
     return Enum.ContextActionResult.Pass
 end
 
-ContextActionService:BindAction("SprintAction", sprintAction, true, Enum.KeyCode.LeftShift, Enum.KeyCode.RightShift, Enum.KeyCode.ButtonL3)
+ContextActionService:BindAction("SprintAction", sprintAction, true, Enum.KeyCode.LeftControl, Enum.KeyCode.RightControl, Enum.KeyCode.ButtonL3)
 ContextActionService:SetTitle("SprintAction", "Sprint")
 ContextActionService:SetImage("SprintAction", cursorImageAsset)
+
+if sprintButton then
+    sprintButton.Activated:Connect(function()
+        if sprintState.touchIntent then
+            sprintState.touchIntent = false
+            recomputeSprintIntent()
+            if not sprintState.sprintIntent then
+                stopSprinting(false)
+            end
+        else
+            if sprintState.energy <= 0 then
+                updateSprintButtonState()
+                return
+            end
+            sprintState.touchIntent = true
+            recomputeSprintIntent()
+            if not sprintState.isSprinting then
+                startSprinting()
+            end
+        end
+    end)
+end
 
 RunService.Heartbeat:Connect(function(deltaTime)
     local dt = math.max(deltaTime, 0)
@@ -808,6 +905,10 @@ RunService.Heartbeat:Connect(function(deltaTime)
         sprintState.rechargeBlockedUntil = now + SPRINT_RECHARGE_DELAY
         if sprintState.energy <= 0 then
             sprintState.energy = 0
+            if sprintState.touchIntent then
+                sprintState.touchIntent = false
+                recomputeSprintIntent()
+            end
             stopSprinting(false)
         end
     elseif sprintState.energy < MAX_SPRINT_ENERGY and now >= sprintState.rechargeBlockedUntil then
