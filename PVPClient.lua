@@ -26,17 +26,25 @@ end
 
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
+local isTouchDevice = UserInputService.TouchEnabled
+
 local DEFAULT_BACKGROUND_COLOR = Color3.fromRGB(28, 32, 45)
 local DEFAULT_BACKGROUND_TRANSPARENCY = 0.15
-local DEFAULT_TEXT_SIZE = 26
-local EMPHASIZED_TEXT_SIZE = 32
+local DEFAULT_TEXT_SIZE = if isTouchDevice then 22 else 26
+local EMPHASIZED_TEXT_SIZE = if isTouchDevice then 28 else 32
 
 local cursorImageAsset = "rbxassetid://9925913476"
+local DEFAULT_WALK_SPEED = 16
 
 local energyBarFill: Frame? = nil
 local energyTextLabel: TextLabel? = nil
 local sprintButton: TextButton? = nil
 local centerCursorImage: ImageLabel? = nil
+
+local existingGui = playerGui:FindFirstChild("PVPStatusGui")
+if existingGui then
+    existingGui:Destroy()
+end
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PVPStatusGui"
@@ -46,7 +54,7 @@ screenGui.Parent = playerGui
 
 local statusFrame = Instance.new("Frame")
 statusFrame.Name = "StatusFrame"
-statusFrame.Size = UDim2.fromOffset(260, 56)
+statusFrame.Size = UDim2.fromOffset(isTouchDevice and 220 or 260, isTouchDevice and 52 or 56)
 statusFrame.Position = UDim2.new(0.5, 0, 0, 32)
 statusFrame.AnchorPoint = Vector2.new(0.5, 0)
 statusFrame.BackgroundColor3 = DEFAULT_BACKGROUND_COLOR
@@ -102,8 +110,8 @@ sprintContainer.ZIndex = 5
 sprintContainer.Parent = screenGui
 
 local sprintPadding = Instance.new("UIPadding")
-sprintPadding.PaddingLeft = UDim.new(0, 32)
-sprintPadding.PaddingRight = UDim.new(0, 32)
+sprintPadding.PaddingLeft = UDim.new(0, isTouchDevice and 24 or 32)
+sprintPadding.PaddingRight = UDim.new(0, isTouchDevice and 24 or 32)
 sprintPadding.PaddingBottom = UDim.new(0, 12)
 sprintPadding.Parent = sprintContainer
 
@@ -129,7 +137,7 @@ local energyFillContainer = Instance.new("Frame")
 energyFillContainer.Name = "EnergyFill"
 energyFillContainer.AnchorPoint = Vector2.new(0, 0.5)
 energyFillContainer.Position = UDim2.new(0, 8, 0.5, 0)
-energyFillContainer.Size = UDim2.new(1, -120, 0, 18)
+energyFillContainer.Size = UDim2.new(1, isTouchDevice and -100 or -120, 0, isTouchDevice and 16 or 18)
 energyFillContainer.BackgroundTransparency = 1
 energyFillContainer.ClipsDescendants = true
 energyFillContainer.Parent = sprintBackground
@@ -173,7 +181,7 @@ energyTextLabel.BackgroundTransparency = 1
 energyTextLabel.Font = Enum.Font.GothamSemibold
 energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
 energyTextLabel.TextScaled = false
-energyTextLabel.TextSize = 18
+energyTextLabel.TextSize = isTouchDevice and 16 or 18
 energyTextLabel.TextXAlignment = Enum.TextXAlignment.Right
 energyTextLabel.TextYAlignment = Enum.TextYAlignment.Center
 energyTextLabel.Text = "Energy 100%"
@@ -184,22 +192,22 @@ centerCursorImage.Name = "ShiftLockCursor"
 centerCursorImage.BackgroundTransparency = 1
 centerCursorImage.AnchorPoint = Vector2.new(0.5, 0.5)
 centerCursorImage.Position = UDim2.fromScale(0.5, 0.5)
-centerCursorImage.Size = UDim2.fromOffset(48, 48)
+centerCursorImage.Size = UDim2.fromOffset(isTouchDevice and 40 or 48, isTouchDevice and 40 or 48)
 centerCursorImage.Image = cursorImageAsset
 centerCursorImage.ZIndex = 50
 centerCursorImage.Visible = false
 centerCursorImage.Parent = screenGui
 
-if UserInputService.TouchEnabled then
+if isTouchDevice then
     sprintButton = Instance.new("TextButton")
     sprintButton.Name = "SprintToggleButton"
     sprintButton.AnchorPoint = Vector2.new(1, 1)
-    sprintButton.Position = UDim2.new(1, -40, 1, -120)
-    sprintButton.Size = UDim2.fromOffset(160, 60)
+    sprintButton.Position = UDim2.new(1, -32, 1, -100)
+    sprintButton.Size = UDim2.fromOffset(130, 52)
     sprintButton.BackgroundColor3 = Color3.fromRGB(40, 48, 65)
     sprintButton.AutoButtonColor = false
     sprintButton.Text = "Sprint"
-    sprintButton.TextSize = 20
+    sprintButton.TextSize = 18
     sprintButton.Font = Enum.Font.GothamSemibold
     sprintButton.TextColor3 = Color3.fromRGB(210, 235, 255)
     sprintButton.ZIndex = 20
@@ -256,6 +264,8 @@ local highlightState = {
     playerRemovingConn = nil :: RBXScriptConnection?,
 }
 
+local deathMatchHighlightActive = false
+
 type SprintState = {
     energy: number,
     isSprinting: boolean,
@@ -288,7 +298,7 @@ local sprintState: SprintState = {
     keyboardIntent = false,
     touchIntent = false,
     rechargeBlockedUntil = 0,
-    originalWalkSpeed = 16,
+    originalWalkSpeed = DEFAULT_WALK_SPEED,
     speedTween = nil,
     cameraTween = nil,
     originalCameraFov = nil,
@@ -318,16 +328,19 @@ local function clearConnectionsForPlayer(targetPlayer: Player)
     end
 end
 
-local function getHighlightStyleForLocalPlayer(): HighlightStyle?
+local function getHighlightStyleForContext(context: string?): HighlightStyle?
+    if not context then
+        return nil
+    end
+
     local team = localPlayer.Team
     if not team then
         return nil
     end
 
-    local teamName = team.Name
-    if teamName == "Spectate" then
+    if context == "Spectate" and team.Name == "Spectate" then
         return highlightStyles.Spectate
-    elseif teamName == "Neutral" and highlightState.context == "DeathMatch" then
+    elseif context == "DeathMatch" and team.Name == "Neutral" then
         return highlightStyles.DeathMatch
     end
 
@@ -384,13 +397,10 @@ local function refreshHighlightStyle()
         return
     end
 
-    local newStyle = getHighlightStyleForLocalPlayer()
+    local newStyle = getHighlightStyleForContext(highlightState.context)
     if not newStyle then
-        highlightState.style = nil
-        for player, highlight in highlightState.highlights do
-            highlight:Destroy()
-        end
-        table.clear(highlightState.highlights)
+        disableHighlights()
+        updateHighlightActivation()
         return
     end
 
@@ -407,7 +417,7 @@ local function refreshHighlightStyle()
     end
 end
 
-local function disableDeathMatchTransitionVisuals()
+local function disableHighlights()
     if highlightState.playerAddedConn then
         highlightState.playerAddedConn:Disconnect()
         highlightState.playerAddedConn = nil
@@ -463,20 +473,21 @@ local function trackPlayerForHighlights(targetPlayer: Player)
     updateHighlightForPlayer(targetPlayer)
 end
 
-local function enableDeathMatchTransitionVisuals()
-    if highlightState.active then
+local function enableHighlights(context: string)
+    if highlightState.active and highlightState.context == context then
+        highlightState.style = getHighlightStyleForContext(context)
         refreshHighlightStyle()
         return
     end
 
-    highlightState.context = "DeathMatch"
+    disableHighlights()
 
-    local style = getHighlightStyleForLocalPlayer()
+    local style = getHighlightStyleForContext(context)
     if not style then
-        disableDeathMatchTransitionVisuals()
         return
     end
 
+    highlightState.context = context
     highlightState.active = true
     highlightState.style = style
 
@@ -496,6 +507,23 @@ local function enableDeathMatchTransitionVisuals()
     end)
 
     refreshHighlightStyle()
+end
+
+local function updateHighlightActivation()
+    local team = localPlayer.Team
+    local desiredContext: string? = nil
+
+    if team and team.Name == "Spectate" then
+        desiredContext = "Spectate"
+    elseif deathMatchHighlightActive and team and team.Name == "Neutral" then
+        desiredContext = "DeathMatch"
+    end
+
+    if desiredContext then
+        enableHighlights(desiredContext)
+    else
+        disableHighlights()
+    end
 end
 
 local function updateSprintButtonState()
@@ -649,7 +677,13 @@ local function startSprinting()
     end
 
     sprintState.isSprinting = true
-    sprintState.originalWalkSpeed = humanoid.WalkSpeed
+    local baselineSpeed = humanoid.WalkSpeed
+    if math.abs(baselineSpeed - SPRINT_SPEED) < 0.001 then
+        baselineSpeed = DEFAULT_WALK_SPEED
+    elseif baselineSpeed <= 0 then
+        baselineSpeed = DEFAULT_WALK_SPEED
+    end
+    sprintState.originalWalkSpeed = baselineSpeed
 
     tweenHumanoidSpeed(SPRINT_SPEED, false)
 
@@ -675,6 +709,7 @@ local function resetSprintState()
     sprintState.speedTween = nil
     sprintState.cameraTween = nil
     sprintState.originalCameraFov = nil
+    sprintState.originalWalkSpeed = DEFAULT_WALK_SPEED
     updateEnergyUI()
 end
 
@@ -739,7 +774,7 @@ local function stopDeathMatchTransition()
         transitionState.active = false
     end
 
-    disableDeathMatchTransitionVisuals()
+    updateHighlightActivation()
 end
 
 local function startDeathMatchTransition(duration: number?)
@@ -747,7 +782,8 @@ local function startDeathMatchTransition(duration: number?)
     transitionState.active = true
     local currentToken = transitionState.token
 
-    enableDeathMatchTransitionVisuals()
+    deathMatchHighlightActive = true
+    updateHighlightActivation()
     playDeathMatchCameraSequence()
 
     local delayTime = duration or 3
@@ -759,7 +795,7 @@ local function startDeathMatchTransition(duration: number?)
 end
 
 localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
-    refreshHighlightStyle()
+    updateHighlightActivation()
 end)
 
 if mouse then
@@ -789,6 +825,7 @@ end)
 
 updateCenterCursorVisibility()
 updateEnergyUI()
+updateHighlightActivation()
 
 local function onHumanoidAdded(humanoid: Humanoid)
     if humanoidSpeedChangedConn then
@@ -797,11 +834,26 @@ local function onHumanoidAdded(humanoid: Humanoid)
     end
 
     currentHumanoid = humanoid
-    sprintState.originalWalkSpeed = humanoid.WalkSpeed
+    if humanoid.WalkSpeed <= 0 then
+        humanoid.WalkSpeed = DEFAULT_WALK_SPEED
+    end
+
+    local currentSpeed = humanoid.WalkSpeed
+    if math.abs(currentSpeed - SPRINT_SPEED) < 0.001 then
+        currentSpeed = DEFAULT_WALK_SPEED
+    end
+    sprintState.originalWalkSpeed = currentSpeed
 
     humanoidSpeedChangedConn = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
         if not sprintState.isSprinting then
-            sprintState.originalWalkSpeed = humanoid.WalkSpeed
+            local newSpeed = humanoid.WalkSpeed
+            if newSpeed <= 0 then
+                newSpeed = DEFAULT_WALK_SPEED
+            elseif math.abs(newSpeed - SPRINT_SPEED) < 0.001 then
+                newSpeed = DEFAULT_WALK_SPEED
+            end
+
+            sprintState.originalWalkSpeed = newSpeed
         end
     end)
 
@@ -1075,15 +1127,19 @@ statusRemote.OnClientEvent:Connect(function(payload)
         labelStroke.Transparency = 0
 
         local duration = tonumber(payload.duration) or 3
+        deathMatchHighlightActive = true
+        updateHighlightActivation()
         startDeathMatchTransition(duration)
     elseif action == "DeathMatch" then
         local isActive = payload.active == nil or payload.active
         if isActive then
+            deathMatchHighlightActive = true
             stopDeathMatchTransition()
             statusFrame.Visible = true
             statusLabel.Text = "Death Match"
             startDeathMatchEffect()
         else
+            deathMatchHighlightActive = false
             stopShake()
             stopFlash()
             stopDeathMatchTransition()
@@ -1091,6 +1147,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
             statusFrame.Visible = false
         end
     elseif action == "RoundEnded" then
+        deathMatchHighlightActive = false
         hideStatus()
     end
 end)
