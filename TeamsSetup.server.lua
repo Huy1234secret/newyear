@@ -38,6 +38,7 @@ local INTERMISSION_MUSIC_ID = "15689444712"
 local DEFAULT_MUSIC_VOLUME = 0.5
 local DEATHMATCH_TRANSITION_DURATION = 3
 local DEATHMATCH_MUSIC_ID = "117047384857700"
+local STORM_MIN_HORIZONTAL_SIZE = 200
 
 local function isGameOwner(player: Player): boolean
     if allowedUserIds[player.UserId] then
@@ -484,9 +485,11 @@ local function setParticipantFrozen(record: ParticipantRecord, freeze: boolean)
     else
         if record.originalWalkSpeed then
             humanoid.WalkSpeed = record.originalWalkSpeed
+            record.originalWalkSpeed = nil
         end
         if record.originalJumpPower then
             humanoid.JumpPower = record.originalJumpPower
+            record.originalJumpPower = nil
         end
         humanoid.AutoRotate = true
     end
@@ -664,6 +667,18 @@ local function prepareParticipant(record: ParticipantRecord, spawnPart: BasePart
         setParticipantFrozen(record, true)
         teleportParticipant(record)
 
+        task.defer(function()
+            if roundId ~= currentRoundId or not roundInProgress then
+                return
+            end
+
+            if record.countdownComplete then
+                return
+            end
+
+            setParticipantFrozen(record, false)
+        end)
+
         if record.deathConn then
             record.deathConn:Disconnect()
         end
@@ -820,6 +835,7 @@ local function beginDeathMatch(roundId: number)
 
     stormPart.CanCollide = false
     stormPart.CanTouch = false
+    stormPart.CanQuery = false
     stormPart.Anchored = true
     stormPart.CastShadow = false
 
@@ -830,7 +846,18 @@ local function beginDeathMatch(roundId: number)
         stormPart.Size = Vector3.new(600, 1000, 600)
     end
 
-    stormPart.CFrame = CFrame.new(0, 0, 0)
+    local initialSize = stormPart.Size
+    local adjustedSize = Vector3.new(
+        math.max(initialSize.X, STORM_MIN_HORIZONTAL_SIZE),
+        if initialSize.Y > 0 then initialSize.Y else 100,
+        math.max(initialSize.Z, STORM_MIN_HORIZONTAL_SIZE)
+    )
+
+    if adjustedSize ~= initialSize then
+        stormPart.Size = adjustedSize
+    end
+
+    stormPart:PivotTo(CFrame.new(0, 0, 0))
     stormPart.Parent = activeMapModel or Workspace
     currentStormPart = stormPart
 
@@ -857,7 +884,7 @@ local function beginDeathMatch(roundId: number)
             local halfSize = activeStorm.Size * 0.5
             local stormCFrame = activeStorm.CFrame
 
-            if halfSize.X <= 0 or halfSize.Y <= 0 or halfSize.Z <= 0 then
+            if halfSize.X <= 0 or halfSize.Z <= 0 then
                 continue
             end
 
@@ -881,7 +908,10 @@ local function beginDeathMatch(roundId: number)
                 record.humanoid = humanoid
 
                 local relative = stormCFrame:PointToObjectSpace(rootPart.Position)
-                if math.abs(relative.X) > halfSize.X or math.abs(relative.Y) > halfSize.Y or math.abs(relative.Z) > halfSize.Z then
+                local outsideX = math.abs(relative.X) > halfSize.X
+                local outsideZ = math.abs(relative.Z) > halfSize.Z
+
+                if outsideX or outsideZ then
                     humanoid:TakeDamage(1)
                 end
             end
