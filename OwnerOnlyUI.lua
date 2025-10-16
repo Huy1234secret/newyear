@@ -151,36 +151,12 @@ toggleButton.AnchorPoint = Vector2.new(0.5, 0.5)
 toggleButton.Position = UDim2.new(0, panelWidth - (buttonWidth / 2), 0.5, 0)
 toggleButton.BackgroundColor3 = Color3.fromRGB(74, 87, 120)
 toggleButton.AutoButtonColor = false
-toggleButton.Image = "rbxassetid://4726772334"
+toggleButton.Image = "rbxassetid://4726772330"
 toggleButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
 toggleButton.ScaleType = Enum.ScaleType.Fit
 toggleButton.Parent = panel
 
 toggleButton.ZIndex = 3
-
-local quickPVPButton = Instance.new("TextButton")
-quickPVPButton.Name = "QuickPVPButton"
-quickPVPButton.Size = UDim2.fromOffset(buttonWidth, 36)
-quickPVPButton.AnchorPoint = Vector2.new(0, 0.5)
-quickPVPButton.Position = UDim2.new(0, panelWidth - buttonWidth, 0.5, -60)
-quickPVPButton.BackgroundColor3 = Color3.fromRGB(94, 108, 160)
-quickPVPButton.AutoButtonColor = false
-quickPVPButton.Font = Enum.Font.GothamBold
-quickPVPButton.Text = "PVP"
-quickPVPButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-quickPVPButton.TextSize = 16
-quickPVPButton.ZIndex = 3
-quickPVPButton.Parent = panel
-
-local quickPVPCorner = Instance.new("UICorner")
-quickPVPCorner.CornerRadius = UDim.new(0, 8)
-quickPVPCorner.Parent = quickPVPButton
-
-local quickPVPStroke = Instance.new("UIStroke")
-quickPVPStroke.Thickness = 1.5
-quickPVPStroke.Color = Color3.fromRGB(150, 160, 210)
-quickPVPStroke.Transparency = 0.3
-quickPVPStroke.Parent = quickPVPButton
 
 local buttonCorner = Instance.new("UICorner")
 buttonCorner.CornerRadius = UDim.new(1, 0)
@@ -231,6 +207,7 @@ pvpTitle.Text = "PVP"
 pvpTitle.TextColor3 = Color3.fromRGB(245, 245, 255)
 pvpTitle.TextSize = 26
 pvpTitle.TextXAlignment = Enum.TextXAlignment.Left
+pvpTitle.ZIndex = 6
 pvpTitle.Parent = pvpFrame
 
 local actionContainer = Instance.new("Frame")
@@ -239,6 +216,7 @@ actionContainer.AnchorPoint = Vector2.new(1, 1)
 actionContainer.Position = UDim2.new(1, -20, 1, -20)
 actionContainer.Size = UDim2.fromOffset(200, 40)
 actionContainer.BackgroundTransparency = 1
+actionContainer.ZIndex = 6
 actionContainer.Parent = pvpFrame
 
 local actionLayout = Instance.new("UIListLayout")
@@ -257,6 +235,7 @@ local function createActionButton(name: string, text: string): TextButton
     button.Text = text
     button.TextColor3 = Color3.fromRGB(255, 255, 255)
     button.TextSize = 18
+    button.ZIndex = 6
     button.Parent = actionContainer
 
     local corner = Instance.new("UICorner")
@@ -333,7 +312,6 @@ local function onPVPActivated()
 end
 
 pvpButton.Activated:Connect(onPVPActivated)
-quickPVPButton.Activated:Connect(onPVPActivated)
 
 startButton.Activated:Connect(function()
     showPanelUI()
