@@ -163,6 +163,7 @@ type ParticipantRecord = {
     originalWalkSpeed: number?,
     originalJumpPower: number?,
     countdownComplete: boolean?,
+    freezeToken: number?,
 }
 
 local participantRecords: {[Player]: ParticipantRecord} = {}
@@ -527,6 +528,8 @@ local function cleanupParticipant(player: Player)
         return
     end
 
+    record.freezeToken = (record.freezeToken or 0) + 1
+
     clearParticipantConnections(record)
 
     local character = player.Character
@@ -667,17 +670,26 @@ local function prepareParticipant(record: ParticipantRecord, spawnPart: BasePart
         setParticipantFrozen(record, true)
         teleportParticipant(record)
 
-        task.defer(function()
+        record.freezeToken = (record.freezeToken or 0) + 1
+        local activeFreezeToken = record.freezeToken
+
+        local function releaseTeleportFreeze()
             if roundId ~= currentRoundId or not roundInProgress then
                 return
             end
 
-            if record.countdownComplete then
+            if record.freezeToken ~= activeFreezeToken then
                 return
             end
 
             setParticipantFrozen(record, false)
-        end)
+        end
+
+        if TELEPORT_FREEZE_DURATION > 0 then
+            task.delay(TELEPORT_FREEZE_DURATION, releaseTeleportFreeze)
+        else
+            task.defer(releaseTeleportFreeze)
+        end
 
         if record.deathConn then
             record.deathConn:Disconnect()
@@ -1118,6 +1130,7 @@ local function startRound(player: Player, mapId: string)
             originalJumpPower = nil,
             originalWalkSpeed = nil,
             countdownComplete = false,
+            freezeToken = 0,
         }
 
         participantRecords[targetPlayer] = record
@@ -1128,13 +1141,6 @@ local function startRound(player: Player, mapId: string)
     end
 
     local countdownStart = math.max(0, PREP_COUNTDOWN_DURATION)
-
-    if TELEPORT_FREEZE_DURATION > 0 then
-        task.wait(TELEPORT_FREEZE_DURATION)
-        if not roundInProgress or currentRoundId ~= roundId then
-            return
-        end
-    end
 
     sendStatusUpdate({
         action = "PrepCountdown",
