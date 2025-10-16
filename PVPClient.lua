@@ -36,7 +36,7 @@ local cursorImageAsset = "rbxassetid://9925913476"
 local energyBarFill: Frame? = nil
 local energyTextLabel: TextLabel? = nil
 local sprintButton: TextButton? = nil
-local mobileCursorImage: ImageLabel? = nil
+local centerCursorImage: ImageLabel? = nil
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PVPStatusGui"
@@ -179,18 +179,18 @@ energyTextLabel.TextYAlignment = Enum.TextYAlignment.Center
 energyTextLabel.Text = "Energy 100%"
 energyTextLabel.Parent = sprintBackground
 
-if UserInputService.TouchEnabled then
-    mobileCursorImage = Instance.new("ImageLabel")
-    mobileCursorImage.Name = "ShiftLockCursor"
-    mobileCursorImage.BackgroundTransparency = 1
-    mobileCursorImage.AnchorPoint = Vector2.new(0.5, 0.5)
-    mobileCursorImage.Position = UDim2.fromScale(0.5, 0.5)
-    mobileCursorImage.Size = UDim2.fromOffset(48, 48)
-    mobileCursorImage.Image = cursorImageAsset
-    mobileCursorImage.ZIndex = 50
-    mobileCursorImage.Visible = false
-    mobileCursorImage.Parent = screenGui
+centerCursorImage = Instance.new("ImageLabel")
+centerCursorImage.Name = "ShiftLockCursor"
+centerCursorImage.BackgroundTransparency = 1
+centerCursorImage.AnchorPoint = Vector2.new(0.5, 0.5)
+centerCursorImage.Position = UDim2.fromScale(0.5, 0.5)
+centerCursorImage.Size = UDim2.fromOffset(48, 48)
+centerCursorImage.Image = cursorImageAsset
+centerCursorImage.ZIndex = 50
+centerCursorImage.Visible = false
+centerCursorImage.Parent = screenGui
 
+if UserInputService.TouchEnabled then
     sprintButton = Instance.new("TextButton")
     sprintButton.Name = "SprintToggleButton"
     sprintButton.AnchorPoint = Vector2.new(1, 1)
@@ -688,14 +688,22 @@ local function applyDesktopCursorIcon()
         mouse.Icon = cursorImageAsset
         applyingMouseIcon = false
     end
+
+    if centerCursorImage then
+        centerCursorImage.Image = cursorImageAsset
+    end
 end
 
-local function updateMobileCursorVisibility()
-    if not mobileCursorImage then
+local function updateCenterCursorVisibility()
+    if not centerCursorImage then
         return
     end
 
-    mobileCursorImage.Visible = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
+    local shouldShow = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
+    centerCursorImage.Visible = shouldShow
+    if shouldShow then
+        centerCursorImage.Image = cursorImageAsset
+    end
 end
 
 local function playDeathMatchCameraSequence()
@@ -756,7 +764,6 @@ end)
 
 if mouse then
     UserInputService.MouseIconEnabled = true
-    UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.ForceShow
     applyDesktopCursorIcon()
 
     mouse:GetPropertyChangedSignal("Icon"):Connect(function()
@@ -770,7 +777,7 @@ UserInputService:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
     if mouse then
         applyDesktopCursorIcon()
     end
-    updateMobileCursorVisibility()
+    updateCenterCursorVisibility()
 end)
 
 UserInputService.WindowFocusReleased:Connect(function()
@@ -780,7 +787,7 @@ UserInputService.WindowFocusReleased:Connect(function()
     stopSprinting(true)
 end)
 
-updateMobileCursorVisibility()
+updateCenterCursorVisibility()
 updateEnergyUI()
 
 local function onHumanoidAdded(humanoid: Humanoid)
