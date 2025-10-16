@@ -3,6 +3,7 @@
 -- It will create an owner-only control panel button that slides in and out with animation.
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
@@ -10,6 +11,45 @@ local player = Players.LocalPlayer
 local allowedUserIds = {
     [347735445] = true,
 }
+
+type MapDefinition = {
+    id: string,
+    displayName: string,
+    modelName: string,
+}
+
+local mapDefinitions: {MapDefinition} = {
+    {
+        id = "Crossroad",
+        displayName = "Crossroad",
+        modelName = "Crossroad",
+    },
+}
+
+local mapButtonDefaultColor = Color3.fromRGB(190, 60, 60)
+local mapButtonSelectedColor = Color3.fromRGB(70, 170, 95)
+local mapButtonTextColor = Color3.fromRGB(255, 255, 255)
+
+local remotesFolder = ReplicatedStorage:FindFirstChild("PVPRemotes")
+if not remotesFolder then
+    remotesFolder = ReplicatedStorage:WaitForChild("PVPRemotes", 5)
+end
+
+local startRoundRemote: RemoteEvent? = nil
+local roundStateRemote: RemoteEvent? = nil
+
+if remotesFolder and remotesFolder:IsA("Folder") then
+    startRoundRemote = remotesFolder:FindFirstChild("StartRound") :: RemoteEvent?
+    roundStateRemote = remotesFolder:FindFirstChild("RoundState") :: RemoteEvent?
+
+    remotesFolder.ChildAdded:Connect(function(child)
+        if child.Name == "StartRound" and child:IsA("RemoteEvent") then
+            startRoundRemote = child
+        elseif child.Name == "RoundState" and child:IsA("RemoteEvent") then
+            roundStateRemote = child
+        end
+    end)
+end
 
 local function isGameOwner(): boolean
     if allowedUserIds[player.UserId] then
@@ -43,8 +83,8 @@ screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
-local panelWidth = 220
-local panelHeight = 180
+local panelWidth = 240
+local panelHeight = 200
 local buttonWidth = 32
 
 local panel = Instance.new("Frame")
@@ -117,6 +157,8 @@ pvpButton.Font = Enum.Font.GothamBold
 pvpButton.Text = "PVP"
 pvpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 pvpButton.TextSize = 18
+pvpButton.TextStrokeTransparency = 0.4
+pvpButton.ZIndex = 4
 pvpButton.Parent = buttonContainer
 
 local pvpButtonCorner = Instance.new("UICorner")
@@ -163,7 +205,7 @@ glow.Parent = toggleButton
 
 local pvpFrame = Instance.new("Frame")
 pvpFrame.Name = "PVPPanel"
-pvpFrame.Size = UDim2.fromOffset(360, 220)
+pvpFrame.Size = UDim2.fromOffset(420, 260)
 pvpFrame.Position = UDim2.fromScale(0.5, 0.5)
 pvpFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 pvpFrame.BackgroundColor3 = Color3.fromRGB(32, 35, 50)
@@ -195,6 +237,42 @@ pvpTitle.TextXAlignment = Enum.TextXAlignment.Left
 pvpTitle.ZIndex = 6
 pvpTitle.Parent = pvpFrame
 
+local mapSection = Instance.new("Frame")
+mapSection.Name = "MapSection"
+mapSection.Size = UDim2.new(1, -40, 0, 110)
+mapSection.Position = UDim2.new(0, 20, 0, 70)
+mapSection.BackgroundTransparency = 1
+mapSection.ZIndex = 6
+mapSection.Parent = pvpFrame
+
+local mapHeader = Instance.new("TextLabel")
+mapHeader.Name = "Header"
+mapHeader.Size = UDim2.new(1, 0, 0, 24)
+mapHeader.BackgroundTransparency = 1
+mapHeader.Font = Enum.Font.GothamBold
+mapHeader.Text = "Map"
+mapHeader.TextColor3 = Color3.fromRGB(245, 245, 255)
+mapHeader.TextSize = 20
+mapHeader.TextXAlignment = Enum.TextXAlignment.Left
+mapHeader.ZIndex = 6
+mapHeader.Parent = mapSection
+
+local mapList = Instance.new("Frame")
+mapList.Name = "MapList"
+mapList.Size = UDim2.new(1, 0, 0, 64)
+mapList.Position = UDim2.new(0, 0, 0, 32)
+mapList.BackgroundTransparency = 1
+mapList.ZIndex = 6
+mapList.Parent = mapSection
+
+local mapListLayout = Instance.new("UIListLayout")
+mapListLayout.FillDirection = Enum.FillDirection.Horizontal
+mapListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+mapListLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+mapListLayout.Padding = UDim.new(0, 12)
+mapListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+mapListLayout.Parent = mapList
+
 local actionContainer = Instance.new("Frame")
 actionContainer.Name = "ActionContainer"
 actionContainer.AnchorPoint = Vector2.new(1, 1)
@@ -203,6 +281,21 @@ actionContainer.Size = UDim2.fromOffset(200, 40)
 actionContainer.BackgroundTransparency = 1
 actionContainer.ZIndex = 6
 actionContainer.Parent = pvpFrame
+
+local messageLabel = Instance.new("TextLabel")
+messageLabel.Name = "MessageLabel"
+messageLabel.AnchorPoint = Vector2.new(0, 1)
+messageLabel.Position = UDim2.new(0, 20, 1, -72)
+messageLabel.Size = UDim2.new(1, -40, 0, 20)
+messageLabel.BackgroundTransparency = 1
+messageLabel.Font = Enum.Font.Gotham
+messageLabel.Text = ""
+messageLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
+messageLabel.TextSize = 16
+messageLabel.TextTransparency = 1
+messageLabel.TextXAlignment = Enum.TextXAlignment.Left
+messageLabel.ZIndex = 6
+messageLabel.Parent = pvpFrame
 
 local actionLayout = Instance.new("UIListLayout")
 actionLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -238,6 +331,124 @@ end
 
 local startButton = createActionButton("StartButton", "Start")
 local cancelButton = createActionButton("CancelButton", "Cancel")
+
+local startButtonDefaultColor = startButton.BackgroundColor3
+local startButtonDisabledColor = Color3.fromRGB(70, 80, 110)
+
+local mapButtons: {[string]: TextButton} = {}
+local selectedMapId: string? = nil
+local startButtonLocked = false
+local startButtonLabel = startButton.Text
+local messageFadeToken = 0
+local messageFadeTween: Tween? = nil
+
+local function updateStartButtonVisual()
+    startButton.Text = startButtonLabel
+    startButton.BackgroundColor3 = startButtonLocked and startButtonDisabledColor or startButtonDefaultColor
+    startButton.Active = not startButtonLocked
+    startButton.AutoButtonColor = not startButtonLocked
+    startButton.TextTransparency = startButtonLocked and 0.2 or 0
+end
+
+local function setStartButtonState(isLocked: boolean, label: string?)
+    startButtonLocked = isLocked
+    if not isLocked then
+        startButtonLabel = "Start"
+    elseif label then
+        startButtonLabel = label
+    end
+    updateStartButtonVisual()
+end
+
+local function clearMessage()
+    if messageFadeTween then
+        messageFadeTween:Cancel()
+        messageFadeTween = nil
+    end
+    messageLabel.Text = ""
+    messageLabel.TextTransparency = 1
+end
+
+local function showMessage(text: string, color: Color3?)
+    messageFadeToken += 1
+    local token = messageFadeToken
+
+    if messageFadeTween then
+        messageFadeTween:Cancel()
+        messageFadeTween = nil
+    end
+
+    messageLabel.Text = text
+    messageLabel.TextColor3 = color or Color3.fromRGB(255, 120, 120)
+    messageLabel.TextTransparency = 0
+
+    task.delay(3, function()
+        if token ~= messageFadeToken then
+            return
+        end
+
+        messageFadeTween = TweenService:Create(messageLabel, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            TextTransparency = 1,
+        })
+        messageFadeTween:Play()
+    end)
+end
+
+local function updateMapButtonVisual(button: TextButton, isSelected: boolean)
+    button.BackgroundColor3 = isSelected and mapButtonSelectedColor or mapButtonDefaultColor
+    button.TextColor3 = mapButtonTextColor
+
+    local stroke = button:FindFirstChildOfClass("UIStroke")
+    if stroke then
+        stroke.Color = isSelected and Color3.fromRGB(185, 255, 205) or Color3.fromRGB(120, 40, 40)
+        stroke.Transparency = isSelected and 0 or 0.2
+    end
+end
+
+local function selectMap(mapId: string)
+    selectedMapId = mapId
+    for id, button in mapButtons do
+        updateMapButtonVisual(button, id == selectedMapId)
+    end
+end
+
+for order, definition in ipairs(mapDefinitions) do
+    local button = Instance.new("TextButton")
+    button.Name = string.format("%sButton", definition.id)
+    button.LayoutOrder = order
+    button.Size = UDim2.new(0, 120, 0, 44)
+    button.BackgroundColor3 = mapButtonDefaultColor
+    button.AutoButtonColor = false
+    button.Font = Enum.Font.GothamBold
+    button.Text = definition.displayName
+    button.TextColor3 = mapButtonTextColor
+    button.TextSize = 18
+    button.ZIndex = 6
+    button.Parent = mapList
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = button
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1.6
+    stroke.Transparency = 0.2
+    stroke.Color = Color3.fromRGB(120, 40, 40)
+    stroke.Parent = button
+
+    mapButtons[definition.id] = button
+    updateMapButtonVisual(button, false)
+
+    button.Activated:Connect(function()
+        if selectedMapId == definition.id then
+            return
+        end
+
+        selectMap(definition.id)
+    end)
+end
+
+updateStartButtonVisual()
 
 local opened = false
 local tweenInfo = TweenInfo.new(0.35, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out)
@@ -275,11 +486,14 @@ local function showPanelUI()
     opened = true
     updateToggleVisual()
     tweenPanel()
+    clearMessage()
 end
 
 local function showPVPUI()
     panel.Visible = false
     pvpFrame.Visible = true
+    clearMessage()
+    updateStartButtonVisual()
 end
 
 local toggleDebounce = false
@@ -299,12 +513,59 @@ end
 pvpButton.Activated:Connect(onPVPActivated)
 
 startButton.Activated:Connect(function()
-    showPanelUI()
+    if startButtonLocked then
+        return
+    end
+
+    if not selectedMapId then
+        showMessage("Select a map to begin a round.")
+        return
+    end
+
+    if not startRoundRemote then
+        showMessage("PVP controls are not ready yet.")
+        return
+    end
+
+    setStartButtonState(true, "Starting...")
+    clearMessage()
+    startRoundRemote:FireServer({
+        mapId = selectedMapId,
+    })
 end)
 
 cancelButton.Activated:Connect(function()
+    clearMessage()
     showPanelUI()
 end)
+
+if roundStateRemote then
+    roundStateRemote.OnClientEvent:Connect(function(payload)
+        if typeof(payload) == "table" then
+            local state = payload.state
+            if state == "Starting" then
+                setStartButtonState(true, "Starting...")
+            elseif state == "Active" then
+                setStartButtonState(true, "In Progress")
+            elseif state == "Idle" or state == "Ended" then
+                setStartButtonState(false)
+                clearMessage()
+            elseif state == "Error" then
+                setStartButtonState(false)
+                if payload.message then
+                    showMessage(payload.message)
+                end
+            end
+        elseif typeof(payload) == "string" then
+            if payload == "Active" then
+                setStartButtonState(true, "In Progress")
+            elseif payload == "Idle" then
+                setStartButtonState(false)
+                clearMessage()
+            end
+        end
+    end)
+end
 
 toggleButton.Activated:Connect(function()
     if toggleDebounce then
