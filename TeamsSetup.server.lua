@@ -34,6 +34,8 @@ local allowedUserIds = {
 
 local PREP_COUNTDOWN_DURATION = 2
 local INTERMISSION_MUSIC_ID = "15689444712"
+local DEFAULT_MUSIC_VOLUME = 0.5
+local DEATHMATCH_TRANSITION_DURATION = 3
 
 local function isGameOwner(player: Player): boolean
     if allowedUserIds[player.UserId] then
@@ -151,6 +153,10 @@ local storedNormalSkyParent: Instance? = nil
 local currentStormPart: BasePart? = nil
 local deathMatchActive = false
 
+local function performDeathMatchTransition(roundId: number)
+    -- Forward declaration; defined later.
+end
+
 local function endRound(roundId: number)
 end
 
@@ -209,6 +215,8 @@ local function playMusic(assetId: string | number | nil)
     end
 
     if currentMusic and currentMusicId == normalizedId then
+        currentMusic.Volume = DEFAULT_MUSIC_VOLUME
+        currentMusic.PlaybackSpeed = 1
         if not currentMusic.IsPlaying then
             currentMusic:Play()
         end
@@ -221,7 +229,7 @@ local function playMusic(assetId: string | number | nil)
     sound.Name = "PVPBackgroundMusic"
     sound.SoundId = normalizedId
     sound.Looped = true
-    sound.Volume = 0.5
+    sound.Volume = DEFAULT_MUSIC_VOLUME
     sound.Parent = SoundService
     sound:Play()
 
@@ -733,6 +741,78 @@ local function beginDeathMatch(roundId: number)
     end)
 end
 
+performDeathMatchTransition = function(roundId: number)
+    if roundId ~= currentRoundId or not roundInProgress then
+        return
+    end
+
+    sendStatusUpdate({
+        action = "DeathMatchTransition",
+        duration = DEATHMATCH_TRANSITION_DURATION,
+    })
+
+    local tweens: {Tween} = {}
+
+    local activeMusic = currentMusic
+    if activeMusic then
+        local tweenInfo = TweenInfo.new(DEATHMATCH_TRANSITION_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+
+        local speedTween = TweenService:Create(activeMusic, tweenInfo, {
+            PlaybackSpeed = 0.5,
+        })
+        local volumeTween = TweenService:Create(activeMusic, tweenInfo, {
+            Volume = 0,
+        })
+
+        speedTween:Play()
+        volumeTween:Play()
+
+        tweens = {speedTween, volumeTween}
+    end
+
+    local elapsed = 0
+    while elapsed < DEATHMATCH_TRANSITION_DURATION do
+        local waitTime = task.wait(0.1)
+        if not waitTime then
+            waitTime = 0.1
+        end
+        elapsed += waitTime
+
+        if roundId ~= currentRoundId or not roundInProgress then
+            for _, tween in tweens do
+                tween:Cancel()
+            end
+
+            if activeMusic then
+                activeMusic.PlaybackSpeed = 1
+                activeMusic.Volume = DEFAULT_MUSIC_VOLUME
+            end
+
+            return
+        end
+    end
+
+    for _, tween in tweens do
+        tween:Cancel()
+    end
+
+    if roundId ~= currentRoundId or not roundInProgress then
+        if activeMusic then
+            activeMusic.PlaybackSpeed = 1
+            activeMusic.Volume = DEFAULT_MUSIC_VOLUME
+        end
+        return
+    end
+
+    if activeMusic then
+        activeMusic.PlaybackSpeed = 1
+    end
+
+    stopCurrentMusic()
+
+    beginDeathMatch(roundId)
+end
+
 local function startRound(player: Player, mapId: string)
     if roundInProgress then
         sendRoundState("Error", {
@@ -927,7 +1007,7 @@ local function startRound(player: Player, mapId: string)
         return
     end
 
-    beginDeathMatch(roundId)
+    performDeathMatchTransition(roundId)
 end
 
 local lobbyParts: {BasePart} = {}
