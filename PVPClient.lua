@@ -152,13 +152,15 @@ local function getHumanoidRootPart(humanoid: Humanoid): BasePart?
     return nil
 end
 
+type GuiButton = TextButton | ImageButton
+
 type InventorySlotUI = {
     frame: Frame,
     stroke: UIStroke,
     icon: ImageLabel,
     label: TextLabel,
     numberLabel: TextLabel,
-    button: TextButton,
+    button: GuiButton,
 }
 
 local inventorySlots: {InventorySlotUI} = {}
@@ -474,16 +476,16 @@ for slotIndex = 1, 10 do
     nameLabel.ZIndex = 18
     nameLabel.Parent = slotFrame
 
-    local slotButton = Instance.new("TextButton")
+    local slotButton = Instance.new("ImageButton")
     slotButton.Name = "SelectButton"
     slotButton.BackgroundTransparency = 1
     slotButton.Size = UDim2.new(1, 0, 1, 0)
-    slotButton.Text = ""
     slotButton.AutoButtonColor = false
+    slotButton.ImageTransparency = 1
+    slotButton.Active = false
+    slotButton.Selectable = false
     slotButton.ZIndex = 19
     slotButton.Parent = slotFrame
-
-    slotFrame.Active = true
 
     local currentSlotIndex = slotIndex
     local lastTriggerTime = 0
@@ -521,14 +523,16 @@ for slotIndex = 1, 10 do
         return false
     end
 
-    slotButton.InputBegan:Connect(function(input)
+    slotFrame.Active = true
+
+    slotFrame.InputBegan:Connect(function(input)
         if shouldTriggerFromInput(input) then
             triggerSelection()
         end
     end)
 
-    slotFrame.InputBegan:Connect(function(input)
-        if shouldTriggerFromInput(input) then
+    slotFrame.InputEnded:Connect(function(input)
+        if shouldTriggerFromInput(input) and input.UserInputState == Enum.UserInputState.End then
             triggerSelection()
         end
     end)
@@ -1282,6 +1286,7 @@ updateInventorySlots = function()
                 slot.label.Text = tool.Name
                 slot.frame.BackgroundTransparency = 0.15
                 slot.button.Active = true
+                slot.button.Selectable = true
                 slot.numberLabel.TextColor3 = Color3.fromRGB(210, 220, 240)
             else
                 slot.icon.Image = ""
@@ -1289,6 +1294,7 @@ updateInventorySlots = function()
                 slot.label.Text = ""
                 slot.frame.BackgroundTransparency = 0.4
                 slot.button.Active = false
+                slot.button.Selectable = false
                 slot.numberLabel.TextColor3 = Color3.fromRGB(140, 150, 180)
             end
 
