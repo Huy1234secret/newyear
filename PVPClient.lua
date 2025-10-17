@@ -76,6 +76,7 @@ local inventoryFrame: Frame? = nil
 
 local noSprintPart: BasePart? = nil
 local sprintActionButton: ImageButton? = nil
+local sprintActionBound = false
 
 local function updateNoSprintPartReference()
     local found = Workspace:FindFirstChild("NoSprintPart", true)
@@ -836,6 +837,10 @@ local function getSprintActionButton(): ImageButton?
 end
 
 local function updateSprintButtonState()
+    if not sprintActionBound then
+        return
+    end
+
     local hasEnergy = sprintState.energy > 0
     local canSprint = hasEnergy and not sprintState.zoneBlocked
     local buttonActive = sprintState.touchIntent and canSprint
@@ -1638,8 +1643,10 @@ local function sprintAction(_: string, inputState: Enum.UserInputState, inputObj
 end
 
 ContextActionService:BindAction("SprintAction", sprintAction, true, Enum.KeyCode.LeftControl, Enum.KeyCode.RightControl, Enum.KeyCode.ButtonL3)
+sprintActionBound = true
 ContextActionService:SetTitle("SprintAction", "Sprint")
 ContextActionService:SetImage("SprintAction", GEAR_CURSOR_IMAGE_ASSET)
+updateSprintButtonState()
 
 local keyToSlotIndex: {[Enum.KeyCode]: number} = {
     [Enum.KeyCode.One] = 1,
