@@ -50,11 +50,17 @@ end
 
 setBackpackCoreGuiEnabled(false)
 
-StarterGui.CoreGuiChangedSignal:Connect(function(coreGuiType, enabled)
-    if coreGuiType == Enum.CoreGuiType.Backpack and enabled then
+local function ensureBackpackDisabled()
+    local success, enabled = pcall(function()
+        return StarterGui:GetCoreGuiEnabled(Enum.CoreGuiType.Backpack)
+    end)
+
+    if success and enabled then
         setBackpackCoreGuiEnabled(false)
     end
-end)
+end
+
+RunService.Heartbeat:Connect(ensureBackpackDisabled)
 
 local GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
 local DEFAULT_CURSOR_IMAGE_ASSET = GEAR_CURSOR_IMAGE_ASSET
