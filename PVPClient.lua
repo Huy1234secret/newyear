@@ -410,6 +410,13 @@ local currentRemaining = 0
 local flashConnection: RBXScriptConnection? = nil
 local shakeConnection: RBXScriptConnection? = nil
 
+type NeutralButtonShakeTarget = {
+    instance: GuiObject,
+    basePosition: UDim2,
+}
+
+local neutralButtonShakeTargets: {NeutralButtonShakeTarget} = {}
+
 local transitionState = {
     active = false,
     token = 0,
@@ -1623,11 +1630,49 @@ local function startFlash()
     end)
 end
 
+local function resetNeutralButtonShakeTargets()
+    for _, target in neutralButtonShakeTargets do
+        local instance = target.instance
+        if instance and instance.Parent then
+            instance.Position = target.basePosition
+        end
+    end
+
+    table.clear(neutralButtonShakeTargets)
+end
+
+local function collectNeutralButtonShakeTargets()
+    resetNeutralButtonShakeTargets()
+
+    if not localPlayer.Neutral then
+        return
+    end
+
+    if sprintButton then
+        table.insert(neutralButtonShakeTargets, {
+            instance = sprintButton,
+            basePosition = sprintButton.Position,
+        })
+    end
+
+    for _, slot in inventorySlots do
+        local frame = slot.frame
+        if frame then
+            table.insert(neutralButtonShakeTargets, {
+                instance = frame,
+                basePosition = frame.Position,
+            })
+        end
+    end
+end
+
 local function stopShake()
     if shakeConnection then
         shakeConnection:Disconnect()
         shakeConnection = nil
     end
+
+    resetNeutralButtonShakeTargets()
 
     statusFrame.Position = baseFramePosition
     statusLabel.Position = baseLabelPosition
@@ -1647,6 +1692,8 @@ local function startDeathMatchEffect()
     statusLabel.TextSize = EMPHASIZED_TEXT_SIZE
     labelStroke.Transparency = 0
 
+    collectNeutralButtonShakeTargets()
+
     shakeConnection = RunService.RenderStepped:Connect(function()
         local now = os.clock()
         local frameMagnitude = 1 + math.abs(math.sin(now * 5)) * 1.4
@@ -1657,12 +1704,29 @@ local function startDeathMatchEffect()
         local textMagnitude = 0.5 + math.abs(math.sin(now * 12)) * 1.5
         local textOffsetX = math.noise(now * 20, 2, 0) * textMagnitude * 4
         local textOffsetY = math.noise(now * 18, 3, 0) * textMagnitude * 3
-        statusLabel.Position = baseLabelPosition + UDim2.fromOffset(textOffsetX, textOffsetY)
+        local buttonOffset = UDim2.fromOffset(textOffsetX, textOffsetY)
+        statusLabel.Position = baseLabelPosition + buttonOffset
         statusLabel.Rotation = math.noise(now * 14, 4, 0) * 8
 
         local pulse = (math.sin(now * 6) + 1) / 2
         local colorOffset = math.floor(40 * pulse)
         statusLabel.TextColor3 = Color3.fromRGB(255, 90 + colorOffset, 90 + colorOffset)
+
+        if not localPlayer.Neutral then
+            if #neutralButtonShakeTargets > 0 then
+                resetNeutralButtonShakeTargets()
+            end
+        else
+            for index = #neutralButtonShakeTargets, 1, -1 do
+                local target = neutralButtonShakeTargets[index]
+                local instance = target.instance
+                if not instance or not instance.Parent then
+                    table.remove(neutralButtonShakeTargets, index)
+                else
+                    instance.Position = target.basePosition + buttonOffset
+                end
+            end
+        end
     end)
 end
 
