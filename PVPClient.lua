@@ -33,8 +33,8 @@ local DEFAULT_BACKGROUND_TRANSPARENCY = 0.15
 local DEFAULT_TEXT_SIZE = if isTouchDevice then 22 else 26
 local EMPHASIZED_TEXT_SIZE = if isTouchDevice then 28 else 32
 
-local DEFAULT_CURSOR_IMAGE_ASSET = ""
 local GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
+local DEFAULT_CURSOR_IMAGE_ASSET = GEAR_CURSOR_IMAGE_ASSET
 local currentCursorImageAsset = DEFAULT_CURSOR_IMAGE_ASSET
 local DEFAULT_WALK_SPEED = 16
 
@@ -801,11 +801,7 @@ local function setCursorAsset(assetId: string)
 end
 
 local function updateCursorForGearState()
-    if equippedGearCount > 0 then
-        setCursorAsset(GEAR_CURSOR_IMAGE_ASSET)
-    else
-        setCursorAsset(DEFAULT_CURSOR_IMAGE_ASSET)
-    end
+    setCursorAsset(GEAR_CURSOR_IMAGE_ASSET)
 end
 
 local function handleGearEquipped(info: GearTrackingInfo)
