@@ -1086,8 +1086,30 @@ local function startRound(player: Player, mapId: string)
 
     local mapClone = mapTemplate:Clone()
     mapClone.Name = string.format("Active_%s", config.modelName)
+    local originalAnchoredStates: {[BasePart]: boolean} = {}
+
+    if mapClone:IsA("BasePart") then
+        originalAnchoredStates[mapClone] = mapClone.Anchored
+        mapClone.Anchored = true
+    end
+
+    for _, descendant in mapClone:GetDescendants() do
+        if descendant:IsA("BasePart") then
+            originalAnchoredStates[descendant] = descendant.Anchored
+            descendant.Anchored = true
+        end
+    end
+
     mapClone.Parent = Workspace
     activeMapModel = mapClone
+
+    task.defer(function()
+        for part, wasAnchored in originalAnchoredStates do
+            if part.Parent then
+                part.Anchored = wasAnchored
+            end
+        end
+    end)
 
     applySkybox(config)
 
