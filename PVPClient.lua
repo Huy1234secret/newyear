@@ -818,6 +818,44 @@ local function updateHighlightActivation()
     end
 end
 
+local setButtonEnabledSupported: boolean? = nil
+local hasLoggedSetButtonEnabledWarning = false
+
+local function trySetSprintButtonEnabled(shouldEnable: boolean): boolean
+    if setButtonEnabledSupported == false then
+        return false
+    end
+
+    local success, methodOrErr = pcall(function()
+        return ContextActionService.SetButtonEnabled
+    end)
+
+    if success and typeof(methodOrErr) == "function" then
+        local callSuccess, callErr = pcall(function()
+            methodOrErr(ContextActionService, "SprintAction", shouldEnable)
+        end)
+
+        if callSuccess then
+            setButtonEnabledSupported = true
+            return true
+        end
+
+        methodOrErr = callErr
+    end
+
+    setButtonEnabledSupported = false
+    if methodOrErr == nil then
+        methodOrErr = "SetButtonEnabled method missing"
+    end
+
+    if not hasLoggedSetButtonEnabledWarning then
+        warn("ContextActionService:SetButtonEnabled unavailable; falling back to manual button control.", methodOrErr)
+        hasLoggedSetButtonEnabledWarning = true
+    end
+
+    return false
+end
+
 local function updateSprintButtonState()
     local hasEnergy = sprintState.energy > 0
     local canSprint = hasEnergy and not sprintState.zoneBlocked
@@ -833,16 +871,15 @@ local function updateSprintButtonState()
     end
 
     local shouldEnable = canSprint or sprintState.touchIntent
-    local setButtonEnabled = ContextActionService.SetButtonEnabled
-    if typeof(setButtonEnabled) == "function" then
-        setButtonEnabled(ContextActionService, "SprintAction", shouldEnable)
-    else
-        local sprintButton = ContextActionService:GetButton("SprintAction")
-        if sprintButton then
-            sprintButton.Visible = shouldEnable
-            sprintButton.Active = shouldEnable
-            sprintButton.AutoButtonColor = shouldEnable
-        end
+    if trySetSprintButtonEnabled(shouldEnable) then
+        return
+    end
+
+    local sprintButton = ContextActionService:GetButton("SprintAction")
+    if sprintButton then
+        sprintButton.Visible = shouldEnable
+        sprintButton.Active = shouldEnable
+        sprintButton.AutoButtonColor = shouldEnable
     end
 end
 
