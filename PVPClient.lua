@@ -38,6 +38,24 @@ local DEFAULT_BACKGROUND_TRANSPARENCY = 0.15
 local DEFAULT_TEXT_SIZE = if isTouchDevice then 22 else 26
 local EMPHASIZED_TEXT_SIZE = if isTouchDevice then 28 else 32
 
+local function setBackpackCoreGuiEnabled(enabled: boolean)
+    local success, result = pcall(function()
+        StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, enabled)
+    end)
+
+    if not success then
+        warn("Failed to set backpack CoreGui state:", result)
+    end
+end
+
+setBackpackCoreGuiEnabled(false)
+
+StarterGui.CoreGuiChangedSignal:Connect(function(coreGuiType, enabled)
+    if coreGuiType == Enum.CoreGuiType.Backpack and enabled then
+        setBackpackCoreGuiEnabled(false)
+    end
+end)
+
 local GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
 local DEFAULT_CURSOR_IMAGE_ASSET = GEAR_CURSOR_IMAGE_ASSET
 local currentCursorImageAsset = DEFAULT_CURSOR_IMAGE_ASSET
@@ -387,12 +405,15 @@ for slotIndex = 1, 10 do
 
     local numberLabel = Instance.new("TextLabel")
     numberLabel.Name = "KeyLabel"
-    numberLabel.Size = UDim2.new(0, 20, 0, 16)
-    numberLabel.Position = UDim2.new(0, 6, 0, 4)
+    numberLabel.AnchorPoint = Vector2.new(0, 0)
+    numberLabel.Size = UDim2.new(0, 24, 0, 18)
+    numberLabel.Position = UDim2.new(0, 0, 0, 0)
     numberLabel.BackgroundTransparency = 1
     numberLabel.Font = Enum.Font.GothamSemibold
     numberLabel.TextColor3 = Color3.fromRGB(140, 150, 180)
     numberLabel.TextSize = 12
+    numberLabel.TextXAlignment = Enum.TextXAlignment.Left
+    numberLabel.TextYAlignment = Enum.TextYAlignment.Top
     numberLabel.Text = slotIndex == 10 and "0" or tostring(slotIndex)
     numberLabel.ZIndex = 18
     numberLabel.Parent = slotFrame
@@ -1173,7 +1194,15 @@ equipInventorySlot = function(slotIndex: number)
         return
     end
 
-    if tool.Parent == character then
+    local backpack = currentBackpack or localPlayer:FindFirstChildOfClass("Backpack")
+    local toolEquipped = tool.Parent == character
+
+    if toolEquipped then
+        if backpack then
+            tool.Parent = backpack
+        else
+            humanoid:UnequipTools()
+        end
         return
     end
 
