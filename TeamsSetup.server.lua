@@ -516,7 +516,12 @@ local function applySkybox(config: MapConfig)
         return
     end
 
-    local targetSky = skyboxFolder:FindFirstChild(config.skyboxName)
+    local skyboxName = config.skyboxName
+    if config.id == "ChaosCanyon" then
+        skyboxName = "ChaosCanyonSky"
+    end
+
+    local targetSky = skyboxFolder:FindFirstChild(skyboxName)
     if not targetSky then
         return
     end
@@ -535,7 +540,7 @@ local function applySkybox(config: MapConfig)
     end
 
     local skyClone = targetSky:Clone()
-    skyClone.Name = string.format("%s_Active", config.skyboxName)
+    skyClone.Name = string.format("%s_Active", skyboxName)
     skyClone.Parent = Lighting
     activeSkybox = skyClone
 end
