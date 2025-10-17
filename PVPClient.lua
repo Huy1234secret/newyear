@@ -832,7 +832,17 @@ local function updateSprintButtonState()
         ContextActionService:SetTitle("SprintAction", "Sprint")
     end
 
-    ContextActionService:SetButtonEnabled("SprintAction", canSprint or sprintState.touchIntent)
+    local shouldEnable = canSprint or sprintState.touchIntent
+    if ContextActionService.SetButtonEnabled then
+        ContextActionService:SetButtonEnabled("SprintAction", shouldEnable)
+    else
+        local sprintButton = ContextActionService:GetButton("SprintAction")
+        if sprintButton then
+            sprintButton.Visible = shouldEnable
+            sprintButton.Active = shouldEnable
+            sprintButton.AutoButtonColor = shouldEnable
+        end
+    end
 end
 
 local function recomputeSprintIntent()
