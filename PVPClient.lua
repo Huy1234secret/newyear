@@ -75,6 +75,7 @@ local centerCursorImage: ImageLabel? = nil
 local inventoryFrame: Frame? = nil
 
 local noSprintPart: BasePart? = nil
+local sprintActionButton: ImageButton? = nil
 
 local function updateNoSprintPartReference()
     local found = Workspace:FindFirstChild("NoSprintPart", true)
@@ -818,42 +819,20 @@ local function updateHighlightActivation()
     end
 end
 
-local setButtonEnabledSupported: boolean? = nil
-local hasLoggedSetButtonEnabledWarning = false
-
-local function trySetSprintButtonEnabled(shouldEnable: boolean): boolean
-    if setButtonEnabledSupported == false then
-        return false
+local function getSprintActionButton(): ImageButton?
+    local button = sprintActionButton
+    if button and button.Parent then
+        return button
     end
 
-    local success, methodOrErr = pcall(function()
-        return ContextActionService.SetButtonEnabled
-    end)
-
-    if success and typeof(methodOrErr) == "function" then
-        local callSuccess, callErr = pcall(function()
-            methodOrErr(ContextActionService, "SprintAction", shouldEnable)
-        end)
-
-        if callSuccess then
-            setButtonEnabledSupported = true
-            return true
-        end
-
-        methodOrErr = callErr
+    button = ContextActionService:GetButton("SprintAction")
+    if button and button:IsA("ImageButton") then
+        sprintActionButton = button
+        return button
     end
 
-    setButtonEnabledSupported = false
-    if methodOrErr == nil then
-        methodOrErr = "SetButtonEnabled method missing"
-    end
-
-    if not hasLoggedSetButtonEnabledWarning then
-        warn("ContextActionService:SetButtonEnabled unavailable; falling back to manual button control.", methodOrErr)
-        hasLoggedSetButtonEnabledWarning = true
-    end
-
-    return false
+    sprintActionButton = nil
+    return nil
 end
 
 local function updateSprintButtonState()
@@ -871,15 +850,13 @@ local function updateSprintButtonState()
     end
 
     local shouldEnable = canSprint or sprintState.touchIntent
-    if trySetSprintButtonEnabled(shouldEnable) then
-        return
-    end
 
-    local sprintButton = ContextActionService:GetButton("SprintAction")
+    local sprintButton = getSprintActionButton()
     if sprintButton then
         sprintButton.Visible = shouldEnable
         sprintButton.Active = shouldEnable
         sprintButton.AutoButtonColor = shouldEnable
+        sprintButton.Selectable = shouldEnable
     end
 end
 
