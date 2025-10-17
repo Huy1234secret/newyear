@@ -25,17 +25,31 @@ if not statusRemote or not statusRemote:IsA("RemoteEvent") then
     return
 end
 
-local toggleInventorySlotRemote = remotesFolder:FindFirstChild("ToggleInventorySlot") :: RemoteEvent?
-if not toggleInventorySlotRemote then
+local toggleInventorySlotRemote: RemoteEvent? = nil
+
+local function setToggleInventoryRemote(candidate: Instance?)
+    if candidate and candidate:IsA("RemoteEvent") and candidate.Name == "ToggleInventorySlot" then
+        toggleInventorySlotRemote = candidate
+    end
+end
+
+local existingToggleRemote = remotesFolder:FindFirstChild("ToggleInventorySlot")
+if existingToggleRemote and existingToggleRemote:IsA("RemoteEvent") then
+    toggleInventorySlotRemote = existingToggleRemote
+else
     local foundToggle = remotesFolder:WaitForChild("ToggleInventorySlot", 5)
-    if foundToggle and foundToggle:IsA("RemoteEvent") then
-        toggleInventorySlotRemote = foundToggle :: RemoteEvent
-    else
+    setToggleInventoryRemote(foundToggle)
+end
+
+remotesFolder.ChildAdded:Connect(function(child)
+    setToggleInventoryRemote(child)
+end)
+
+remotesFolder.ChildRemoved:Connect(function(child)
+    if child == toggleInventorySlotRemote then
         toggleInventorySlotRemote = nil
     end
-elseif not toggleInventorySlotRemote:IsA("RemoteEvent") then
-    toggleInventorySlotRemote = nil
-end
+end)
 
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
