@@ -46,6 +46,8 @@ local allowedUserIds = {
     [347735445] = true,
 }
 
+local HUMANOID_WAIT_TIMEOUT = 5
+
 local TELEPORT_FREEZE_DURATION = 2
 local PREP_COUNTDOWN_DURATION = 10
 local INTERMISSION_MUSIC_ID = "15689444712"
@@ -72,6 +74,45 @@ local function isGameOwner(player: Player): boolean
     end
 
     return false
+end
+
+local function ensureRigIsR6(player: Player, character: Model)
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        local existing = character:FindFirstChild("Humanoid")
+        if existing and existing:IsA("Humanoid") then
+            humanoid = existing
+        else
+            local waitResult = character:WaitForChild("Humanoid", HUMANOID_WAIT_TIMEOUT)
+            if waitResult and waitResult:IsA("Humanoid") then
+                humanoid = waitResult
+            end
+        end
+    end
+
+    if not humanoid or humanoid.RigType == Enum.HumanoidRigType.R6 then
+        return
+    end
+
+    local description: HumanoidDescription? = nil
+    local success, result = pcall(function()
+        return Players:GetHumanoidDescriptionFromUserId(player.UserId)
+    end)
+
+    if success and result and result:IsA("HumanoidDescription") then
+        description = result
+    end
+
+    if description then
+        description.RigType = Enum.HumanoidRigType.R6
+        pcall(function()
+            humanoid:ApplyDescription(description :: HumanoidDescription)
+        end)
+    else
+        pcall(function()
+            humanoid.RigType = Enum.HumanoidRigType.R6
+        end)
+    end
 end
 
 type MapConfig = {
@@ -1342,6 +1383,10 @@ local function moveCharacterToLobby(character: Model)
 end
 
 local function onCharacterAdded(player: Player, character: Model)
+    task.defer(function()
+        ensureRigIsR6(player, character)
+    end)
+
     if player.Team == spectateTeam then
         moveCharacterToLobby(character)
     end
@@ -1353,6 +1398,10 @@ local function onPlayerAdded(player: Player)
 
     player.CharacterAdded:Connect(function(character)
         onCharacterAdded(player, character)
+    end)
+
+    player.CharacterAppearanceLoaded:Connect(function(character)
+        ensureRigIsR6(player, character)
     end)
 
     if player.Character then
