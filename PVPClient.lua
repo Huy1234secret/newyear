@@ -456,6 +456,7 @@ for slotIndex = 1, 10 do
     slotButton.ZIndex = 19
     slotButton.Parent = slotFrame
 
+    local currentSlotIndex = slotIndex
     local lastTriggerTime = 0
     local function triggerSelection()
         local now = os.clock()
@@ -465,7 +466,7 @@ for slotIndex = 1, 10 do
         lastTriggerTime = now
 
         if equipInventorySlot then
-            equipInventorySlot(slotIndex)
+            equipInventorySlot(currentSlotIndex)
         end
     end
 
