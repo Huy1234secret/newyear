@@ -2,6 +2,7 @@
 -- Place this LocalScript in StarterPlayerScripts so each player can see match updates.
 
 local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -28,6 +29,10 @@ local playerGui = localPlayer:WaitForChild("PlayerGui")
 
 local isTouchDevice = UserInputService.TouchEnabled
 
+if isTouchDevice then
+    StarterGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
+end
+
 local DEFAULT_BACKGROUND_COLOR = Color3.fromRGB(28, 32, 45)
 local DEFAULT_BACKGROUND_TRANSPARENCY = 0.15
 local DEFAULT_TEXT_SIZE = if isTouchDevice then 22 else 26
@@ -40,8 +45,23 @@ local DEFAULT_WALK_SPEED = 16
 
 local energyBarFill: Frame? = nil
 local energyTextLabel: TextLabel? = nil
+local sprintStatusLabel: TextLabel? = nil
 local sprintButton: TextButton? = nil
 local centerCursorImage: ImageLabel? = nil
+
+local inventoryFrame: Frame? = nil
+
+type InventorySlotUI = {
+    frame: Frame,
+    stroke: UIStroke,
+    icon: ImageLabel,
+    label: TextLabel,
+    numberLabel: TextLabel,
+    button: TextButton,
+}
+
+local inventorySlots: {InventorySlotUI} = {}
+local slotToolMapping: {Tool?} = {}
 
 local existingGui = playerGui:FindFirstChild("PVPStatusGui")
 if existingGui then
@@ -102,25 +122,44 @@ labelStroke.Thickness = 2
 labelStroke.Transparency = 0.3
 labelStroke.Parent = statusLabel
 
+local sprintContainerWidth = isTouchDevice and 300 or 360
+local sprintContainerHeight = isTouchDevice and 92 or 98
+
 local sprintContainer = Instance.new("Frame")
 sprintContainer.Name = "SprintEnergyContainer"
-sprintContainer.Size = UDim2.new(1, 0, 0, 48)
-sprintContainer.Position = UDim2.new(0.5, 0, 1, 0)
+sprintContainer.Size = UDim2.fromOffset(sprintContainerWidth, sprintContainerHeight)
+sprintContainer.Position = UDim2.new(0.5, 0, 1, -(isTouchDevice and 24 or 28))
 sprintContainer.AnchorPoint = Vector2.new(0.5, 1)
 sprintContainer.BackgroundTransparency = 1
 sprintContainer.ZIndex = 5
 sprintContainer.Parent = screenGui
 
 local sprintPadding = Instance.new("UIPadding")
-sprintPadding.PaddingLeft = UDim.new(0, isTouchDevice and 24 or 32)
-sprintPadding.PaddingRight = UDim.new(0, isTouchDevice and 24 or 32)
+sprintPadding.PaddingTop = UDim.new(0, 4)
 sprintPadding.PaddingBottom = UDim.new(0, 12)
+sprintPadding.PaddingLeft = UDim.new(0, 12)
+sprintPadding.PaddingRight = UDim.new(0, 12)
 sprintPadding.Parent = sprintContainer
+
+sprintStatusLabel = Instance.new("TextLabel")
+sprintStatusLabel.Name = "SprintStatus"
+sprintStatusLabel.Size = UDim2.new(1, -8, 0, isTouchDevice and 22 or 26)
+sprintStatusLabel.Position = UDim2.new(0.5, 0, 0, 2)
+sprintStatusLabel.AnchorPoint = Vector2.new(0.5, 0)
+sprintStatusLabel.BackgroundTransparency = 1
+sprintStatusLabel.Font = Enum.Font.GothamSemibold
+sprintStatusLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
+sprintStatusLabel.TextSize = isTouchDevice and 18 or 20
+sprintStatusLabel.TextScaled = false
+sprintStatusLabel.Text = "Sprint Enable"
+sprintStatusLabel.ZIndex = 7
+sprintStatusLabel.Parent = sprintContainer
 
 local sprintBackground = Instance.new("Frame")
 sprintBackground.Name = "EnergyBackground"
-sprintBackground.Size = UDim2.new(1, 0, 1, -12)
-sprintBackground.Position = UDim2.new(0, 0, 0, 0)
+sprintBackground.Size = UDim2.new(1, 0, 0, sprintContainerHeight - (isTouchDevice and 34 or 38))
+sprintBackground.Position = UDim2.new(0, 0, 1, 0)
+sprintBackground.AnchorPoint = Vector2.new(0, 1)
 sprintBackground.BackgroundColor3 = Color3.fromRGB(20, 24, 35)
 sprintBackground.BackgroundTransparency = 0.2
 sprintBackground.Parent = sprintContainer
@@ -138,8 +177,8 @@ sprintBackgroundStroke.Parent = sprintBackground
 local energyFillContainer = Instance.new("Frame")
 energyFillContainer.Name = "EnergyFill"
 energyFillContainer.AnchorPoint = Vector2.new(0, 0.5)
-energyFillContainer.Position = UDim2.new(0, 8, 0.5, 0)
-energyFillContainer.Size = UDim2.new(1, isTouchDevice and -100 or -120, 0, isTouchDevice and 16 or 18)
+energyFillContainer.Position = UDim2.new(0, 10, 0.5, 0)
+energyFillContainer.Size = UDim2.new(1, -(isTouchDevice and 110 or 140), 0, isTouchDevice and 16 or 18)
 energyFillContainer.BackgroundTransparency = 1
 energyFillContainer.ClipsDescendants = true
 energyFillContainer.Parent = sprintBackground
@@ -178,7 +217,7 @@ energyTextLabel = Instance.new("TextLabel")
 energyTextLabel.Name = "EnergyText"
 energyTextLabel.AnchorPoint = Vector2.new(1, 0.5)
 energyTextLabel.Position = UDim2.new(1, -12, 0.5, 0)
-energyTextLabel.Size = UDim2.new(0, 96, 0, 24)
+energyTextLabel.Size = UDim2.new(0, isTouchDevice and 88 or 100, 0, isTouchDevice and 20 or 22)
 energyTextLabel.BackgroundTransparency = 1
 energyTextLabel.Font = Enum.Font.GothamSemibold
 energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
@@ -218,6 +257,134 @@ if isTouchDevice then
     local sprintButtonCorner = Instance.new("UICorner")
     sprintButtonCorner.CornerRadius = UDim.new(0, 14)
     sprintButtonCorner.Parent = sprintButton
+end
+
+local viewportWidth = 1024
+do
+    local camera = Workspace.CurrentCamera
+    if camera then
+        viewportWidth = camera.ViewportSize.X
+    end
+end
+
+local slotPadding = if isTouchDevice then 2 else 6
+local calculatedAvailableWidth = if isTouchDevice then math.max(280, math.min(viewportWidth - 40, 540)) else math.clamp(viewportWidth * 0.5, 520, 780)
+local slotSize = math.clamp(math.floor((calculatedAvailableWidth - 24 - slotPadding * 9) / 10), if isTouchDevice then 24 else 40, if isTouchDevice then 40 else 56)
+local inventoryWidth = slotSize * 10 + slotPadding * 9 + 24
+local inventoryHeight = slotSize + 20
+
+inventoryFrame = Instance.new("Frame")
+inventoryFrame.Name = "InventoryBar"
+inventoryFrame.AnchorPoint = Vector2.new(0.5, 1)
+inventoryFrame.Size = UDim2.fromOffset(inventoryWidth, inventoryHeight)
+inventoryFrame.Position = UDim2.new(0.5, 0, 1, -(sprintContainerHeight + (isTouchDevice and 36 or 40)))
+inventoryFrame.BackgroundTransparency = 1
+inventoryFrame.ZIndex = 15
+inventoryFrame.Parent = screenGui
+
+local slotContainer = Instance.new("Frame")
+slotContainer.Name = "SlotContainer"
+slotContainer.Size = UDim2.new(1, 0, 1, 0)
+slotContainer.BackgroundTransparency = 1
+slotContainer.Parent = inventoryFrame
+
+local slotPaddingContainer = Instance.new("UIPadding")
+slotPaddingContainer.PaddingLeft = UDim.new(0, 12)
+slotPaddingContainer.PaddingRight = UDim.new(0, 12)
+slotPaddingContainer.PaddingTop = UDim.new(0, 4)
+slotPaddingContainer.PaddingBottom = UDim.new(0, 4)
+slotPaddingContainer.Parent = slotContainer
+
+local slotLayout = Instance.new("UIListLayout")
+slotLayout.FillDirection = Enum.FillDirection.Horizontal
+slotLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+slotLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+slotLayout.Padding = UDim.new(0, slotPadding)
+slotLayout.Parent = slotContainer
+
+for slotIndex = 1, 10 do
+    local slotFrame = Instance.new("Frame")
+    slotFrame.Name = string.format("Slot_%d", slotIndex)
+    slotFrame.Size = UDim2.fromOffset(slotSize, slotSize)
+    slotFrame.BackgroundColor3 = Color3.fromRGB(24, 28, 40)
+    slotFrame.BackgroundTransparency = 0.2
+    slotFrame.ZIndex = 16
+    slotFrame.Parent = slotContainer
+
+    local slotCorner = Instance.new("UICorner")
+    slotCorner.CornerRadius = UDim.new(0, 8)
+    slotCorner.Parent = slotFrame
+
+    local slotStroke = Instance.new("UIStroke")
+    slotStroke.Color = Color3.fromRGB(80, 100, 150)
+    slotStroke.Thickness = 1.5
+    slotStroke.Transparency = 0.3
+    slotStroke.Parent = slotFrame
+
+    local numberLabel = Instance.new("TextLabel")
+    numberLabel.Name = "KeyLabel"
+    numberLabel.Size = UDim2.new(0, 20, 0, 16)
+    numberLabel.Position = UDim2.new(0, 6, 0, 4)
+    numberLabel.BackgroundTransparency = 1
+    numberLabel.Font = Enum.Font.GothamSemibold
+    numberLabel.TextColor3 = Color3.fromRGB(140, 150, 180)
+    numberLabel.TextSize = 12
+    numberLabel.Text = slotIndex == 10 and "0" or tostring(slotIndex)
+    numberLabel.ZIndex = 18
+    numberLabel.Parent = slotFrame
+
+    local nameLabelHeight = math.max(12, math.floor(slotSize * 0.35))
+    local iconPadding = math.max(8, math.floor(slotSize * 0.3))
+    local iconImage = Instance.new("ImageLabel")
+    iconImage.Name = "Icon"
+    iconImage.BackgroundTransparency = 1
+    iconImage.Size = UDim2.new(1, -12, 0, math.max(0, slotSize - (nameLabelHeight + iconPadding)))
+    iconImage.Position = UDim2.new(0.5, 0, 0, math.floor(iconPadding * 0.5))
+    iconImage.AnchorPoint = Vector2.new(0.5, 0)
+    iconImage.Image = ""
+    iconImage.ScaleType = Enum.ScaleType.Fit
+    iconImage.ZIndex = 17
+    iconImage.Parent = slotFrame
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Name = "Name"
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Position = UDim2.new(0.5, 0, 1, -4)
+    nameLabel.AnchorPoint = Vector2.new(0.5, 1)
+    nameLabel.Size = UDim2.new(1, -8, 0, nameLabelHeight)
+    nameLabel.Font = Enum.Font.Gotham
+    nameLabel.Text = ""
+    nameLabel.TextColor3 = Color3.fromRGB(200, 210, 230)
+    nameLabel.TextSize = math.max(10, math.floor(nameLabelHeight * 0.65))
+    nameLabel.TextScaled = false
+    nameLabel.TextWrapped = true
+    nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    nameLabel.ZIndex = 18
+    nameLabel.Parent = slotFrame
+
+    local slotButton = Instance.new("TextButton")
+    slotButton.Name = "SelectButton"
+    slotButton.BackgroundTransparency = 1
+    slotButton.Size = UDim2.new(1, 0, 1, 0)
+    slotButton.Text = ""
+    slotButton.AutoButtonColor = false
+    slotButton.ZIndex = 19
+    slotButton.Parent = slotFrame
+
+    slotButton.Activated:Connect(function()
+        if equipInventorySlot then
+            equipInventorySlot(slotIndex)
+        end
+    end)
+
+    inventorySlots[slotIndex] = {
+        frame = slotFrame,
+        stroke = slotStroke,
+        icon = iconImage,
+        label = nameLabel,
+        numberLabel = numberLabel,
+        button = slotButton,
+    }
 end
 local defaultColor = statusLabel.TextColor3
 local countdownColor = Color3.fromRGB(245, 245, 255)
@@ -330,6 +497,20 @@ local equippedGearCount = 0
 local currentBackpack: Backpack? = nil
 local backpackConnections: {RBXScriptConnection} = {}
 local characterGearConn: RBXScriptConnection? = nil
+
+local trackedGearOrder: {Tool} = {}
+
+local function removeToolFromOrder(tool: Tool)
+    for index, candidate in ipairs(trackedGearOrder) do
+        if candidate == tool then
+            table.remove(trackedGearOrder, index)
+            return
+        end
+    end
+end
+
+local equipInventorySlot: (number) -> ()
+local updateInventorySlots: () -> ()
 
 local function removeHighlightForPlayer(targetPlayer: Player)
     local highlight = highlightState.highlights[targetPlayer]
@@ -607,6 +788,20 @@ local function updateEnergyUI()
         energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
     end
 
+    if sprintStatusLabel then
+        if sprintState.energy <= 0 then
+            sprintStatusLabel.Text = "Sprint disable"
+            sprintStatusLabel.TextColor3 = Color3.fromRGB(255, 140, 140)
+        else
+            sprintStatusLabel.Text = "Sprint Enable"
+            if sprintState.isSprinting then
+                sprintStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 220)
+            else
+                sprintStatusLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
+            end
+        end
+    end
+
     updateSprintButtonState()
 end
 
@@ -804,6 +999,99 @@ local function updateCursorForGearState()
     setCursorAsset(GEAR_CURSOR_IMAGE_ASSET)
 end
 
+local function getToolIcon(tool: Tool): string
+    local textureId = tool.TextureId
+    if textureId and textureId ~= "" then
+        return textureId
+    end
+
+    local handle = tool:FindFirstChild("Handle")
+    if handle and handle:IsA("BasePart") then
+        if handle:IsA("MeshPart") then
+            local meshTexture = handle.TextureID
+            if meshTexture and meshTexture ~= "" then
+                return meshTexture
+            end
+        end
+
+        local specialMesh = handle:FindFirstChildOfClass("SpecialMesh")
+        if specialMesh and specialMesh.TextureId ~= "" then
+            return specialMesh.TextureId
+        end
+    end
+
+    return ""
+end
+
+updateInventorySlots = function()
+    local cleanedOrder: {Tool} = {}
+    for _, tool in ipairs(trackedGearOrder) do
+        if trackedGearTools[tool] then
+            table.insert(cleanedOrder, tool)
+        end
+    end
+    trackedGearOrder = cleanedOrder
+
+    for slotIndex = 1, 10 do
+        local slot = inventorySlots[slotIndex]
+        if slot then
+            local tool = trackedGearOrder[slotIndex]
+            slotToolMapping[slotIndex] = tool
+
+            if tool then
+                local iconId = getToolIcon(tool)
+                slot.icon.Image = iconId
+                slot.icon.Visible = iconId ~= ""
+                slot.label.Text = tool.Name
+                slot.frame.BackgroundTransparency = 0.15
+                slot.button.Active = true
+                slot.numberLabel.TextColor3 = Color3.fromRGB(210, 220, 240)
+            else
+                slot.icon.Image = ""
+                slot.icon.Visible = false
+                slot.label.Text = ""
+                slot.frame.BackgroundTransparency = 0.4
+                slot.button.Active = false
+                slot.numberLabel.TextColor3 = Color3.fromRGB(140, 150, 180)
+            end
+
+            local isEquipped = tool ~= nil and tool.Parent == localPlayer.Character
+            if isEquipped then
+                slot.stroke.Color = Color3.fromRGB(80, 190, 255)
+                slot.frame.BackgroundColor3 = Color3.fromRGB(30, 40, 60)
+            else
+                slot.stroke.Color = Color3.fromRGB(80, 100, 150)
+                slot.frame.BackgroundColor3 = Color3.fromRGB(24, 28, 40)
+            end
+        end
+    end
+end
+
+equipInventorySlot = function(slotIndex: number)
+    local tool = slotToolMapping[slotIndex]
+    if not tool then
+        return
+    end
+
+    local character = localPlayer.Character
+    if not character then
+        return
+    end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        return
+    end
+
+    if tool.Parent == character then
+        return
+    end
+
+    humanoid:EquipTool(tool)
+end
+
+updateInventorySlots()
+
 local function handleGearEquipped(info: GearTrackingInfo)
     if info.isEquipped then
         return
@@ -812,6 +1100,7 @@ local function handleGearEquipped(info: GearTrackingInfo)
     info.isEquipped = true
     equippedGearCount += 1
     updateCursorForGearState()
+    updateInventorySlots()
 end
 
 local function handleGearUnequipped(info: GearTrackingInfo)
@@ -824,6 +1113,7 @@ local function handleGearUnequipped(info: GearTrackingInfo)
         equippedGearCount -= 1
     end
     updateCursorForGearState()
+    updateInventorySlots()
 end
 
 local function clearBackpackConnections()
@@ -841,6 +1131,8 @@ local function untrackGearTool(tool: Tool)
 
     trackedGearTools[tool] = nil
     handleGearUnequipped(tracked)
+    removeToolFromOrder(tool)
+    updateInventorySlots()
 
     for _, connection in tracked.connections do
         if connection then
@@ -869,6 +1161,8 @@ local function trackGearTool(tool: Tool)
     }
 
     trackedGearTools[tool] = info
+    table.insert(trackedGearOrder, tool)
+    updateInventorySlots()
 
     info.connections.equipped = tool.Equipped:Connect(function()
         handleGearEquipped(info)
@@ -918,6 +1212,7 @@ local function watchBackpack(backpack: Backpack?)
 
     if not backpack then
         updateCursorForGearState()
+        updateInventorySlots()
         return
     end
 
@@ -1103,6 +1398,7 @@ end
 local function onCharacterAdded(character: Model)
     resetSprintState()
     watchCharacterTools(character)
+    updateInventorySlots()
 
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if humanoid then
@@ -1138,6 +1434,7 @@ localPlayer.CharacterRemoving:Connect(function()
         characterGearConn = nil
     end
     updateCursorForGearState()
+    updateInventorySlots()
 end)
 
 if localPlayer.Character then
@@ -1198,6 +1495,30 @@ ContextActionService:BindAction("SprintAction", sprintAction, true, Enum.KeyCode
 ContextActionService:SetTitle("SprintAction", "Sprint")
 ContextActionService:SetImage("SprintAction", GEAR_CURSOR_IMAGE_ASSET)
 
+local keyToSlotIndex: {[Enum.KeyCode]: number} = {
+    [Enum.KeyCode.One] = 1,
+    [Enum.KeyCode.Two] = 2,
+    [Enum.KeyCode.Three] = 3,
+    [Enum.KeyCode.Four] = 4,
+    [Enum.KeyCode.Five] = 5,
+    [Enum.KeyCode.Six] = 6,
+    [Enum.KeyCode.Seven] = 7,
+    [Enum.KeyCode.Eight] = 8,
+    [Enum.KeyCode.Nine] = 9,
+    [Enum.KeyCode.Zero] = 10,
+}
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then
+        return
+    end
+
+    local slotIndex = keyToSlotIndex[input.KeyCode]
+    if slotIndex then
+        equipInventorySlot(slotIndex)
+    end
+end)
+
 if sprintButton then
     sprintButton.Activated:Connect(function()
         if sprintState.touchIntent then
@@ -1245,8 +1566,11 @@ RunService.Heartbeat:Connect(function(deltaTime)
             sprintState.energy = 0
             if sprintState.touchIntent then
                 sprintState.touchIntent = false
-                recomputeSprintIntent()
             end
+            if sprintState.keyboardIntent then
+                sprintState.keyboardIntent = false
+            end
+            recomputeSprintIntent()
             stopSprinting(false)
         end
     elseif sprintState.energy < MAX_SPRINT_ENERGY and now >= sprintState.rechargeBlockedUntil then
