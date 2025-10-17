@@ -148,6 +148,17 @@ local mapConfigurations: {[string]: MapConfig} = {
         deathMatchStormSize = Vector2.new(700, 700),
         deathMatchShrinkDuration = 100,
     },
+    ChaosCanyon = {
+        id = "ChaosCanyon",
+        displayName = "Chaos Canyon",
+        modelName = "ChaosCanyon",
+        spawnContainer = "ChaosCanyonSpawns",
+        skyboxName = "ChaosCanyonSky",
+        musicId = "100710950168570",
+        deathMatchMusicId = "113378366723798",
+        deathMatchStormSize = Vector2.new(350, 350),
+        deathMatchShrinkDuration = 100,
+    },
 }
 
 local remotesFolder = ReplicatedStorage:FindFirstChild("PVPRemotes")
@@ -995,7 +1006,7 @@ local function beginDeathMatch(roundId: number)
 
     task.spawn(function()
         while deathMatchActive and roundInProgress and currentRoundId == roundId do
-            task.wait(0.2)
+            task.wait(0.1)
 
             local activeStorm = currentStormPart
             if not activeStorm or not activeStorm.Parent then

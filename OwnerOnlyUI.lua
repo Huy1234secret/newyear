@@ -29,6 +29,11 @@ local mapDefinitions: {MapDefinition} = {
         displayName = "SFOTH",
         modelName = "SFOTH",
     },
+    {
+        id = "ChaosCanyon",
+        displayName = "Chaos Canyon",
+        modelName = "ChaosCanyon",
+    },
 }
 
 local mapButtonDefaultColor = Color3.fromRGB(190, 60, 60)
