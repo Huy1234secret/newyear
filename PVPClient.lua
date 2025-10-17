@@ -70,7 +70,6 @@ local DEFAULT_WALK_SPEED = 16
 local energyBarFill: Frame? = nil
 local energyTextLabel: TextLabel? = nil
 local sprintStatusLabel: TextLabel? = nil
-local sprintButton: TextButton? = nil
 local centerCursorImage: ImageLabel? = nil
 
 local inventoryFrame: Frame? = nil
@@ -340,25 +339,6 @@ centerCursorImage.ZIndex = 50
 centerCursorImage.Visible = false
 centerCursorImage.Parent = screenGui
 
-if isTouchDevice then
-    sprintButton = Instance.new("TextButton")
-    sprintButton.Name = "SprintToggleButton"
-    sprintButton.AnchorPoint = Vector2.new(1, 1)
-    sprintButton.Position = UDim2.new(1, -32, 1, -100)
-    sprintButton.Size = UDim2.fromOffset(130, 52)
-    sprintButton.BackgroundColor3 = Color3.fromRGB(40, 48, 65)
-    sprintButton.AutoButtonColor = false
-    sprintButton.Text = "Sprint"
-    sprintButton.TextSize = 18
-    sprintButton.Font = Enum.Font.GothamSemibold
-    sprintButton.TextColor3 = Color3.fromRGB(210, 235, 255)
-    sprintButton.ZIndex = 20
-    sprintButton.Parent = screenGui
-
-    local sprintButtonCorner = Instance.new("UICorner")
-    sprintButtonCorner.CornerRadius = UDim.new(0, 14)
-    sprintButtonCorner.Parent = sprintButton
-end
 inventoryFrame = Instance.new("Frame")
 inventoryFrame.Name = "InventoryBar"
 inventoryFrame.AnchorPoint = Vector2.new(0.5, 1)
@@ -462,11 +442,22 @@ for slotIndex = 1, 10 do
     slotButton.ZIndex = 19
     slotButton.Parent = slotFrame
 
-    slotButton.Activated:Connect(function()
+    local lastTriggerTime = 0
+    local function triggerSelection()
+        local now = os.clock()
+        if now - lastTriggerTime < 0.08 then
+            return
+        end
+        lastTriggerTime = now
+
         if equipInventorySlot then
             equipInventorySlot(slotIndex)
         end
-    end)
+    end
+
+    slotButton.Activated:Connect(triggerSelection)
+    slotButton.MouseButton1Click:Connect(triggerSelection)
+    slotButton.TouchTap:Connect(triggerSelection)
 
     inventorySlots[slotIndex] = {
         frame = slotFrame,
@@ -554,10 +545,6 @@ local SPRINT_RECHARGE_DELAY = 2
 local SPRINT_SPEED = 28
 local SPRINT_TWEEN_TIME = 1
 local SPRINT_FOV_OFFSET = 8
-
-local SPRINT_BUTTON_DEFAULT_COLOR = Color3.fromRGB(40, 48, 65)
-local SPRINT_BUTTON_ACTIVE_COLOR = Color3.fromRGB(80, 190, 255)
-local SPRINT_BUTTON_DISABLED_COLOR = Color3.fromRGB(70, 76, 90)
 
 local sprintState: SprintState = {
     energy = MAX_SPRINT_ENERGY,
@@ -832,38 +819,20 @@ local function updateHighlightActivation()
 end
 
 local function updateSprintButtonState()
-    if not sprintButton then
-        return
-    end
-
     local hasEnergy = sprintState.energy > 0
     local canSprint = hasEnergy and not sprintState.zoneBlocked
     local buttonActive = sprintState.touchIntent and canSprint
 
     if not canSprint and not buttonActive then
-        if sprintState.zoneBlocked then
-            sprintButton.Text = "No Sprint"
-        else
-            sprintButton.Text = "Rest"
-        end
+        local title = if sprintState.zoneBlocked then "No Sprint" else "Rest"
+        ContextActionService:SetTitle("SprintAction", title)
     elseif buttonActive then
-        sprintButton.Text = "Unsprint"
+        ContextActionService:SetTitle("SprintAction", "Unsprint")
     else
-        sprintButton.Text = "Sprint"
+        ContextActionService:SetTitle("SprintAction", "Sprint")
     end
 
-    if not canSprint then
-        sprintButton.BackgroundColor3 = SPRINT_BUTTON_DISABLED_COLOR
-        sprintButton.TextColor3 = Color3.fromRGB(200, 210, 225)
-    elseif buttonActive then
-        sprintButton.BackgroundColor3 = SPRINT_BUTTON_ACTIVE_COLOR
-        sprintButton.TextColor3 = Color3.fromRGB(20, 30, 40)
-    else
-        sprintButton.BackgroundColor3 = SPRINT_BUTTON_DEFAULT_COLOR
-        sprintButton.TextColor3 = Color3.fromRGB(210, 235, 255)
-    end
-
-    sprintButton.Active = canSprint
+    ContextActionService:SetButtonEnabled("SprintAction", canSprint or sprintState.touchIntent)
 end
 
 local function recomputeSprintIntent()
@@ -915,6 +884,29 @@ local function updateEnergyUI()
     end
 
     updateSprintButtonState()
+end
+
+local function toggleTouchSprintIntent()
+    if sprintState.touchIntent then
+        sprintState.touchIntent = false
+        recomputeSprintIntent()
+        if not sprintState.sprintIntent then
+            stopSprinting(false)
+        end
+        return
+    end
+
+    if sprintState.energy <= 0 or sprintState.zoneBlocked then
+        sprintState.touchIntent = false
+        recomputeSprintIntent()
+        return
+    end
+
+    sprintState.touchIntent = true
+    recomputeSprintIntent()
+    if not sprintState.isSprinting then
+        startSprinting()
+    end
 end
 
 local function tweenHumanoidSpeed(targetSpeed: number, instant: boolean)
@@ -1608,9 +1600,13 @@ local function sprintAction(_: string, inputState: Enum.UserInputState, inputObj
             end
             return Enum.ContextActionResult.Sink
         end
-    elseif inputState == Enum.UserInputState.Begin and not inputObject then
-        toggleKeyboardSprintIntent()
-        return Enum.ContextActionResult.Sink
+    elseif not inputObject then
+        if inputState == Enum.UserInputState.Begin then
+            toggleTouchSprintIntent()
+            return Enum.ContextActionResult.Sink
+        elseif inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
+            return Enum.ContextActionResult.Sink
+        end
     end
 
     return Enum.ContextActionResult.Pass
@@ -1643,28 +1639,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         equipInventorySlot(slotIndex)
     end
 end)
-
-if sprintButton then
-    sprintButton.Activated:Connect(function()
-        if sprintState.touchIntent then
-            sprintState.touchIntent = false
-            recomputeSprintIntent()
-            if not sprintState.sprintIntent then
-                stopSprinting(false)
-            end
-        else
-            if sprintState.energy <= 0 or sprintState.zoneBlocked then
-                updateSprintButtonState()
-                return
-            end
-            sprintState.touchIntent = true
-            recomputeSprintIntent()
-            if not sprintState.isSprinting then
-                startSprinting()
-            end
-        end
-    end)
-end
 
 RunService.Heartbeat:Connect(function(deltaTime)
     local dt = math.max(deltaTime, 0)
@@ -1800,13 +1774,6 @@ local function collectNeutralButtonShakeTargets()
 
     if not localPlayer.Neutral then
         return
-    end
-
-    if sprintButton then
-        table.insert(neutralButtonShakeTargets, {
-            instance = sprintButton,
-            basePosition = sprintButton.Position,
-        })
     end
 
     for _, slot in inventorySlots do
