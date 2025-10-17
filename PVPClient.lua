@@ -480,7 +480,6 @@ for slotIndex = 1, 10 do
     slotButton.Size = UDim2.new(1, 0, 1, 0)
     slotButton.Text = ""
     slotButton.AutoButtonColor = false
-    slotButton.Active = true
     slotButton.ZIndex = 19
     slotButton.Parent = slotFrame
 
@@ -494,10 +493,6 @@ for slotIndex = 1, 10 do
             return
         end
         lastTriggerTime = now
-
-        if not slotToolMapping[currentSlotIndex] then
-            return
-        end
 
         if equipInventorySlot then
             equipInventorySlot(currentSlotIndex)
@@ -1286,12 +1281,14 @@ updateInventorySlots = function()
                 slot.icon.Visible = iconId ~= ""
                 slot.label.Text = tool.Name
                 slot.frame.BackgroundTransparency = 0.15
+                slot.button.Active = true
                 slot.numberLabel.TextColor3 = Color3.fromRGB(210, 220, 240)
             else
                 slot.icon.Image = ""
                 slot.icon.Visible = false
                 slot.label.Text = ""
                 slot.frame.BackgroundTransparency = 0.4
+                slot.button.Active = false
                 slot.numberLabel.TextColor3 = Color3.fromRGB(140, 150, 180)
             end
 
