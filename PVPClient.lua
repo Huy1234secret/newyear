@@ -555,40 +555,6 @@ for slotIndex = 1, 10 do
     end
 
     slotButton.Activated:Connect(triggerSelection)
-    slotButton.MouseButton1Click:Connect(triggerSelection)
-    slotButton.TouchTap:Connect(triggerSelection)
-
-    local function shouldTriggerFromInput(inputObject: InputObject?): boolean
-        if not inputObject then
-            return false
-        end
-
-        local inputType = inputObject.UserInputType
-        if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
-            return true
-        end
-
-        if inputType == Enum.UserInputType.Gamepad1 then
-            local keyCode = inputObject.KeyCode
-            return keyCode == Enum.KeyCode.ButtonA or keyCode == Enum.KeyCode.ButtonX
-        end
-
-        return false
-    end
-
-    slotFrame.Active = true
-
-    slotFrame.InputBegan:Connect(function(input)
-        if shouldTriggerFromInput(input) then
-            triggerSelection()
-        end
-    end)
-
-    slotFrame.InputEnded:Connect(function(input)
-        if shouldTriggerFromInput(input) and input.UserInputState == Enum.UserInputState.End then
-            triggerSelection()
-        end
-    end)
 
     inventorySlots[slotIndex] = {
         frame = slotFrame,
