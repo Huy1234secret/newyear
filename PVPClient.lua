@@ -25,6 +25,18 @@ if not statusRemote or not statusRemote:IsA("RemoteEvent") then
     return
 end
 
+local toggleInventorySlotRemote = remotesFolder:FindFirstChild("ToggleInventorySlot") :: RemoteEvent?
+if not toggleInventorySlotRemote then
+    local foundToggle = remotesFolder:WaitForChild("ToggleInventorySlot", 5)
+    if foundToggle and foundToggle:IsA("RemoteEvent") then
+        toggleInventorySlotRemote = foundToggle :: RemoteEvent
+    else
+        toggleInventorySlotRemote = nil
+    end
+elseif not toggleInventorySlotRemote:IsA("RemoteEvent") then
+    toggleInventorySlotRemote = nil
+end
+
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
 local isTouchDevice = UserInputService.TouchEnabled
@@ -599,6 +611,31 @@ local function removeToolFromOrder(tool: Tool)
 end
 
 local equipInventorySlot: (number) -> ()
+local function locallyToggleTool(tool: Tool)
+    local character = localPlayer.Character
+    if not character then
+        return
+    end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        return
+    end
+
+    local backpack = currentBackpack or localPlayer:FindFirstChildOfClass("Backpack")
+    local toolEquipped = tool.Parent == character
+
+    if toolEquipped then
+        if backpack then
+            tool.Parent = backpack
+        else
+            humanoid:UnequipTools()
+        end
+        return
+    end
+
+    humanoid:EquipTool(tool)
+end
 local updateInventorySlots: () -> ()
 
 local function removeHighlightForPlayer(targetPlayer: Player)
@@ -1212,29 +1249,12 @@ equipInventorySlot = function(slotIndex: number)
         return
     end
 
-    local character = localPlayer.Character
-    if not character then
+    if toggleInventorySlotRemote then
+        toggleInventorySlotRemote:FireServer(tool)
         return
     end
 
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then
-        return
-    end
-
-    local backpack = currentBackpack or localPlayer:FindFirstChildOfClass("Backpack")
-    local toolEquipped = tool.Parent == character
-
-    if toolEquipped then
-        if backpack then
-            tool.Parent = backpack
-        else
-            humanoid:UnequipTools()
-        end
-        return
-    end
-
-    humanoid:EquipTool(tool)
+    locallyToggleTool(tool)
 end
 
 updateInventorySlots()

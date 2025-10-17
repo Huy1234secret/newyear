@@ -184,6 +184,7 @@ end
 local startRoundRemote = getOrCreateRemote("StartRound")
 local statusUpdateRemote = getOrCreateRemote("StatusUpdate")
 local roundStateRemote = getOrCreateRemote("RoundState")
+local toggleInventorySlotRemote = getOrCreateRemote("ToggleInventorySlot")
 
 local mapsFolder = ReplicatedStorage:FindFirstChild("Maps")
 local skyboxFolder = ReplicatedStorage:FindFirstChild("Skybox")
@@ -706,6 +707,41 @@ local function giveParticipantGear(record: ParticipantRecord)
         end
     end
 end
+
+local function handleToggleInventorySlot(player: Player, tool: Tool?)
+    if not tool or not tool:IsA("Tool") then
+        return
+    end
+
+    if tool:GetAttribute("PVPGenerated") ~= true then
+        return
+    end
+
+    local character = player.Character
+    local backpack = player:FindFirstChildOfClass("Backpack")
+
+    if tool.Parent ~= character and tool.Parent ~= backpack then
+        return
+    end
+
+    if tool.Parent == character then
+        if backpack then
+            tool.Parent = backpack
+        else
+            tool.Parent = nil
+        end
+        return
+    end
+
+    if backpack and tool.Parent == backpack and character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid:EquipTool(tool)
+        end
+    end
+end
+
+toggleInventorySlotRemote.OnServerEvent:Connect(handleToggleInventorySlot)
 
 local function disableParticipantHealing(record: ParticipantRecord)
     if not isPlayerInNeutralState(record.player) then
