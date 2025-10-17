@@ -376,6 +376,19 @@ inventoryFrame.BackgroundTransparency = 1
 inventoryFrame.ZIndex = 15
 inventoryFrame.Parent = screenGui
 
+local sprintContainerBasePosition = sprintContainer.Position
+local sprintContainerBaseRotation = sprintContainer.Rotation
+local sprintBackgroundDefaultColor = sprintBackground.BackgroundColor3
+local sprintBackgroundDefaultTransparency = sprintBackground.BackgroundTransparency
+local sprintBackgroundStrokeDefaultColor = sprintBackgroundStroke.Color
+local sprintBackgroundStrokeDefaultTransparency = sprintBackgroundStroke.Transparency
+local energyBarFillDefaultColor = energyBarFill.BackgroundColor3
+local energyTextDefaultColor = energyTextLabel.TextColor3
+local energyGradientDefault = energyFillGradient.Color
+
+local inventoryBasePosition = inventoryFrame.Position
+local inventoryBaseRotation = inventoryFrame.Rotation
+
 local slotContainer = Instance.new("Frame")
 slotContainer.Name = "SlotContainer"
 slotContainer.Size = UDim2.new(1, 0, 1, 0)
@@ -556,6 +569,7 @@ local shakeConnection: RBXScriptConnection? = nil
 type NeutralButtonShakeTarget = {
     instance: GuiObject,
     basePosition: UDim2,
+    baseRotation: number,
 }
 
 local neutralButtonShakeTargets: {NeutralButtonShakeTarget} = {}
@@ -1296,7 +1310,9 @@ equipInventorySlot = function(slotIndex: number)
         return
     end
 
-    if toggleInventorySlotRemote then
+    local isPVPGear = tool:GetAttribute("PVPGenerated") == true
+
+    if toggleInventorySlotRemote and isPVPGear then
         toggleInventorySlotRemote:FireServer(tool)
         return
     end
@@ -1862,6 +1878,7 @@ local function resetNeutralButtonShakeTargets()
         local instance = target.instance
         if instance and instance.Parent then
             instance.Position = target.basePosition
+            instance.Rotation = target.baseRotation or 0
         end
     end
 
@@ -1881,6 +1898,7 @@ local function collectNeutralButtonShakeTargets()
             table.insert(neutralButtonShakeTargets, {
                 instance = frame,
                 basePosition = frame.Position,
+                baseRotation = frame.Rotation,
             })
         end
     end
@@ -1899,6 +1917,27 @@ local function stopShake()
     statusLabel.Rotation = 0
     statusLabel.TextColor3 = defaultColor
     statusLabel.TextSize = DEFAULT_TEXT_SIZE
+
+    inventoryFrame.Position = inventoryBasePosition
+    inventoryFrame.Rotation = inventoryBaseRotation
+    sprintContainer.Position = sprintContainerBasePosition
+    sprintContainer.Rotation = sprintContainerBaseRotation
+    sprintBackground.BackgroundColor3 = sprintBackgroundDefaultColor
+    sprintBackground.BackgroundTransparency = sprintBackgroundDefaultTransparency
+    sprintBackgroundStroke.Color = sprintBackgroundStrokeDefaultColor
+    sprintBackgroundStroke.Transparency = sprintBackgroundStrokeDefaultTransparency
+    energyBarFill.BackgroundColor3 = energyBarFillDefaultColor
+    energyTextLabel.TextColor3 = energyTextDefaultColor
+    energyFillGradient.Color = energyGradientDefault
+
+    for _, slot in inventorySlots do
+        local frame = slot.frame
+        if frame then
+            frame.Rotation = 0
+        end
+    end
+
+    updateInventorySlots()
 end
 
 local function startDeathMatchEffect()
@@ -1931,6 +1970,56 @@ local function startDeathMatchEffect()
         local pulse = (math.sin(now * 6) + 1) / 2
         local colorOffset = math.floor(40 * pulse)
         statusLabel.TextColor3 = Color3.fromRGB(255, 90 + colorOffset, 90 + colorOffset)
+
+        local inventoryMagnitude = 0.6 + math.abs(math.sin(now * 6)) * 1.3
+        local inventoryOffsetX = math.noise(now * 11, 5, 0) * inventoryMagnitude * 3
+        local inventoryOffsetY = math.noise(now * 10, 6, 0) * inventoryMagnitude * 2
+        inventoryFrame.Position = inventoryBasePosition + UDim2.fromOffset(inventoryOffsetX, inventoryOffsetY)
+        inventoryFrame.Rotation = math.noise(now * 9, 7, 0) * 2.4
+
+        local sprintOffsetX = math.noise(now * 7, 8, 0) * 2.6
+        local sprintOffsetY = math.noise(now * 8, 9, 0) * 2.1
+        sprintContainer.Position = sprintContainerBasePosition + UDim2.fromOffset(sprintOffsetX, sprintOffsetY)
+        sprintContainer.Rotation = math.noise(now * 13, 10, 0) * 1.8
+
+        local flashPulse = (math.sin(now * 12) + 1) * 0.5
+        local flashNoise = math.clamp(math.noise(now * 15, 11, 0) * 0.5 + 0.5, 0, 1)
+        local flashAmount = math.clamp(flashPulse * 0.6 + flashNoise * 0.4, 0, 1)
+        local baseRed = 150 + math.floor(105 * flashAmount)
+        local dimComponent = 25 + math.floor(90 * (1 - flashAmount))
+        sprintBackground.BackgroundColor3 = Color3.fromRGB(baseRed, dimComponent, dimComponent)
+        sprintBackground.BackgroundTransparency = 0.05 + (1 - flashAmount) * 0.2
+
+        local strokeGreen = 60 + math.floor(120 * (1 - flashAmount))
+        sprintBackgroundStroke.Color = Color3.fromRGB(255, strokeGreen, strokeGreen)
+        sprintBackgroundStroke.Transparency = 0.05 + flashAmount * 0.25
+
+        local energyPulse = math.abs(math.sin(now * 18))
+        local energyGreen = 40 + math.floor(150 * (1 - energyPulse))
+        energyBarFill.BackgroundColor3 = Color3.fromRGB(255, energyGreen, energyGreen)
+        energyFillGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, math.max(0, energyGreen - 60), math.max(0, energyGreen - 60))),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, energyGreen, energyGreen)),
+        })
+        energyTextLabel.TextColor3 = Color3.fromRGB(255, 180 - math.floor(80 * flashAmount), 180 - math.floor(80 * flashAmount))
+
+        for slotIndex = 1, 10 do
+            local slot = inventorySlots[slotIndex]
+            if slot then
+                local slotPulse = math.abs(math.sin(now * 14 + slotIndex))
+                local slotNoise = math.noise(now * 16, slotIndex, 0)
+                local frame = slot.frame
+                local stroke = slot.stroke
+                if frame then
+                    frame.Rotation = slotNoise * 3
+                end
+                if stroke then
+                    local slotGreen = 50 + math.floor(150 * (1 - slotPulse))
+                    stroke.Color = Color3.fromRGB(255, slotGreen, slotGreen)
+                    stroke.Transparency = 0.05 + slotPulse * 0.25
+                end
+            end
+        end
 
         if not localPlayer.Neutral then
             if #neutralButtonShakeTargets > 0 then
