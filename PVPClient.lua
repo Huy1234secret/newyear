@@ -93,6 +93,12 @@ local DEFAULT_CURSOR_IMAGE_ASSET = GEAR_CURSOR_IMAGE_ASSET
 local currentCursorImageAsset = DEFAULT_CURSOR_IMAGE_ASSET
 local DEFAULT_WALK_SPEED = 16
 
+local INVENTORY_BASE_ZINDEX = 60
+local SLOT_CONTENT_BASE_ZINDEX = INVENTORY_BASE_ZINDEX + 1
+local SLOT_ICON_ZINDEX = SLOT_CONTENT_BASE_ZINDEX + 1
+local SLOT_TEXT_ZINDEX = SLOT_CONTENT_BASE_ZINDEX + 2
+local SLOT_BUTTON_ZINDEX = SLOT_CONTENT_BASE_ZINDEX + 4
+
 local energyBarFill: Frame? = nil
 local energyTextLabel: TextLabel? = nil
 local sprintStatusLabel: TextLabel? = nil
@@ -382,7 +388,7 @@ inventoryFrame.AnchorPoint = Vector2.new(0.5, 1)
 inventoryFrame.Size = UDim2.fromOffset(inventoryWidth, inventoryHeight)
 inventoryFrame.Position = UDim2.new(0.5, 0, 1, -inventoryBottomMargin)
 inventoryFrame.BackgroundTransparency = 1
-inventoryFrame.ZIndex = 25
+inventoryFrame.ZIndex = INVENTORY_BASE_ZINDEX
 inventoryFrame.Parent = screenGui
 
 local sprintContainerBasePosition = sprintContainer.Position
@@ -471,7 +477,7 @@ for slotIndex = 1, 10 do
     slotFrame.Size = UDim2.fromOffset(slotSize, slotSize)
     slotFrame.BackgroundColor3 = Color3.fromRGB(24, 28, 40)
     slotFrame.BackgroundTransparency = 0.2
-    slotFrame.ZIndex = 26
+    slotFrame.ZIndex = SLOT_CONTENT_BASE_ZINDEX
     slotFrame.LayoutOrder = slotIndex
     slotFrame.Parent = slotContainer
 
@@ -497,7 +503,7 @@ for slotIndex = 1, 10 do
     numberLabel.TextXAlignment = Enum.TextXAlignment.Left
     numberLabel.TextYAlignment = Enum.TextYAlignment.Top
     numberLabel.Text = slotIndex == 10 and "0" or tostring(slotIndex)
-    numberLabel.ZIndex = 28
+    numberLabel.ZIndex = SLOT_TEXT_ZINDEX
     numberLabel.Parent = slotFrame
 
     local nameLabelHeight = math.max(12, math.floor(slotSize * 0.35))
@@ -510,7 +516,7 @@ for slotIndex = 1, 10 do
     iconImage.AnchorPoint = Vector2.new(0.5, 0)
     iconImage.Image = ""
     iconImage.ScaleType = Enum.ScaleType.Fit
-    iconImage.ZIndex = 27
+    iconImage.ZIndex = SLOT_ICON_ZINDEX
     iconImage.Parent = slotFrame
 
     local nameLabel = Instance.new("TextLabel")
@@ -526,7 +532,7 @@ for slotIndex = 1, 10 do
     nameLabel.TextScaled = false
     nameLabel.TextWrapped = true
     nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
-    nameLabel.ZIndex = 28
+    nameLabel.ZIndex = SLOT_TEXT_ZINDEX
     nameLabel.Parent = slotFrame
 
     local slotButton = Instance.new("ImageButton")
@@ -537,7 +543,7 @@ for slotIndex = 1, 10 do
     slotButton.ImageTransparency = 1
     slotButton.Active = true
     slotButton.Selectable = false
-    slotButton.ZIndex = 29
+    slotButton.ZIndex = SLOT_BUTTON_ZINDEX
     slotButton.Parent = slotFrame
 
     local currentSlotIndex = slotIndex
@@ -555,6 +561,15 @@ for slotIndex = 1, 10 do
     end
 
     slotButton.Activated:Connect(triggerSelection)
+    slotButton.InputBegan:Connect(function(input)
+        local inputType = input.UserInputType
+        if inputType == Enum.UserInputType.MouseButton1
+            or inputType == Enum.UserInputType.Touch
+            or inputType == Enum.UserInputType.Gamepad1
+        then
+            triggerSelection()
+        end
+    end)
 
     inventorySlots[slotIndex] = {
         frame = slotFrame,
