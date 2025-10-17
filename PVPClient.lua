@@ -51,6 +51,56 @@ local centerCursorImage: ImageLabel? = nil
 
 local inventoryFrame: Frame? = nil
 
+local noSprintPart: BasePart? = nil
+
+local function updateNoSprintPartReference()
+    local found = Workspace:FindFirstChild("NoSprintPart", true)
+    if found and found:IsA("BasePart") then
+        noSprintPart = found
+    else
+        noSprintPart = nil
+    end
+end
+
+updateNoSprintPartReference()
+
+Workspace.DescendantAdded:Connect(function(descendant)
+    if descendant.Name == "NoSprintPart" and descendant:IsA("BasePart") then
+        noSprintPart = descendant
+    end
+end)
+
+Workspace.DescendantRemoving:Connect(function(descendant)
+    if descendant == noSprintPart then
+        noSprintPart = nil
+    end
+end)
+
+local function isPointInsidePart(part: BasePart, point: Vector3): boolean
+    local localPoint = part.CFrame:PointToObjectSpace(point)
+    local halfSize = part.Size * 0.5
+    return math.abs(localPoint.X) <= halfSize.X + 0.05
+        and math.abs(localPoint.Y) <= halfSize.Y + 0.05
+        and math.abs(localPoint.Z) <= halfSize.Z + 0.05
+end
+
+local function getHumanoidRootPart(humanoid: Humanoid): BasePart?
+    local rootPart = humanoid.RootPart
+    if rootPart and rootPart:IsA("BasePart") then
+        return rootPart
+    end
+
+    local character = humanoid.Parent
+    if character then
+        local candidate = character:FindFirstChild("HumanoidRootPart")
+        if candidate and candidate:IsA("BasePart") then
+            return candidate
+        end
+    end
+
+    return nil
+end
+
 type InventorySlotUI = {
     frame: Frame,
     stroke: UIStroke,
@@ -122,46 +172,72 @@ labelStroke.Thickness = 2
 labelStroke.Transparency = 0.3
 labelStroke.Parent = statusLabel
 
-local sprintContainerWidth = isTouchDevice and 300 or 360
-local sprintContainerHeight = isTouchDevice and 92 or 98
+local viewportWidth = 1024
+do
+    local camera = Workspace.CurrentCamera
+    if camera then
+        viewportWidth = camera.ViewportSize.X
+    end
+end
+
+local slotPadding = if isTouchDevice then 2 else 6
+local calculatedAvailableWidth = if isTouchDevice
+    then math.max(280, math.min(viewportWidth - 40, 540))
+    else math.clamp(viewportWidth * 0.5, 520, 780)
+local slotSize = math.clamp(
+    math.floor((calculatedAvailableWidth - 24 - slotPadding * 9) / 10),
+    if isTouchDevice then 24 else 40,
+    if isTouchDevice then 40 else 56
+)
+local inventoryWidth = slotSize * 10 + slotPadding * 9 + 24
+local inventoryHeight = slotSize + 20
+local inventoryBottomMargin = 0
+local energyContainerGap = if isTouchDevice then 20 else 24
+local energyLabelHeight = if isTouchDevice then 20 else 22
+local energyBarHeight = if isTouchDevice then 18 else 20
+local energyTopPadding = if isTouchDevice then 6 else 8
+local energyBottomPadding = if isTouchDevice then 8 else 10
+local energySpacing = if isTouchDevice then 6 else 8
+local sprintContainerHeight = energyTopPadding + energyLabelHeight + energySpacing + energyBarHeight + energyBottomPadding
+local energyTextWidth = if isTouchDevice then 96 else 110
 
 local sprintContainer = Instance.new("Frame")
 sprintContainer.Name = "SprintEnergyContainer"
-sprintContainer.Size = UDim2.fromOffset(sprintContainerWidth, sprintContainerHeight)
-sprintContainer.Position = UDim2.new(0.5, 0, 1, -(isTouchDevice and 24 or 28))
+sprintContainer.Size = UDim2.fromOffset(inventoryWidth, sprintContainerHeight)
+sprintContainer.Position = UDim2.new(0.5, 0, 1, -(inventoryBottomMargin + inventoryHeight + energyContainerGap))
 sprintContainer.AnchorPoint = Vector2.new(0.5, 1)
 sprintContainer.BackgroundTransparency = 1
 sprintContainer.ZIndex = 5
 sprintContainer.Parent = screenGui
 
 local sprintPadding = Instance.new("UIPadding")
-sprintPadding.PaddingTop = UDim.new(0, 4)
-sprintPadding.PaddingBottom = UDim.new(0, 12)
+sprintPadding.PaddingTop = UDim.new(0, energyTopPadding)
+sprintPadding.PaddingBottom = UDim.new(0, energyBottomPadding)
 sprintPadding.PaddingLeft = UDim.new(0, 12)
 sprintPadding.PaddingRight = UDim.new(0, 12)
 sprintPadding.Parent = sprintContainer
 
 sprintStatusLabel = Instance.new("TextLabel")
 sprintStatusLabel.Name = "SprintStatus"
-sprintStatusLabel.Size = UDim2.new(1, -8, 0, isTouchDevice and 22 or 26)
-sprintStatusLabel.Position = UDim2.new(0.5, 0, 0, 2)
+sprintStatusLabel.Size = UDim2.new(1, -8, 0, energyLabelHeight)
+sprintStatusLabel.Position = UDim2.new(0.5, 0, 0, 0)
 sprintStatusLabel.AnchorPoint = Vector2.new(0.5, 0)
 sprintStatusLabel.BackgroundTransparency = 1
 sprintStatusLabel.Font = Enum.Font.GothamSemibold
 sprintStatusLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
 sprintStatusLabel.TextSize = isTouchDevice and 18 or 20
 sprintStatusLabel.TextScaled = false
-sprintStatusLabel.Text = "Sprint Enable"
+sprintStatusLabel.Text = "Sprint OFF"
 sprintStatusLabel.ZIndex = 7
 sprintStatusLabel.Parent = sprintContainer
 
 local sprintBackground = Instance.new("Frame")
 sprintBackground.Name = "EnergyBackground"
-sprintBackground.Size = UDim2.new(1, 0, 0, sprintContainerHeight - (isTouchDevice and 34 or 38))
-sprintBackground.Position = UDim2.new(0, 0, 1, 0)
-sprintBackground.AnchorPoint = Vector2.new(0, 1)
-sprintBackground.BackgroundColor3 = Color3.fromRGB(20, 24, 35)
-sprintBackground.BackgroundTransparency = 0.2
+sprintBackground.Size = UDim2.new(1, -24, 0, energyBarHeight)
+sprintBackground.Position = UDim2.new(0.5, 0, 0, energyLabelHeight + energySpacing)
+sprintBackground.AnchorPoint = Vector2.new(0.5, 0)
+sprintBackground.BackgroundColor3 = Color3.fromRGB(34, 52, 82)
+sprintBackground.BackgroundTransparency = 0.15
 sprintBackground.Parent = sprintContainer
 
 local sprintBackgroundCorner = Instance.new("UICorner")
@@ -171,14 +247,14 @@ sprintBackgroundCorner.Parent = sprintBackground
 local sprintBackgroundStroke = Instance.new("UIStroke")
 sprintBackgroundStroke.Thickness = 1.5
 sprintBackgroundStroke.Transparency = 0.35
-sprintBackgroundStroke.Color = Color3.fromRGB(80, 100, 150)
+sprintBackgroundStroke.Color = Color3.fromRGB(80, 130, 200)
 sprintBackgroundStroke.Parent = sprintBackground
 
 local energyFillContainer = Instance.new("Frame")
 energyFillContainer.Name = "EnergyFill"
 energyFillContainer.AnchorPoint = Vector2.new(0, 0.5)
-energyFillContainer.Position = UDim2.new(0, 10, 0.5, 0)
-energyFillContainer.Size = UDim2.new(1, -(isTouchDevice and 110 or 140), 0, isTouchDevice and 16 or 18)
+energyFillContainer.Position = UDim2.new(0, 8, 0.5, 0)
+energyFillContainer.Size = UDim2.new(1, -(energyTextWidth + 24), 1, 0)
 energyFillContainer.BackgroundTransparency = 1
 energyFillContainer.ClipsDescendants = true
 energyFillContainer.Parent = sprintBackground
@@ -186,8 +262,8 @@ energyFillContainer.Parent = sprintBackground
 local energyFillBackground = Instance.new("Frame")
 energyFillBackground.Name = "EnergyFillBackground"
 energyFillBackground.Size = UDim2.new(1, 0, 1, 0)
-energyFillBackground.BackgroundColor3 = Color3.fromRGB(45, 52, 70)
-energyFillBackground.BackgroundTransparency = 0.4
+energyFillBackground.BackgroundColor3 = Color3.fromRGB(52, 80, 130)
+energyFillBackground.BackgroundTransparency = 0.3
 energyFillBackground.Parent = energyFillContainer
 
 local energyFillBackgroundCorner = Instance.new("UICorner")
@@ -216,13 +292,13 @@ energyFillGradient.Parent = energyBarFill
 energyTextLabel = Instance.new("TextLabel")
 energyTextLabel.Name = "EnergyText"
 energyTextLabel.AnchorPoint = Vector2.new(1, 0.5)
-energyTextLabel.Position = UDim2.new(1, -12, 0.5, 0)
-energyTextLabel.Size = UDim2.new(0, isTouchDevice and 88 or 100, 0, isTouchDevice and 20 or 22)
+energyTextLabel.Position = UDim2.new(1, -8, 0.5, 0)
+energyTextLabel.Size = UDim2.new(0, energyTextWidth, 0, energyBarHeight)
 energyTextLabel.BackgroundTransparency = 1
 energyTextLabel.Font = Enum.Font.GothamSemibold
 energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
 energyTextLabel.TextScaled = false
-energyTextLabel.TextSize = isTouchDevice and 16 or 18
+energyTextLabel.TextSize = isTouchDevice and 16 or 17
 energyTextLabel.TextXAlignment = Enum.TextXAlignment.Right
 energyTextLabel.TextYAlignment = Enum.TextYAlignment.Center
 energyTextLabel.Text = "Energy 100%"
@@ -258,26 +334,11 @@ if isTouchDevice then
     sprintButtonCorner.CornerRadius = UDim.new(0, 14)
     sprintButtonCorner.Parent = sprintButton
 end
-
-local viewportWidth = 1024
-do
-    local camera = Workspace.CurrentCamera
-    if camera then
-        viewportWidth = camera.ViewportSize.X
-    end
-end
-
-local slotPadding = if isTouchDevice then 2 else 6
-local calculatedAvailableWidth = if isTouchDevice then math.max(280, math.min(viewportWidth - 40, 540)) else math.clamp(viewportWidth * 0.5, 520, 780)
-local slotSize = math.clamp(math.floor((calculatedAvailableWidth - 24 - slotPadding * 9) / 10), if isTouchDevice then 24 else 40, if isTouchDevice then 40 else 56)
-local inventoryWidth = slotSize * 10 + slotPadding * 9 + 24
-local inventoryHeight = slotSize + 20
-
 inventoryFrame = Instance.new("Frame")
 inventoryFrame.Name = "InventoryBar"
 inventoryFrame.AnchorPoint = Vector2.new(0.5, 1)
 inventoryFrame.Size = UDim2.fromOffset(inventoryWidth, inventoryHeight)
-inventoryFrame.Position = UDim2.new(0.5, 0, 1, -(sprintContainerHeight + (isTouchDevice and 36 or 40)))
+inventoryFrame.Position = UDim2.new(0.5, 0, 1, -inventoryBottomMargin)
 inventoryFrame.BackgroundTransparency = 1
 inventoryFrame.ZIndex = 15
 inventoryFrame.Parent = screenGui
@@ -292,7 +353,7 @@ local slotPaddingContainer = Instance.new("UIPadding")
 slotPaddingContainer.PaddingLeft = UDim.new(0, 12)
 slotPaddingContainer.PaddingRight = UDim.new(0, 12)
 slotPaddingContainer.PaddingTop = UDim.new(0, 4)
-slotPaddingContainer.PaddingBottom = UDim.new(0, 4)
+slotPaddingContainer.PaddingBottom = UDim.new(0, 0)
 slotPaddingContainer.Parent = slotContainer
 
 local slotLayout = Instance.new("UIListLayout")
@@ -300,6 +361,7 @@ slotLayout.FillDirection = Enum.FillDirection.Horizontal
 slotLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 slotLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 slotLayout.Padding = UDim.new(0, slotPadding)
+slotLayout.SortOrder = Enum.SortOrder.LayoutOrder
 slotLayout.Parent = slotContainer
 
 for slotIndex = 1, 10 do
@@ -309,6 +371,7 @@ for slotIndex = 1, 10 do
     slotFrame.BackgroundColor3 = Color3.fromRGB(24, 28, 40)
     slotFrame.BackgroundTransparency = 0.2
     slotFrame.ZIndex = 16
+    slotFrame.LayoutOrder = slotIndex
     slotFrame.Parent = slotContainer
 
     local slotCorner = Instance.new("UICorner")
@@ -448,6 +511,7 @@ type SprintState = {
     sprintIntent: boolean,
     keyboardIntent: boolean,
     touchIntent: boolean,
+    zoneBlocked: boolean,
     rechargeBlockedUntil: number,
     originalWalkSpeed: number,
     speedTween: Tween?,
@@ -473,6 +537,7 @@ local sprintState: SprintState = {
     sprintIntent = false,
     keyboardIntent = false,
     touchIntent = false,
+    zoneBlocked = false,
     rechargeBlockedUntil = 0,
     originalWalkSpeed = DEFAULT_WALK_SPEED,
     speedTween = nil,
@@ -744,17 +809,22 @@ local function updateSprintButtonState()
     end
 
     local hasEnergy = sprintState.energy > 0
-    local buttonActive = sprintState.touchIntent
+    local canSprint = hasEnergy and not sprintState.zoneBlocked
+    local buttonActive = sprintState.touchIntent and canSprint
 
-    if not hasEnergy and not buttonActive then
-        sprintButton.Text = "Rest"
+    if not canSprint and not buttonActive then
+        if sprintState.zoneBlocked then
+            sprintButton.Text = "No Sprint"
+        else
+            sprintButton.Text = "Rest"
+        end
     elseif buttonActive then
         sprintButton.Text = "Unsprint"
     else
         sprintButton.Text = "Sprint"
     end
 
-    if not hasEnergy then
+    if not canSprint then
         sprintButton.BackgroundColor3 = SPRINT_BUTTON_DISABLED_COLOR
         sprintButton.TextColor3 = Color3.fromRGB(200, 210, 225)
     elseif buttonActive then
@@ -764,10 +834,17 @@ local function updateSprintButtonState()
         sprintButton.BackgroundColor3 = SPRINT_BUTTON_DEFAULT_COLOR
         sprintButton.TextColor3 = Color3.fromRGB(210, 235, 255)
     end
+
+    sprintButton.Active = canSprint
 end
 
 local function recomputeSprintIntent()
-    sprintState.sprintIntent = sprintState.keyboardIntent or sprintState.touchIntent
+    local desiredIntent = sprintState.keyboardIntent or sprintState.touchIntent
+    if sprintState.zoneBlocked then
+        desiredIntent = false
+    end
+
+    sprintState.sprintIntent = desiredIntent
     updateSprintButtonState()
 end
 
@@ -796,13 +873,13 @@ local function updateEnergyUI()
     end
 
     if sprintStatusLabel then
-        if sprintState.energy <= 0 then
-            sprintStatusLabel.Text = "Sprint disable"
-            sprintStatusLabel.TextColor3 = Color3.fromRGB(255, 140, 140)
+        if sprintState.isSprinting then
+            sprintStatusLabel.Text = "Sprint ON"
+            sprintStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 220)
         else
-            sprintStatusLabel.Text = "Sprint Enable"
-            if sprintState.isSprinting then
-                sprintStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 220)
+            sprintStatusLabel.Text = "Sprint OFF"
+            if sprintState.energy <= 0 or sprintState.zoneBlocked then
+                sprintStatusLabel.TextColor3 = Color3.fromRGB(255, 140, 140)
             else
                 sprintStatusLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
             end
@@ -906,6 +983,10 @@ local function startSprinting()
         return
     end
 
+    if sprintState.zoneBlocked then
+        return
+    end
+
     if sprintState.energy <= 0 then
         return
     end
@@ -948,6 +1029,7 @@ local function resetSprintState()
     stopSprinting(true)
     sprintState.keyboardIntent = false
     sprintState.touchIntent = false
+    sprintState.zoneBlocked = false
     recomputeSprintIntent()
     sprintState.energy = MAX_SPRINT_ENERGY
     sprintState.rechargeBlockedUntil = 0
@@ -1535,7 +1617,7 @@ if sprintButton then
                 stopSprinting(false)
             end
         else
-            if sprintState.energy <= 0 then
+            if sprintState.energy <= 0 or sprintState.zoneBlocked then
                 updateSprintButtonState()
                 return
             end
@@ -1555,6 +1637,42 @@ RunService.Heartbeat:Connect(function(deltaTime)
     local isMoving = false
     if humanoid then
         isMoving = humanoid.MoveDirection.Magnitude > 0.01
+    end
+
+    local zoneBlocked = false
+    local zonePart = noSprintPart
+    if zonePart and zonePart.Parent and humanoid then
+        local rootPart = getHumanoidRootPart(humanoid)
+        if rootPart then
+            zoneBlocked = isPointInsidePart(zonePart, rootPart.Position)
+        end
+    end
+
+    if zoneBlocked ~= sprintState.zoneBlocked then
+        sprintState.zoneBlocked = zoneBlocked
+
+        if zoneBlocked then
+            local wasSprinting = sprintState.isSprinting
+            if sprintState.touchIntent then
+                sprintState.touchIntent = false
+            end
+            if sprintState.keyboardIntent then
+                sprintState.keyboardIntent = false
+            end
+
+            if wasSprinting then
+                stopSprinting(true)
+                sprintState.rechargeBlockedUntil = 0
+            else
+                updateEnergyUI()
+            end
+        end
+
+        recomputeSprintIntent()
+
+        if not zoneBlocked then
+            updateEnergyUI()
+        end
     end
 
     if sprintState.sprintIntent and not sprintState.isSprinting and sprintState.energy > 0 then
