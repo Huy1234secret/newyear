@@ -122,6 +122,10 @@ type MapConfig = {
     spawnContainer: string,
     skyboxName: string,
     musicId: string?,
+    deathMatchMusicId: string?,
+    deathMatchMusicStartTime: number?,
+    deathMatchStormSize: Vector2?,
+    deathMatchShrinkDuration: number?,
 }
 
 local mapConfigurations: {[string]: MapConfig} = {
@@ -132,6 +136,18 @@ local mapConfigurations: {[string]: MapConfig} = {
         spawnContainer = "CrossroadSpawns",
         skyboxName = "CrossroadSky",
         musicId = "95137069632101",
+    },
+    SFOTH = {
+        id = "SFOTH",
+        displayName = "SFOTH",
+        modelName = "SFOTH",
+        spawnContainer = "SFOTHSpawns",
+        skyboxName = "SFOTHSky",
+        musicId = "11470520383",
+        deathMatchMusicId = "108063319549878",
+        deathMatchMusicStartTime = 8,
+        deathMatchStormSize = Vector2.new(700, 700),
+        deathMatchShrinkDuration = 100,
     },
 }
 
@@ -225,6 +241,7 @@ local participantRecords: {[Player]: ParticipantRecord} = {}
 local roundInProgress = false
 local currentRoundId = 0
 local activeMapModel: Model? = nil
+local activeMapConfig: MapConfig? = nil
 local activeSkybox: Instance? = nil
 local storedNormalSky: Instance? = nil
 local storedNormalSkyParent: Instance? = nil
@@ -328,6 +345,22 @@ local function playMapMusic(config: MapConfig)
         playMusic(config.musicId)
     else
         playIntermissionMusic()
+    end
+end
+
+local function playDeathMatchMusic(config: MapConfig?)
+    local musicId = DEATHMATCH_MUSIC_ID
+    if config and config.deathMatchMusicId then
+        musicId = config.deathMatchMusicId
+    end
+
+    playMusic(musicId)
+
+    if currentMusic and config then
+        local startTime = config.deathMatchMusicStartTime
+        if typeof(startTime) == "number" then
+            currentMusic.TimePosition = math.max(0, startTime)
+        end
     end
 end
 
@@ -836,6 +869,7 @@ endRound = function(roundId: number)
     end
 
     roundInProgress = false
+    activeMapConfig = nil
 
     local wasDeathMatch = deathMatchActive
 
@@ -882,7 +916,8 @@ local function beginDeathMatch(roundId: number)
 
     deathMatchActive = true
 
-    playMusic(DEATHMATCH_MUSIC_ID)
+    local config = activeMapConfig
+    playDeathMatchMusic(config)
 
     sendStatusUpdate({
         action = "DeathMatch",
@@ -916,14 +951,22 @@ local function beginDeathMatch(roundId: number)
         stormPart.Size = Vector3.new(600, 1000, 600)
     end
 
-    local initialSize = stormPart.Size
+    if config and config.deathMatchStormSize then
+        local override = config.deathMatchStormSize
+        local currentSize = stormPart.Size
+        local overrideX = math.max(override.X, STORM_MIN_HORIZONTAL_SIZE)
+        local overrideZ = math.max(override.Y, STORM_MIN_HORIZONTAL_SIZE)
+        stormPart.Size = Vector3.new(overrideX, currentSize.Y, overrideZ)
+    end
+
+    local currentSize = stormPart.Size
     local adjustedSize = Vector3.new(
-        math.max(initialSize.X, STORM_MIN_HORIZONTAL_SIZE),
-        if initialSize.Y > 0 then initialSize.Y else 100,
-        math.max(initialSize.Z, STORM_MIN_HORIZONTAL_SIZE)
+        math.max(currentSize.X, STORM_MIN_HORIZONTAL_SIZE),
+        if currentSize.Y > 0 then currentSize.Y else 100,
+        math.max(currentSize.Z, STORM_MIN_HORIZONTAL_SIZE)
     )
 
-    if adjustedSize ~= initialSize then
+    if adjustedSize ~= currentSize then
         stormPart.Size = adjustedSize
     end
 
@@ -937,10 +980,19 @@ local function beginDeathMatch(roundId: number)
         end
     end
 
-    local shrinkTween = TweenService:Create(stormPart, TweenInfo.new(60, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
-        Size = Vector3.new(0, stormPart.Size.Y, 0),
-    })
-    shrinkTween:Play()
+    local shrinkDuration = 60
+    if config and typeof(config.deathMatchShrinkDuration) == "number" then
+        shrinkDuration = math.max(config.deathMatchShrinkDuration, 0)
+    end
+
+    if shrinkDuration > 0 then
+        local shrinkTween = TweenService:Create(stormPart, TweenInfo.new(shrinkDuration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
+            Size = Vector3.new(0, stormPart.Size.Y, 0),
+        })
+        shrinkTween:Play()
+    else
+        stormPart.Size = Vector3.new(0, stormPart.Size.Y, 0)
+    end
 
     task.spawn(function()
         while deathMatchActive and roundInProgress and currentRoundId == roundId do
@@ -1124,6 +1176,7 @@ local function startRound(player: Player, mapId: string)
         map = mapId,
     })
     playMapMusic(config)
+    activeMapConfig = config
 
     local mapClone = mapTemplate:Clone()
     mapClone.Name = string.format("Active_%s", config.modelName)

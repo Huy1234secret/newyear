@@ -24,6 +24,11 @@ local mapDefinitions: {MapDefinition} = {
         displayName = "Crossroad",
         modelName = "Crossroad",
     },
+    {
+        id = "SFOTH",
+        displayName = "SFOTH",
+        modelName = "SFOTH",
+    },
 }
 
 local mapButtonDefaultColor = Color3.fromRGB(190, 60, 60)
