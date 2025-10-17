@@ -99,6 +99,12 @@ local sprintStatusLabel: TextLabel? = nil
 local centerCursorImage: ImageLabel? = nil
 
 local inventoryFrame: Frame? = nil
+local inventoryToggleButton: ImageButton? = nil
+local inventoryVisible = true
+local inventoryAutoOpened = false
+local setInventoryVisibility: (boolean) -> ()
+
+inventoryVisible = not isTouchDevice
 
 local noSprintPart: BasePart? = nil
 local sprintActionButton: ImageButton? = nil
@@ -175,6 +181,7 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PVPStatusGui"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
+screenGui.DisplayOrder = 5
 screenGui.Parent = playerGui
 
 local statusFrame = Instance.new("Frame")
@@ -244,7 +251,7 @@ local slotSize = math.clamp(
 )
 local inventoryWidth = slotSize * 10 + slotPadding * 9 + 24
 local inventoryHeight = slotSize + 20
-local inventoryBottomMargin = 0
+local inventoryBottomMargin = if isTouchDevice then math.max(64, math.floor(slotSize * 1.4)) else 0
 local minimumEnergyGap = 0
 local energyContainerGap = minimumEnergyGap
 local energyLabelHeight = if isTouchDevice then 16 else 18
@@ -375,7 +382,7 @@ inventoryFrame.AnchorPoint = Vector2.new(0.5, 1)
 inventoryFrame.Size = UDim2.fromOffset(inventoryWidth, inventoryHeight)
 inventoryFrame.Position = UDim2.new(0.5, 0, 1, -inventoryBottomMargin)
 inventoryFrame.BackgroundTransparency = 1
-inventoryFrame.ZIndex = 15
+inventoryFrame.ZIndex = 25
 inventoryFrame.Parent = screenGui
 
 local sprintContainerBasePosition = sprintContainer.Position
@@ -390,6 +397,52 @@ local energyGradientDefault = energyFillGradient.Color
 
 local inventoryBasePosition = inventoryFrame.Position
 local inventoryBaseRotation = inventoryFrame.Rotation
+
+local function updateInventoryToggleVisual()
+    local button = inventoryToggleButton
+    if not button then
+        return
+    end
+
+    if inventoryVisible then
+        button.ImageTransparency = 0
+        button.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    else
+        button.ImageTransparency = 0.2
+        button.ImageColor3 = Color3.fromRGB(200, 205, 220)
+    end
+end
+
+setInventoryVisibility = function(visible: boolean)
+    inventoryVisible = visible
+
+    if inventoryFrame then
+        inventoryFrame.Visible = visible
+    end
+
+    updateInventoryToggleVisual()
+end
+
+if isTouchDevice then
+    inventoryToggleButton = Instance.new("ImageButton")
+    inventoryToggleButton.Name = "InventoryToggleButton"
+    inventoryToggleButton.AnchorPoint = Vector2.new(0.5, 1)
+    inventoryToggleButton.Size = UDim2.fromOffset(math.max(56, math.floor(slotSize * 1.1)), math.max(56, math.floor(slotSize * 1.1)))
+    inventoryToggleButton.Position = UDim2.new(0.5, 0, 1, -8)
+    inventoryToggleButton.BackgroundTransparency = 1
+    inventoryToggleButton.AutoButtonColor = true
+    inventoryToggleButton.Image = "rbxasset://textures/ui/Backpack/BackpackButton.png"
+    inventoryToggleButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    inventoryToggleButton.ZIndex = 50
+    inventoryToggleButton.Parent = screenGui
+
+    inventoryToggleButton.Activated:Connect(function()
+        setInventoryVisibility(not inventoryVisible)
+        inventoryAutoOpened = true
+    end)
+end
+
+setInventoryVisibility(inventoryVisible)
 
 local slotContainer = Instance.new("Frame")
 slotContainer.Name = "SlotContainer"
@@ -418,7 +471,7 @@ for slotIndex = 1, 10 do
     slotFrame.Size = UDim2.fromOffset(slotSize, slotSize)
     slotFrame.BackgroundColor3 = Color3.fromRGB(24, 28, 40)
     slotFrame.BackgroundTransparency = 0.2
-    slotFrame.ZIndex = 16
+    slotFrame.ZIndex = 26
     slotFrame.LayoutOrder = slotIndex
     slotFrame.Parent = slotContainer
 
@@ -444,7 +497,7 @@ for slotIndex = 1, 10 do
     numberLabel.TextXAlignment = Enum.TextXAlignment.Left
     numberLabel.TextYAlignment = Enum.TextYAlignment.Top
     numberLabel.Text = slotIndex == 10 and "0" or tostring(slotIndex)
-    numberLabel.ZIndex = 18
+    numberLabel.ZIndex = 28
     numberLabel.Parent = slotFrame
 
     local nameLabelHeight = math.max(12, math.floor(slotSize * 0.35))
@@ -457,7 +510,7 @@ for slotIndex = 1, 10 do
     iconImage.AnchorPoint = Vector2.new(0.5, 0)
     iconImage.Image = ""
     iconImage.ScaleType = Enum.ScaleType.Fit
-    iconImage.ZIndex = 17
+    iconImage.ZIndex = 27
     iconImage.Parent = slotFrame
 
     local nameLabel = Instance.new("TextLabel")
@@ -473,7 +526,7 @@ for slotIndex = 1, 10 do
     nameLabel.TextScaled = false
     nameLabel.TextWrapped = true
     nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
-    nameLabel.ZIndex = 18
+    nameLabel.ZIndex = 28
     nameLabel.Parent = slotFrame
 
     local slotButton = Instance.new("ImageButton")
@@ -484,7 +537,7 @@ for slotIndex = 1, 10 do
     slotButton.ImageTransparency = 1
     slotButton.Active = false
     slotButton.Selectable = false
-    slotButton.ZIndex = 19
+    slotButton.ZIndex = 29
     slotButton.Parent = slotFrame
 
     local currentSlotIndex = slotIndex
@@ -1272,6 +1325,14 @@ updateInventorySlots = function()
         end
     end
     trackedGearOrder = cleanedOrder
+
+    local toolCount = #trackedGearOrder
+    if toolCount == 0 then
+        inventoryAutoOpened = false
+    elseif isTouchDevice and not inventoryVisible and not inventoryAutoOpened then
+        inventoryAutoOpened = true
+        setInventoryVisibility(true)
+    end
 
     for slotIndex = 1, 10 do
         local slot = inventorySlots[slotIndex]
