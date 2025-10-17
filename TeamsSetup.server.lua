@@ -104,9 +104,8 @@ local function ensureRigIsR6(player: Player, character: Model)
     end
 
     if description then
-        description.RigType = Enum.HumanoidRigType.R6
         pcall(function()
-            humanoid:ApplyDescription(description :: HumanoidDescription)
+            humanoid:ApplyDescription(description :: HumanoidDescription, Enum.HumanoidRigType.R6)
         end)
     else
         pcall(function()
