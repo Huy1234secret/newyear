@@ -833,8 +833,9 @@ local function updateSprintButtonState()
     end
 
     local shouldEnable = canSprint or sprintState.touchIntent
-    if ContextActionService.SetButtonEnabled then
-        ContextActionService:SetButtonEnabled("SprintAction", shouldEnable)
+    local setButtonEnabled = ContextActionService.SetButtonEnabled
+    if typeof(setButtonEnabled) == "function" then
+        setButtonEnabled(ContextActionService, "SprintAction", shouldEnable)
     else
         local sprintButton = ContextActionService:GetButton("SprintAction")
         if sprintButton then
