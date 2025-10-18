@@ -169,6 +169,9 @@ local SLOT_CONTENT_BASE_ZINDEX = INVENTORY_BASE_ZINDEX + 1
 local SLOT_ICON_ZINDEX = SLOT_CONTENT_BASE_ZINDEX + 1
 local SLOT_TEXT_ZINDEX = SLOT_CONTENT_BASE_ZINDEX + 2
 local SLOT_BUTTON_ZINDEX = SLOT_CONTENT_BASE_ZINDEX + 4
+local SPRINT_CONTAINER_ZINDEX = SLOT_BUTTON_ZINDEX + 10
+local SPRINT_TEXT_ZINDEX = SPRINT_CONTAINER_ZINDEX + 2
+local SPRINT_BAR_ZINDEX = SPRINT_CONTAINER_ZINDEX + 1
 
 type UiRefs = {
     energyBarFill: Frame?,
@@ -458,7 +461,7 @@ local sprintContainer = createInstance("Frame", {
     Position = UDim2.new(0.5, 0, 1, -sprintBottomOffset),
     AnchorPoint = Vector2.new(0.5, 1),
     BackgroundTransparency = 1,
-    ZIndex = 5,
+    ZIndex = SPRINT_CONTAINER_ZINDEX,
     Parent = screenGui,
 })
 
@@ -481,7 +484,7 @@ uiRefs.sprintStatusLabel = createInstance("TextLabel", {
     TextSize = isTouchDevice and 14 or 16,
     TextScaled = false,
     Text = "Sprint OFF",
-    ZIndex = 7,
+    ZIndex = SPRINT_TEXT_ZINDEX,
     Parent = sprintContainer,
 })
 
@@ -492,6 +495,7 @@ local sprintBackground = createInstance("Frame", {
     AnchorPoint = Vector2.new(0.5, 0),
     BackgroundColor3 = Color3.fromRGB(34, 52, 82),
     BackgroundTransparency = 0.15,
+    ZIndex = SPRINT_BAR_ZINDEX,
     Parent = sprintContainer,
 })
 
@@ -514,6 +518,7 @@ local energyFillContainer = createInstance("Frame", {
     Size = UDim2.new(1, -(energyTextWidth + 20), 1, 0),
     BackgroundTransparency = 1,
     ClipsDescendants = true,
+    ZIndex = SPRINT_BAR_ZINDEX,
     Parent = sprintBackground,
 })
 
@@ -522,6 +527,7 @@ local energyFillBackground = createInstance("Frame", {
     Size = UDim2.new(1, 0, 1, 0),
     BackgroundColor3 = Color3.fromRGB(52, 80, 130),
     BackgroundTransparency = 0.3,
+    ZIndex = SPRINT_BAR_ZINDEX,
     Parent = energyFillContainer,
 })
 
@@ -536,6 +542,7 @@ uiRefs.energyBarFill = createInstance("Frame", {
     Position = UDim2.new(0, 0, 0.5, 0),
     Size = UDim2.new(1, 0, 1, 0),
     BackgroundColor3 = Color3.fromRGB(80, 190, 255),
+    ZIndex = SPRINT_BAR_ZINDEX + 1,
     Parent = energyFillBackground,
 })
 
@@ -565,6 +572,7 @@ uiRefs.energyTextLabel = createInstance("TextLabel", {
     TextXAlignment = Enum.TextXAlignment.Right,
     TextYAlignment = Enum.TextYAlignment.Center,
     Text = "Energy 100%",
+    ZIndex = SPRINT_TEXT_ZINDEX,
     Parent = sprintBackground,
 })
 
