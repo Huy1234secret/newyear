@@ -1098,6 +1098,7 @@ do
                     toTarget = ball.CFrame.LookVector
                 end
                 local targetDirection = toTarget.Unit
+                local targetPosition = targetHRP.Position
 
                 rocket.CFrame = CFrame.lookAt(launchOrigin, launchOrigin + targetDirection)
                 rocket.Parent = Workspace
@@ -1159,13 +1160,29 @@ do
                     explode()
                 end)
 
-                stepConn = RunService.Heartbeat:Connect(function()
+                stepConn = RunService.Heartbeat:Connect(function(dt)
                     if detonated then
                         return
                     end
 
-                    rocket.CFrame = CFrame.lookAt(rocket.Position, rocket.Position + targetDirection)
-                    rocket.AssemblyLinearVelocity = targetDirection * ROCKET_SPEED
+                    local displacement = targetPosition - rocket.Position
+                    if displacement.Magnitude <= 1 then
+                        explode()
+                        return
+                    end
+
+                    local adjustedDt = math.max(dt or 0, 1 / 240)
+                    if displacement.Magnitude <= ROCKET_SPEED * adjustedDt then
+                        rocket.CFrame = CFrame.lookAt(rocket.Position, rocket.Position + displacement.Unit)
+                        rocket.AssemblyLinearVelocity = displacement.Unit * ROCKET_SPEED
+                        explode()
+                        return
+                    end
+
+                    local direction = displacement.Unit
+                    targetDirection = direction
+                    rocket.CFrame = CFrame.lookAt(rocket.Position, rocket.Position + direction)
+                    rocket.AssemblyLinearVelocity = direction * ROCKET_SPEED
                 end)
 
                 destroyingConn = rocket.Destroying:Connect(function()
@@ -1570,8 +1587,8 @@ do
                                 return
                             end
 
-                            local otherCharacter = hit.Parent
-                            if not otherCharacter then
+                            local otherCharacter = hit:FindFirstAncestorOfClass("Model")
+                            if not otherCharacter or otherCharacter == character or otherCharacter:IsDescendantOf(character) then
                                 return
                             end
 

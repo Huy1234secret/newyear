@@ -1731,6 +1731,117 @@ local function completeSpecialEventRandomization(finalName: string)
     showSpecialEvent(finalName, 3)
 end
 
+local invisibleCharacterFadeTokens: {[Model]: number} = {}
+
+local function cancelCharacterVisibilityFade(character: Model, owner: Player?)
+    local current = invisibleCharacterFadeTokens[character]
+    if current ~= nil then
+        invisibleCharacterFadeTokens[character] = current + 1
+    end
+
+    local resolvedOwner = owner or Players:GetPlayerFromCharacter(character)
+    if resolvedOwner then
+        local shouldBeInvisible = invisibilityState.enabled and resolvedOwner.Neutral
+        applyCharacterInvisibility(character, shouldBeInvisible, resolvedOwner)
+    end
+
+    invisibleCharacterFadeTokens[character] = nil
+end
+
+local function gatherVisibleCharacterParts(character: Model): {BasePart}
+    local parts: {BasePart} = {}
+    for _, descendant in character:GetDescendants() do
+        if descendant:IsA("BasePart") then
+            local belongsToTool = false
+            local ancestor = descendant.Parent
+            while ancestor and ancestor ~= character do
+                if ancestor:IsA("Tool") then
+                    belongsToTool = true
+                    break
+                end
+                ancestor = ancestor.Parent
+            end
+
+            if not belongsToTool then
+                parts[#parts + 1] = descendant
+            end
+        end
+    end
+
+    return parts
+end
+
+local function getInvisibilityTargetTransparency(owner: Player?): number
+    if invisibilityState.enabled and owner and owner.Neutral then
+        if owner == localPlayer then
+            return 0.5
+        end
+        return 1
+    end
+
+    return 0
+end
+
+local function beginCharacterVisibilityFlash(character: Model, owner: Player?)
+    local resolvedOwner = owner or Players:GetPlayerFromCharacter(character)
+    if not resolvedOwner then
+        return
+    end
+
+    local parts = gatherVisibleCharacterParts(character)
+    if #parts == 0 then
+        return
+    end
+
+    local token = (invisibleCharacterFadeTokens[character] or 0) + 1
+    invisibleCharacterFadeTokens[character] = token
+
+    for _, part in parts do
+        if part.Parent then
+            part.LocalTransparencyModifier = 0
+        end
+    end
+
+    local fadeDuration = 2
+
+    task.spawn(function()
+        local startTime = os.clock()
+        while invisibleCharacterFadeTokens[character] == token do
+            local elapsed = os.clock() - startTime
+            if elapsed >= fadeDuration then
+                break
+            end
+
+            local alpha = math.clamp(elapsed / fadeDuration, 0, 1)
+            local ownerForFrame = Players:GetPlayerFromCharacter(character) or resolvedOwner
+            local goalTransparency = getInvisibilityTargetTransparency(ownerForFrame)
+            local currentTransparency = goalTransparency * alpha
+
+            for _, part in parts do
+                if part.Parent then
+                    part.LocalTransparencyModifier = currentTransparency
+                end
+            end
+
+            RunService.Heartbeat:Wait()
+        end
+
+        if invisibleCharacterFadeTokens[character] ~= token then
+            return
+        end
+
+        local finalOwner = Players:GetPlayerFromCharacter(character) or resolvedOwner
+        local finalTransparency = getInvisibilityTargetTransparency(finalOwner)
+        for _, part in parts do
+            if part.Parent then
+                part.LocalTransparencyModifier = finalTransparency
+            end
+        end
+
+        invisibleCharacterFadeTokens[character] = nil
+    end)
+end
+
 local function cancelInvisibleHighlightFade(highlight: Highlight)
     local bundle = invisibleHighlightTweens[highlight]
     if not bundle then
@@ -1777,18 +1888,22 @@ local function ensureInvisibleHighlight(character: Model): Highlight
         highlight.Enabled = true
         highlight.Destroying:Connect(function()
             cancelInvisibleHighlightFade(highlight)
+            local owner = Players:GetPlayerFromCharacter(character)
+            cancelCharacterVisibilityFade(character, owner)
         end)
     end
 
     return highlight
 end
 
-local function clearInvisibleHighlight(character: Model)
+local function clearInvisibleHighlight(character: Model, owner: Player?)
     local highlight = character:FindFirstChild("InvisibleRevealHighlight")
     if highlight then
         cancelInvisibleHighlightFade(highlight :: Highlight)
         highlight:Destroy()
     end
+
+    cancelCharacterVisibilityFade(character, owner)
 end
 
 local function applyCharacterInvisibility(character: Model, enabled: boolean, owner: Player?)
@@ -1830,7 +1945,7 @@ local function updateInvisibilityForPlayer(player: Player)
     applyCharacterInvisibility(character, shouldBeInvisible, player)
 
     if not shouldBeInvisible then
-        clearInvisibleHighlight(character)
+        clearInvisibleHighlight(character, player)
     end
 end
 
@@ -1846,7 +1961,7 @@ local function clearInvisibilityTracking()
     for _, player in Players:GetPlayers() do
         if player.Character then
             applyCharacterInvisibility(player.Character, false, player)
-            clearInvisibleHighlight(player.Character)
+            clearInvisibleHighlight(player.Character, player)
         end
     end
 end
@@ -1869,7 +1984,7 @@ local function trackPlayerForInvisibility(player: Player)
         end)
     end)
     connections[#connections + 1] = player.CharacterRemoving:Connect(function(character)
-        clearInvisibleHighlight(character)
+        clearInvisibleHighlight(character, player)
     end)
 
     invisibilityState.playerConnections[player] = connections
@@ -1890,6 +2005,8 @@ local function updateInvisiblePulseState()
                     highlight.FillTransparency = 1
                     highlight.OutlineTransparency = 1
                 end
+
+                cancelCharacterVisibilityFade(character, player)
             end
         end
         return
@@ -1908,6 +2025,8 @@ local function updateInvisiblePulseState()
                         highlight.FillTransparency = 0.5
                         highlight.OutlineTransparency = 0
                         highlight.Enabled = true
+
+                        beginCharacterVisibilityFlash(character, player)
                     end
                 end
             end
@@ -2117,31 +2236,33 @@ local function enableInvertedControls()
         end
 
         local key = input.KeyCode
-        if key == Enum.KeyCode.W or key == Enum.KeyCode.Up then
+        if key == Enum.KeyCode.W or key == Enum.KeyCode.Up or key == Enum.KeyCode.DPadUp then
             invertedControlState.keyboard.forward = true
-        elseif key == Enum.KeyCode.S or key == Enum.KeyCode.Down then
+        elseif key == Enum.KeyCode.S or key == Enum.KeyCode.Down or key == Enum.KeyCode.DPadDown then
             invertedControlState.keyboard.back = true
-        elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left then
+        elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left or key == Enum.KeyCode.DPadLeft then
             invertedControlState.keyboard.left = true
-        elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
+        elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right or key == Enum.KeyCode.DPadRight then
             invertedControlState.keyboard.right = true
         elseif key == Enum.KeyCode.Space or key == Enum.KeyCode.ButtonA then
             local humanoid = currentHumanoid
             if humanoid then
                 humanoid.Jump = true
             end
+        elseif key == Enum.KeyCode.Thumbstick1 then
+            invertedControlState.thumbstick = Vector2.new(input.Position.X, input.Position.Y)
         end
     end
 
     local function onInputEnded(input: InputObject)
         local key = input.KeyCode
-        if key == Enum.KeyCode.W or key == Enum.KeyCode.Up then
+        if key == Enum.KeyCode.W or key == Enum.KeyCode.Up or key == Enum.KeyCode.DPadUp then
             invertedControlState.keyboard.forward = false
-        elseif key == Enum.KeyCode.S or key == Enum.KeyCode.Down then
+        elseif key == Enum.KeyCode.S or key == Enum.KeyCode.Down or key == Enum.KeyCode.DPadDown then
             invertedControlState.keyboard.back = false
-        elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left then
+        elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left or key == Enum.KeyCode.DPadLeft then
             invertedControlState.keyboard.left = false
-        elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
+        elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right or key == Enum.KeyCode.DPadRight then
             invertedControlState.keyboard.right = false
         elseif key == Enum.KeyCode.Thumbstick1 then
             invertedControlState.thumbstick = Vector2.new(0, 0)
@@ -2955,6 +3076,7 @@ local function onHumanoidAdded(humanoid: Humanoid)
         if invertedControlState.active then
             resetInvertedMovement()
         end
+        applyInvertedControlState()
     end)
 end
 
@@ -2978,6 +3100,8 @@ local function onCharacterAdded(character: Model)
             end
         end)
     end
+
+    applyInvertedControlState()
 end
 
 localPlayer.CharacterAdded:Connect(onCharacterAdded)
@@ -2997,9 +3121,8 @@ localPlayer.CharacterRemoving:Connect(function()
     end
     currentHumanoid = nil
     if invertedControlState.active then
-        resetInvertedMovement()
-    end
-    if not invertedControlState.requested then
+        disableInvertedControls()
+    elseif not invertedControlState.requested then
         enableDefaultControlsIfDisabled()
     end
     if characterGearConn then
@@ -3056,6 +3179,13 @@ local function sprintAction(_: string, inputState: Enum.UserInputState, inputObj
             end
             return Enum.ContextActionResult.Sink
         end
+    elseif keyCode == Enum.KeyCode.ButtonX then
+        if inputState == Enum.UserInputState.Begin then
+            toggleKeyboardSprintIntent()
+            return Enum.ContextActionResult.Sink
+        elseif inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
+            return Enum.ContextActionResult.Sink
+        end
     elseif not inputObject then
         if inputState == Enum.UserInputState.Begin then
             toggleTouchSprintIntent()
@@ -3075,7 +3205,8 @@ ContextActionService:BindAction(
     Enum.KeyCode.LeftControl,
     Enum.KeyCode.RightControl,
     Enum.KeyCode.ButtonL3,
-    Enum.KeyCode.ButtonR3
+    Enum.KeyCode.ButtonR3,
+    Enum.KeyCode.ButtonX
 )
 sprintInteraction.actionBound = true
 ContextActionService:SetTitle("SprintAction", "Sprint")
