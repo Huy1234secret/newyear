@@ -366,7 +366,17 @@ local function calculateLayout(isTouch: boolean): LayoutConfig
     local energySpacing = if isTouch then 3 else 4
     local sprintContainerHeight = energyTopPadding + energyLabelHeight + energySpacing + energyBarHeight + energyBottomPadding
     local energyTextWidth = if isTouch then 80 else 92
-    local estimatedInventoryHeight = if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then inventoryHeight elseif isTouch then math.max(48, math.floor(slotSize * 1.15)) else 0
+    local estimatedInventoryHeight
+    if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
+        estimatedInventoryHeight = inventoryHeight
+    elseif isTouch then
+        estimatedInventoryHeight = math.max(48, math.floor(slotSize * 1.15))
+    else
+        -- When Roblox's default backpack UI is enabled on desktop, the hotbar occupies
+        -- a fixed space near the bottom of the screen. Nudge the sprint container up so
+        -- the custom energy meter always renders above the built-in inventory buttons.
+        estimatedInventoryHeight = math.max(60, math.floor(slotSize * 1.1))
+    end
     local sprintBottomOffset = inventoryBottomMargin + estimatedInventoryHeight
 
     return {
