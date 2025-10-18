@@ -178,6 +178,8 @@ type UiRefs = {
     energyTextLabel: TextLabel?,
     sprintStatusLabel: TextLabel?,
     centerCursorImage: ImageLabel?,
+    mapLabelContainer: Frame?,
+    mapLabelStroke: UIStroke?,
     mapLabel: TextLabel?,
     inventoryFrame: Frame?,
     inventoryToggleButton: ImageButton?,
@@ -189,6 +191,8 @@ local uiRefs: UiRefs = {
     energyTextLabel = nil,
     sprintStatusLabel = nil,
     centerCursorImage = nil,
+    mapLabelContainer = nil,
+    mapLabelStroke = nil,
     mapLabel = nil,
     inventoryFrame = nil,
     inventoryToggleButton = nil,
@@ -309,14 +313,12 @@ createInstance("UIPadding", {
     Parent = statusUI.frame,
 })
 
-local statusLabelOffset = math.floor((UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING) * 0.5)
-
 statusUI.label = createInstance("TextLabel", {
     Name = "StatusLabel",
-    Size = UDim2.new(1, -(UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING), 1, 0),
+    Size = UDim2.new(1, 0, 1, 0),
     BackgroundTransparency = 1,
     AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.new(0.5, -statusLabelOffset, 0.5, 0),
+    Position = UDim2.new(0.5, 0, 0.5, 0),
     Font = Enum.Font.GothamBold,
     Text = "",
     TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE,
@@ -334,22 +336,61 @@ statusUI.labelStroke = createInstance("UIStroke", {
     Parent = statusUI.label,
 })
 
+uiRefs.mapLabelContainer = createInstance("Frame", {
+    Name = "MapLabelContainer",
+    Size = UDim2.new(0, UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING, 1, 0),
+    AnchorPoint = Vector2.new(1, 0.5),
+    Position = UDim2.new(0, -UI_CONFIG.MAP_LABEL_PADDING, 0.5, 0),
+    BackgroundColor3 = Color3.fromRGB(22, 26, 36),
+    BackgroundTransparency = 0.25,
+    BorderSizePixel = 0,
+    Visible = false,
+    ZIndex = statusUI.frame.ZIndex,
+    Parent = statusUI.frame,
+})
+
+createInstance("UICorner", {
+    CornerRadius = UDim.new(0, 10),
+    Parent = uiRefs.mapLabelContainer,
+})
+
+uiRefs.mapLabelStroke = createInstance("UIStroke", {
+    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    Thickness = 1,
+    Transparency = 0.4,
+    Color = Color3.fromRGB(120, 135, 200),
+    Parent = uiRefs.mapLabelContainer,
+})
+
+createInstance("UIPadding", {
+    PaddingLeft = UDim.new(0, math.floor(UI_CONFIG.MAP_LABEL_PADDING * 0.4)),
+    PaddingRight = UDim.new(0, math.floor(UI_CONFIG.MAP_LABEL_PADDING * 0.4)),
+    Parent = uiRefs.mapLabelContainer,
+})
+
 uiRefs.mapLabel = createInstance("TextLabel", {
     Name = "MapLabel",
-    Size = UDim2.new(0, UI_CONFIG.MAP_LABEL_WIDTH, 1, 0),
-    AnchorPoint = Vector2.new(1, 0.5),
-    Position = UDim2.new(1, -math.floor(UI_CONFIG.MAP_LABEL_PADDING * 0.5), 0.5, 0),
+    Size = UDim2.new(1, 0, 1, 0),
     BackgroundTransparency = 1,
     Font = Enum.Font.GothamSemibold,
     Text = "",
     TextSize = math.max(16, UI_CONFIG.DEFAULT_TEXT_SIZE - 4),
     TextColor3 = Color3.fromRGB(210, 230, 255),
-    TextXAlignment = Enum.TextXAlignment.Right,
+    TextXAlignment = Enum.TextXAlignment.Left,
     TextYAlignment = Enum.TextYAlignment.Center,
-    ZIndex = statusUI.label.ZIndex,
-    Visible = false,
-    Parent = statusUI.frame,
+    ZIndex = uiRefs.mapLabelContainer.ZIndex + 1,
+    Parent = uiRefs.mapLabelContainer,
 })
+
+uiRefs.mapLabelContainer:SetAttribute("HasMap", false)
+
+statusUI.frame:GetPropertyChangedSignal("Visible"):Connect(function()
+    local container = uiRefs.mapLabelContainer
+    if container then
+        local hasMap = container:GetAttribute("HasMap")
+        container.Visible = (hasMap == true) and statusUI.frame.Visible
+    end
+end)
 
 local specialEventUI = {}
 specialEventUI.frame = createInstance("Frame", {
@@ -2860,16 +2901,19 @@ local function updateMapLabel(mapId: string?)
     currentMapId = mapId
 
     local targetLabel = uiRefs.mapLabel
-    if not targetLabel then
+    local container = uiRefs.mapLabelContainer
+    if not targetLabel or not container then
         return
     end
 
     if mapId then
         targetLabel.Text = string.format("Map: %s", getMapDisplayName(mapId))
-        targetLabel.Visible = true
+        container:SetAttribute("HasMap", true)
+        container.Visible = statusUI.frame.Visible
     else
         targetLabel.Text = ""
-        targetLabel.Visible = false
+        container:SetAttribute("HasMap", false)
+        container.Visible = false
     end
 end
 
@@ -2983,7 +3027,6 @@ local StormEffects = (function()
             NumberSequenceKeypoint.new(0, 0.15),
             NumberSequenceKeypoint.new(1, 0.65),
         })
-        gradient.GradientType = Enum.GradientType.Radial
         gradient.Parent = gradientFrame
         state.gradient = gradient
 

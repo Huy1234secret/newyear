@@ -59,6 +59,35 @@ local DEATHMATCH_MUSIC_ID = "117047384857700"
 local STORM_MIN_HORIZONTAL_SIZE = 200
 local MAP_ANCHOR_DURATION = 5
 
+local remotesFolder = ReplicatedStorage:FindFirstChild("PVPRemotes")
+if not remotesFolder then
+    remotesFolder = Instance.new("Folder")
+    remotesFolder.Name = "PVPRemotes"
+    remotesFolder.Parent = ReplicatedStorage
+end
+
+local function getOrCreateRemote(name: string): RemoteEvent
+    local remote = remotesFolder:FindFirstChild(name) :: RemoteEvent?
+    if remote then
+        return remote
+    end
+
+    remote = Instance.new("RemoteEvent")
+    remote.Name = name
+    remote.Parent = remotesFolder
+
+    return remote
+end
+
+local startRoundRemote = getOrCreateRemote("StartRound")
+local statusUpdateRemote = getOrCreateRemote("StatusUpdate")
+local roundStateRemote = getOrCreateRemote("RoundState")
+local toggleInventorySlotRemote = getOrCreateRemote("ToggleInventorySlot")
+
+local function sendStatusUpdate(data: {})
+    statusUpdateRemote:FireAllClients(data)
+end
+
 local function isGameOwner(player: Player): boolean
     if allowedUserIds[player.UserId] then
         return true
@@ -1088,31 +1117,6 @@ do
     })
 end
 
-local remotesFolder = ReplicatedStorage:FindFirstChild("PVPRemotes")
-if not remotesFolder then
-    remotesFolder = Instance.new("Folder")
-    remotesFolder.Name = "PVPRemotes"
-    remotesFolder.Parent = ReplicatedStorage
-end
-
-local function getOrCreateRemote(name: string): RemoteEvent
-    local remote = remotesFolder:FindFirstChild(name) :: RemoteEvent?
-    if remote then
-        return remote
-    end
-
-    remote = Instance.new("RemoteEvent")
-    remote.Name = name
-    remote.Parent = remotesFolder
-
-    return remote
-end
-
-local startRoundRemote = getOrCreateRemote("StartRound")
-local statusUpdateRemote = getOrCreateRemote("StatusUpdate")
-local roundStateRemote = getOrCreateRemote("RoundState")
-local toggleInventorySlotRemote = getOrCreateRemote("ToggleInventorySlot")
-
 local mapsFolder = ReplicatedStorage:FindFirstChild("Maps")
 local skyboxFolder = ReplicatedStorage:FindFirstChild("Skybox")
 local gearsFolder = ReplicatedStorage:FindFirstChild("PVPGears")
@@ -1230,10 +1234,6 @@ local function sendRoundState(state: string, extra: {}?)
     local payload = if type(extra) == "table" then table.clone(extra :: {}) else {}
     payload.state = state
     roundStateRemote:FireAllClients(payload)
-end
-
-local function sendStatusUpdate(data: {})
-    statusUpdateRemote:FireAllClients(data)
 end
 
 local currentMusic: Sound? = nil
