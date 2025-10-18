@@ -856,6 +856,10 @@ do
             local SEEK_STRENGTH = 0.55
             local LOS_CHECK = true
 
+            local HOLD_READY_TIME = 0.4
+            local HOLD_DISTANCE = 6
+            local POST_FIRE_MOVE_DELAY = 0.85
+
             local ROCKET_SPEED = 55
             local ROCKET_LIFETIME = 12
             local ROCKET_ARM_DELAY = 0.3
@@ -995,6 +999,10 @@ do
                 local velocity = ball.AssemblyLinearVelocity
                 local position = ball.Position
                 local desiredHoverPosition: Vector3? = nil
+                local holdTimer = botState.holdTimer or HOLD_READY_TIME
+                local postFireCooldown = math.max((botState.afterFireCooldown or 0) - dt, 0)
+                botState.afterFireCooldown = postFireCooldown
+                local holding = botState.isHolding or false
 
                 if targetHRP and targetHRP.Parent then
                     botState.wanderTimer = 0
@@ -1015,6 +1023,16 @@ do
 
                     local jitterOffset = botState.jitterOffset or Vector3.zero
                     desiredHoverPosition = targetHRP.Position + Vector3.new(0, HOVER_HEIGHT, 0) + jitterOffset
+                    local offset = desiredHoverPosition - position
+                    local shouldHold = postFireCooldown <= 0 and offset.Magnitude <= HOLD_DISTANCE
+
+                    if shouldHold then
+                        holding = true
+                        holdTimer = math.max(holdTimer - dt, 0)
+                    else
+                        holding = false
+                        holdTimer = HOLD_READY_TIME
+                    end
                 else
                     local wanderTimer = (botState.wanderTimer or 0) - dt
                     local wanderOffset = botState.wanderOffset
@@ -1032,6 +1050,8 @@ do
                     botState.wanderTimer = wanderTimer
                     botState.jitterOffset = Vector3.zero
                     desiredHoverPosition = (botState.homePosition or position) + wanderOffset + Vector3.new(0, HOVER_HEIGHT, 0)
+                    holding = false
+                    holdTimer = HOLD_READY_TIME
                 end
 
                 if desiredHoverPosition then
@@ -1044,7 +1064,17 @@ do
                     end
 
                     local offset = desiredHoverPosition - position
-                    if offset.Magnitude > 0.5 then
+                    if holding then
+                        if velocity.Magnitude > 0.5 then
+                            local damping = -velocity * SEEK_STRENGTH * 2
+                            local adjustedDt = math.max(dt, 1 / 240)
+                            local dampingForce = damping * mass / adjustedDt
+                            if dampingForce.Magnitude > MOVE_FORCE then
+                                dampingForce = dampingForce.Unit * MOVE_FORCE
+                            end
+                            desiredForce += dampingForce
+                        end
+                    elseif offset.Magnitude > 0.5 then
                         local direction = offset.Unit
                         local desiredVelocity = direction * MAX_SPEED
                         local steer = (desiredVelocity - velocity) * SEEK_STRENGTH
@@ -1056,25 +1086,26 @@ do
                         end
 
                         desiredForce += steeringForce
-                    else
-                        if velocity.Magnitude > 1 then
-                            local damping = -velocity * SEEK_STRENGTH
-                            local adjustedDt = math.max(dt, 1 / 240)
-                            local dampingForce = damping * mass / adjustedDt
-                            if dampingForce.Magnitude > MOVE_FORCE then
-                                dampingForce = dampingForce.Unit * MOVE_FORCE
-                            end
-                            desiredForce += dampingForce
+                    elseif velocity.Magnitude > 1 then
+                        local damping = -velocity * SEEK_STRENGTH
+                        local adjustedDt = math.max(dt, 1 / 240)
+                        local dampingForce = damping * mass / adjustedDt
+                        if dampingForce.Magnitude > MOVE_FORCE then
+                            dampingForce = dampingForce.Unit * MOVE_FORCE
                         end
+                        desiredForce += dampingForce
                     end
                 end
 
                 vectorForce.Force = desiredForce
 
+                botState.isHolding = holding
+                botState.holdTimer = holdTimer
+
                 local align = botState.align
                 if align then
                     local lookDirection: Vector3? = nil
-                    if velocity.Magnitude > 2 then
+                    if not holding and velocity.Magnitude > 2 then
                         lookDirection = velocity
                     elseif targetHRP then
                         lookDirection = targetHRP.Position - position
@@ -1088,17 +1119,17 @@ do
 
             local function createRocket(botState, targetHRP: BasePart)
                 if not targetHRP or not targetHRP.Parent then
-                    return
+                    return false
                 end
 
                 local ball = botState.ball
                 if not ball or not ball.Parent then
-                    return
+                    return false
                 end
 
                 local now = os.clock()
                 if now - (botState.lastFire or 0) < FIRE_COOLDOWN then
-                    return
+                    return false
                 end
                 botState.lastFire = now
 
@@ -1112,6 +1143,7 @@ do
                 rocket.CanQuery = false
                 rocket.CanTouch = true
                 rocket.Anchored = false
+                rocket.Massless = true
 
                 local launchOrigin = ball.Position
                 local targetPosition = targetHRP.Position
@@ -1222,6 +1254,8 @@ do
                         rocket:Destroy()
                     end
                 end)
+
+                return true
             end
 
             local function spawnBot(index: number)
@@ -1280,6 +1314,9 @@ do
                     jitterTimer = 0,
                     currentTarget = nil,
                     targetTimer = 0,
+                    holdTimer = HOLD_READY_TIME,
+                    isHolding = false,
+                    afterFireCooldown = 0,
                 }
 
                 model.Destroying:Connect(function()
@@ -1306,8 +1343,13 @@ do
 
                     local targetHRP = selectBotTarget(botState, dt)
                     stepBot(botState, dt, targetHRP)
-                    if targetHRP then
-                        createRocket(botState, targetHRP)
+                    if targetHRP and botState.isHolding and (botState.holdTimer or 0) <= 0 then
+                        local fired = createRocket(botState, targetHRP)
+                        if fired then
+                            botState.afterFireCooldown = POST_FIRE_MOVE_DELAY
+                            botState.isHolding = false
+                            botState.holdTimer = HOLD_READY_TIME
+                        end
                     end
                 end
             end)
