@@ -893,6 +893,16 @@ local FIRE_COOLDOWN = 2.25 -- seconds between shots while stationary
 			local ROCKET_BASE_DAMAGE = 55
 			local ROCKET_KNOCKBACK = 85
 
+			
+			-- Palette for Killbot spheres
+			local colors = {
+				Color3.fromRGB(255,75,75),
+				Color3.fromRGB(75,255,140),
+				Color3.fromRGB(75,160,255),
+				Color3.fromRGB(255,200,85),
+				Color3.fromRGB(200,110,255),
+			}
+
 			local function buildRocketModel(originCF: CFrame)
 				-- If a prebuilt rocket exists, use it (place a Model named KillBotRocket under ReplicatedStorage).
 				local prefab = ReplicatedStorage:FindFirstChild("KillBotRocket")
