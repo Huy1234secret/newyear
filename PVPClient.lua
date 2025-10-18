@@ -1,14 +1,33 @@
--- Minimal formatTimer to avoid register overflow
+-- Helpers (closed and minimal to avoid register overflow)
 local function formatTimer(seconds)
-    seconds = tonumber(seconds) or 0
-    if seconds < 0 then seconds = 0 end
-    seconds = math.floor(seconds + 0.5)
-    local m = math.floor(seconds / 60)
-    local s = seconds % 60
-    return string.format("%d:%02d", m, s)
+	seconds = tonumber(seconds) or 0
+	if seconds < 0 then seconds = 0 end
+	seconds = math.floor(seconds + 0.5)
+	local h = math.floor(seconds / 3600)
+	local m = math.floor((seconds % 3600) / 60)
+	local s = seconds % 60
+	if h > 0 then
+		return string.format("%d:%02d:%02d", h, m, s)
+	else
+		return string.format("%d:%02d", m, s)
+	end
 end
 
--- Minimal StormEffects stub to avoid register overflow
+local function formatCountdown(seconds)
+	seconds = tonumber(seconds) or 0
+	if seconds < 0 then seconds = 0 end
+	seconds = math.floor(seconds + 0.5)
+	local h = math.floor(seconds / 3600)
+	local m = math.floor((seconds % 3600) / 60)
+	local s = seconds % 60
+	if h > 0 then
+		return string.format("%d:%02d:%02d", h, m, s)
+	else
+		return string.format("%d:%02d", m, s)
+	end
+end
+
+-- Minimal StormEffects stub to avoid register overflow (kept api)
 local StormEffects = {}
 function StormEffects.enable(...) end
 function StormEffects.disable(...) end
@@ -16,49 +35,55 @@ function StormEffects.setTrackedPart(...) end
 function StormEffects.update(...) end
 
 --!strict
--- === Movement reset helper to stop stuck-forward after respawn ===
+-- Movement reset helper to stop stuck-forward after respawn
 local function resetMovementState(humanoid: Humanoid?)
-	local Players = game:GetService("Players")
-	local CAS = game:GetService("ContextActionService")
+	if not humanoid then return end
+	local state = humanoid:GetState()
+	if state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.RunningNoPhysics then
+		humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+	end
+end
 
-	-- Unbind any custom actions that may block default controls
+game:GetService("Players")
+local CAS = game:GetService("ContextActionService")
+
+-- Unbind any custom actions that may block default controls
+pcall(function()
+	CAS:UnbindAction("DisableMovement")
+	CAS:UnbindAction("Inverted_Move")
+	CAS:UnbindAction("Inverted_Look")
+end)
+
+-- Soft reset PlayerModule controls
+local okPM, controls = pcall(function()
+	local player = Players.LocalPlayer
+	local ps = player and player:FindFirstChildOfClass("PlayerScripts")
+	local pm = ps and ps:FindFirstChild("PlayerModule")
+	if not pm then return nil end
+	local PM = require(pm)
+	return PM:GetControls()
+end)
+if okPM and controls then
+	pcall(function() controls:Disable() end)
+end
+
+-- Nudge humanoid state & clear movement intents
+if humanoid and humanoid.Parent then
 	pcall(function()
-		CAS:UnbindAction("DisableMovement")
-		CAS:UnbindAction("Inverted_Move")
-		CAS:UnbindAction("Inverted_Look")
+		-- Zero the movement vector and suppress jump for a tick
+		humanoid:Move(Vector3.new(0,0,0), true)
+		humanoid.Jump = false
+		-- Sometimes RunningNoPhysics -> Running helps clear residual velocity intents
+		humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+		task.wait(0.02)
+		humanoid:ChangeState(Enum.HumanoidStateType.Running)
 	end)
+end
 
-	-- Soft reset PlayerModule controls
-	local okPM, controls = pcall(function()
-		local player = Players.LocalPlayer
-		local ps = player and player:FindFirstChildOfClass("PlayerScripts")
-		local pm = ps and ps:FindFirstChild("PlayerModule")
-		if not pm then return nil end
-		local PM = require(pm)
-		return PM:GetControls()
-	end)
-	if okPM and controls then
-		pcall(function() controls:Disable() end)
-	end
-
-	-- Nudge humanoid state & clear movement intents
-	if humanoid and humanoid.Parent then
-		pcall(function()
-			-- Zero the movement vector and suppress jump for a tick
-			humanoid:Move(Vector3.new(0,0,0), true)
-			humanoid.Jump = false
-			-- Sometimes RunningNoPhysics -> Running helps clear residual velocity intents
-			humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
-			task.wait(0.02)
-			humanoid:ChangeState(Enum.HumanoidStateType.Running)
-		end)
-	end
-
-	-- Re-enable controls after a tiny delay so PlayerModule rebinds default actions
-	task.wait(0.03)
-	if okPM and controls then
-		pcall(function() controls:Enable() end)
-	end
+-- Re-enable controls after a tiny delay so PlayerModule rebinds default actions
+task.wait(0.03)
+if okPM and controls then
+	pcall(function() controls:Enable() end)
 end
 
 -- Place this LocalScript in StarterPlayerScripts so each player can see match updates.
@@ -3261,9 +3286,9 @@ local function onHumanoidAdded(humanoid: Humanoid)
 		recomputeSprintIntent()
 		stopSprinting(true)
 		if invertedControlState.active then disableInvertedControls() end
-	hardEnableDefaultControls()
-resetMovementState(humanoid)
-end)
+		hardEnableDefaultControls()
+		resetMovementState(humanoid)
+	end)
 
 	applyInvertedControlState()
 	-- Reset any stuck inputs immediately and shortly after spawn
@@ -3313,8 +3338,8 @@ end
 localPlayer.CharacterAdded:Connect(onCharacterAdded)
 
 localPlayer.CharacterRemoving:Connect(function()
-		resetMovementState(humanoid)if invertedControlState and invertedControlState.active then disableInvertedControls() end
-		hardEnableDefaultControls()
+	resetMovementState(humanoid)if invertedControlState and invertedControlState.active then disableInvertedControls() end
+	hardEnableDefaultControls()
 	sprintState.keyboardIntent = false
 	sprintState.touchIntent = false
 	recomputeSprintIntent()
@@ -3798,13 +3823,6 @@ local function updateMapLabel(mapId: string?)
 		container.Visible = false
 		updateEventLabelText()
 	end
-end
-
-local function formatCountdown(seconds: number): string
-	if seconds <= 0 then
-		return "Match starting..."
-	end
-	return string.format("Starting in %ds", seconds)
 end
 
 statusRemote.OnClientEvent:Connect(function(payload)
