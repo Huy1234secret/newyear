@@ -1,114 +1,6 @@
--- Helpers (closed and minimal to avoid register overflow)
-local function formatTimer(seconds)
-	seconds = tonumber(seconds) or 0
-	if seconds < 0 then seconds = 0 end
-	seconds = math.floor(seconds + 0.5)
-	local h = math.floor(seconds / 3600)
-	local m = math.floor((seconds % 3600) / 60)
-	local s = seconds % 60
-	if h > 0 then
-		return string.format("%d:%02d:%02d", h, m, s)
-	else
-		return string.format("%d:%02d", m, s)
-	end
-end
-
-local function formatCountdown(seconds)
-	seconds = tonumber(seconds) or 0
-	if seconds < 0 then seconds = 0 end
-	seconds = math.floor(seconds + 0.5)
-	local h = math.floor(seconds / 3600)
-	local m = math.floor((seconds % 3600) / 60)
-	local s = seconds % 60
-	if h > 0 then
-		return string.format("%d:%02d:%02d", h, m, s)
-	else
-		return string.format("%d:%02d", m, s)
-	end
-end
-
--- Minimal StormEffects stub to avoid register overflow (kept api)
-StormEffects = {}
-function StormEffects.enable(...) end
-function StormEffects.disable(...) end
-function StormEffects.setTrackedPart(...) end
-function StormEffects.update(...) end
-
 --!strict
--- Movement reset helper to stop stuck-forward after respawn
-local function resetMovementState(humanoid: Humanoid?)
-        if not humanoid then return end
-        local state = humanoid:GetState()
-        if state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.RunningNoPhysics then
-                humanoid:ChangeState(Enum.HumanoidStateType.Landed)
-        end
-
-        local Players = game:GetService("Players")
-        local CAS = game:GetService("ContextActionService")
-
-        -- Unbind any custom actions that may block default controls
-        pcall(function()
-                CAS:UnbindAction("DisableMovement")
-                CAS:UnbindAction("Inverted_Move")
-                CAS:UnbindAction("Inverted_Look")
-        end)
-
-        -- Soft reset PlayerModule controls
-        local okPM, controls = pcall(function()
-                local player = Players.LocalPlayer
-                local ps = player and player:FindFirstChildOfClass("PlayerScripts")
-                local pm = ps and ps:FindFirstChild("PlayerModule")
-                if not pm then return nil end
-                local PM = require(pm)
-                return PM:GetControls()
-        end)
-        if okPM and controls then
-                pcall(function() controls:Disable() end)
-        end
-
-        -- Nudge humanoid state & clear movement intents
-        if humanoid and humanoid.Parent then
-                pcall(function()
-                        -- Zero the movement vector and suppress jump for a tick
-                        humanoid:Move(Vector3.new(0,0,0), true)
-                        humanoid.Jump = false
-                        -- Sometimes RunningNoPhysics -> Running helps clear residual velocity intents
-                        humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
-                        task.wait(0.02)
-                        humanoid:ChangeState(Enum.HumanoidStateType.Running)
-                end)
-        end
-
-        -- Re-enable controls after a tiny delay so PlayerModule rebinds default actions
-        task.wait(0.03)
-        if okPM and controls then
-                pcall(function() controls:Enable() end)
-        end
-end
-
 -- Place this LocalScript in StarterPlayerScripts so each player can see match updates.
 
-
--- === Safety helper: hard-enable Roblox default controls (idempotent) ===
-local function hardEnableDefaultControls()
-	local player = game:GetService("Players").LocalPlayer
-	local playerScripts = player:FindFirstChildOfClass("PlayerScripts")
-	if not playerScripts then return end
-	local pm = playerScripts:FindFirstChild("PlayerModule")
-	if not pm then return end
-	local ok, PlayerModule = pcall(function() return require(pm) end)
-	if not ok or not PlayerModule then return end
-	local controlsOk, controls = pcall(function() return PlayerModule:GetControls() end)
-	if controlsOk and controls then
-		pcall(function() controls:Enable() end)
-	end
-	-- Also release any ContextAction "Disable" binds commonly used by inverted code
-	pcall(function()
-		game:GetService("ContextActionService"):UnbindAction("DisableMovement")
-		game:GetService("ContextActionService"):UnbindAction("Inverted_Move")
-		game:GetService("ContextActionService"):UnbindAction("Inverted_Look")
-	end)
-end
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -147,7 +39,7 @@ local existingToggleRemote = remotesFolder:FindFirstChild("ToggleInventorySlot")
 if existingToggleRemote and existingToggleRemote:IsA("RemoteEvent") then
 	toggleInventorySlotRemote = existingToggleRemote
 else
-        local foundToggle = remotesFolder:WaitForChild("ToggleInventorySlot", 5)
+	local foundToggle = remotesFolder:WaitForChild("ToggleInventorySlot", 5)
 	setToggleInventoryRemote(foundToggle)
 end
 
@@ -234,12 +126,12 @@ local function getPlayerControls()
 		return playerControls
 	end
 
-	success, moduleOrErr = pcall(function()
-		playerScripts = localPlayer:WaitForChild("PlayerScripts", 5)
+	local success, moduleOrErr = pcall(function()
+		local playerScripts = localPlayer:WaitForChild("PlayerScripts", 5)
 		if not playerScripts then
 			return nil
 		end
-		moduleScript = playerScripts:FindFirstChild("PlayerModule")
+		local moduleScript = playerScripts:FindFirstChild("PlayerModule")
 		if not moduleScript then
 			moduleScript = playerScripts:WaitForChild("PlayerModule", 5)
 		end
@@ -255,8 +147,8 @@ local function getPlayerControls()
 	end
 
 	playerModule = moduleOrErr
-	controls = nil
-	ok, result = pcall(function()
+	local controls = nil
+	local ok, result = pcall(function()
 		return playerModule:GetControls()
 	end)
 	if ok then
@@ -267,11 +159,11 @@ local function getPlayerControls()
 	return controls
 end
 
-GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
-currentCursorImageAsset = GEAR_CURSOR_IMAGE_ASSET
-DEFAULT_WALK_SPEED = 16
+local GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
+local currentCursorImageAsset = GEAR_CURSOR_IMAGE_ASSET
+local DEFAULT_WALK_SPEED = 16
 
-Z_INDEX = {
+local Z_INDEX = {
 	INVENTORY_BASE = 60,
 }
 
@@ -384,7 +276,7 @@ local function refreshHotTouchStatusVisibility()
 		return
 	end
 
-	statusFrame = uiRefs.statusFrame
+	local statusFrame = uiRefs.statusFrame
 	if statusFrame and not statusFrame.Visible then
 		label.Visible = false
 		return
@@ -412,7 +304,7 @@ local function setHotTouchStatusText(text: string?)
 	refreshHotTouchStatusVisibility()
 end
 
-sprintInteraction = {
+local sprintInteraction = {
 	noSprintPart = nil :: BasePart?,
 	actionBound = false,
 }
@@ -454,9 +346,9 @@ local function getHumanoidRootPart(humanoid: Humanoid): BasePart?
 		return rootPart
 	end
 
-	character = humanoid.Parent
+	local character = humanoid.Parent
 	if character then
-		candidate = character:FindFirstChild("HumanoidRootPart")
+		local candidate = character:FindFirstChild("HumanoidRootPart")
 		if candidate and candidate:IsA("BasePart") then
 			return candidate
 		end
@@ -479,12 +371,12 @@ type InventorySlotUI = {
 local inventorySlots: {InventorySlotUI} = {}
 local slotToolMapping: {Tool?} = {}
 
-existingGui = playerGui:FindFirstChild("PVPStatusGui")
+local existingGui = playerGui:FindFirstChild("PVPStatusGui")
 if existingGui then
 	existingGui:Destroy()
 end
 
-screenGui = Instance.new("ScreenGui")
+local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PVPStatusGui"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
@@ -498,26 +390,26 @@ local function calculateLayout(isTouch: boolean): LayoutConfig
 		viewportWidth = camera.ViewportSize.X
 	end
 
-	slotPadding = if isTouch then 2 else 6
-	calculatedAvailableWidth = if isTouch
+	local slotPadding = if isTouch then 2 else 6
+	local calculatedAvailableWidth = if isTouch
 		then math.max(280, math.min(viewportWidth - 40, 540))
 		else math.clamp(viewportWidth * 0.5, 520, 780)
-	slotSize = math.clamp(
+	local slotSize = math.clamp(
 		math.floor((calculatedAvailableWidth - 24 - slotPadding * 9) / 10),
 		if isTouch then 24 else 40,
 		if isTouch then 40 else 56
 	)
-	inventoryWidth = slotSize * 10 + slotPadding * 9 + 24
-	inventoryHeight = slotSize + 20
-	inventoryBottomMargin = if isTouch then math.max(64, math.floor(slotSize * 1.4)) else 0
-	energyLabelHeight = if isTouch then 16 else 18
-	energyBarHeight = if isTouch then 12 else 14
-	energyTopPadding = if isTouch then 2 else 3
-	energyBottomPadding = if isTouch then 4 else 5
-	energySpacing = if isTouch then 3 else 4
-	sprintContainerHeight = energyTopPadding + energyLabelHeight + energySpacing + energyBarHeight + energyBottomPadding
-	energyTextWidth = if isTouch then 80 else 92
-	estimatedInventoryHeight
+	local inventoryWidth = slotSize * 10 + slotPadding * 9 + 24
+	local inventoryHeight = slotSize + 20
+	local inventoryBottomMargin = if isTouch then math.max(64, math.floor(slotSize * 1.4)) else 0
+	local energyLabelHeight = if isTouch then 16 else 18
+	local energyBarHeight = if isTouch then 12 else 14
+	local energyTopPadding = if isTouch then 2 else 3
+	local energyBottomPadding = if isTouch then 4 else 5
+	local energySpacing = if isTouch then 3 else 4
+	local sprintContainerHeight = energyTopPadding + energyLabelHeight + energySpacing + energyBarHeight + energyBottomPadding
+	local energyTextWidth = if isTouch then 80 else 92
+	local estimatedInventoryHeight
 	if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
 		estimatedInventoryHeight = inventoryHeight
 	elseif isTouch then
@@ -528,7 +420,7 @@ local function calculateLayout(isTouch: boolean): LayoutConfig
 		-- the custom energy meter always renders above the built-in inventory buttons.
 		estimatedInventoryHeight = math.max(60, math.floor(slotSize * 1.1))
 	end
-	sprintBottomOffset = inventoryBottomMargin + estimatedInventoryHeight
+	local sprintBottomOffset = inventoryBottomMargin + estimatedInventoryHeight
 
 	return {
 		slotPadding = slotPadding,
@@ -1023,7 +915,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 			state.setVisibility(not isTouch)
 		end
 
-		slotContainer = createInstance("Frame", {
+		local slotContainer = createInstance("Frame", {
 			Name = "SlotContainer",
 			Size = UDim2.new(1, 0, 1, 0),
 			BackgroundTransparency = 1,
@@ -1048,7 +940,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 		})
 
 		for slotIndex = 1, 10 do
-			slotUI = {}
+			local slotUI = {}
 			slotUI.frame = createInstance("Frame", {
 				Name = string.format("Slot_%d", slotIndex),
 				Size = UDim2.fromOffset(layout.slotSize, layout.slotSize),
@@ -1071,8 +963,8 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 				Parent = slotUI.frame,
 			})
 
-			nameLabelHeight = math.max(12, math.floor(layout.slotSize * 0.35))
-			iconPadding = math.max(8, math.floor(layout.slotSize * 0.3))
+			local nameLabelHeight = math.max(12, math.floor(layout.slotSize * 0.35))
+			local iconPadding = math.max(8, math.floor(layout.slotSize * 0.3))
 
 			slotUI.numberLabel = createInstance("TextLabel", {
 				Name = "KeyLabel",
@@ -1131,8 +1023,8 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 				Parent = slotUI.frame,
 			})
 
-			currentSlotIndex = slotIndex
-			lastTriggerTime = 0
+			local currentSlotIndex = slotIndex
+			local lastTriggerTime = 0
 			local function triggerSelection()
 				local now = os.clock()
 				if now - lastTriggerTime < 0.08 then
@@ -1147,7 +1039,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 
 			slotUI.button.Activated:Connect(triggerSelection)
 			slotUI.button.InputBegan:Connect(function(input)
-				inputType = input.UserInputType
+				local inputType = input.UserInputType
 				if inputType == Enum.UserInputType.MouseButton1
 					or inputType == Enum.UserInputType.Touch
 					or inputType == Enum.UserInputType.Gamepad1
@@ -1809,8 +1701,6 @@ local function trackPlayerForHighlights(targetPlayer: Player)
 	end)
 
 	connections[#connections + 1] = targetPlayer.CharacterRemoving:Connect(function()
-		resetMovementState(humanoid)if invertedControlState and invertedControlState.active then disableInvertedControls() end
-		hardEnableDefaultControls()
 		removeHighlightForPlayer(targetPlayer)
 	end)
 
@@ -2476,15 +2366,6 @@ local function enableInvertedControls()
 end
 
 local function applyInvertedControlState()
-	-- Reset any stuck inputs immediately and shortly after spawn
-	resetMovementState(humanoid)
-	task.delay(0.20, function() resetMovementState(humanoid) end)
-	task.delay(0.60, function() resetMovementState(humanoid) end)
-	-- safety: if not inverted after spawn, re-enable defaults
-	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 	local shouldEnable = invertedControlState.requested and localPlayer.Neutral
 	if shouldEnable then
 		enableInvertedControls()
@@ -2500,15 +2381,6 @@ end
 local function setInvertedControlsEnabled(enabled: boolean)
 	invertedControlState.requested = enabled
 	applyInvertedControlState()
-	-- Reset any stuck inputs immediately and shortly after spawn
-	resetMovementState(humanoid)
-	task.delay(0.20, function() resetMovementState(humanoid) end)
-	task.delay(0.60, function() resetMovementState(humanoid) end)
-	-- safety: if not inverted after spawn, re-enable defaults
-	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end
 
 local function getSprintActionButton(): ImageButton?
@@ -3171,30 +3043,12 @@ localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
 	updateHighlightActivation()
 	setSprintEventDisabled(specialEventState.effects.sprintDisabled)
 	applyInvertedControlState()
-	-- Reset any stuck inputs immediately and shortly after spawn
-	resetMovementState(humanoid)
-	task.delay(0.20, function() resetMovementState(humanoid) end)
-	task.delay(0.60, function() resetMovementState(humanoid) end)
-	-- safety: if not inverted after spawn, re-enable defaults
-	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end)
 
 localPlayer:GetPropertyChangedSignal("Neutral"):Connect(function()
 	updateHighlightActivation()
 	setSprintEventDisabled(specialEventState.effects.sprintDisabled)
 	applyInvertedControlState()
-	-- Reset any stuck inputs immediately and shortly after spawn
-	resetMovementState(humanoid)
-	task.delay(0.20, function() resetMovementState(humanoid) end)
-	task.delay(0.60, function() resetMovementState(humanoid) end)
-	-- safety: if not inverted after spawn, re-enable defaults
-	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end)
 
 initializeBackpackTracking()
@@ -3285,21 +3139,12 @@ local function onHumanoidAdded(humanoid: Humanoid)
 		sprintState.touchIntent = false
 		recomputeSprintIntent()
 		stopSprinting(true)
-		if invertedControlState.active then disableInvertedControls() end
-		hardEnableDefaultControls()
-		resetMovementState(humanoid)
+		if invertedControlState.active then
+			resetInvertedMovement()
+		end
 	end)
 
 	applyInvertedControlState()
-	-- Reset any stuck inputs immediately and shortly after spawn
-	resetMovementState(humanoid)
-	task.delay(0.20, function() resetMovementState(humanoid) end)
-	task.delay(0.60, function() resetMovementState(humanoid) end)
-	-- safety: if not inverted after spawn, re-enable defaults
-	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end
 
 local function onCharacterAdded(character: Model)
@@ -3324,22 +3169,11 @@ local function onCharacterAdded(character: Model)
 	end
 
 	applyInvertedControlState()
-	-- Reset any stuck inputs immediately and shortly after spawn
-	resetMovementState(humanoid)
-	task.delay(0.20, function() resetMovementState(humanoid) end)
-	task.delay(0.60, function() resetMovementState(humanoid) end)
-	-- safety: if not inverted after spawn, re-enable defaults
-	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end
 
 localPlayer.CharacterAdded:Connect(onCharacterAdded)
 
 localPlayer.CharacterRemoving:Connect(function()
-	resetMovementState(humanoid)if invertedControlState and invertedControlState.active then disableInvertedControls() end
-	hardEnableDefaultControls()
 	sprintState.keyboardIntent = false
 	sprintState.touchIntent = false
 	recomputeSprintIntent()
@@ -3353,7 +3187,9 @@ localPlayer.CharacterRemoving:Connect(function()
 		humanoidSprintBonusConn = nil
 	end
 	currentHumanoid = nil
-	if invertedControlState.active then disableInvertedControls() end
+	if invertedControlState.active then
+		resetInvertedMovement()
+	end
 	enableDefaultControlsIfDisabled()
 	if characterGearConn then
 		characterGearConn:Disconnect()
@@ -3824,6 +3660,463 @@ local function updateMapLabel(mapId: string?)
 		updateEventLabelText()
 	end
 end
+
+local function formatCountdown(seconds: number): string
+	if seconds <= 0 then
+		return "Match starting..."
+	end
+	return string.format("Starting in %ds", seconds)
+end
+
+local function formatTimer(seconds: number): string
+	local minutes = math.floor(seconds / 60)
+	local remainingSeconds = seconds % 60
+	return string.format("%d:%02d", minutes, remainingSeconds)
+end
+
+local StormEffects = (function()
+	local state = {
+		overlayGui = nil :: ScreenGui?,
+		gradientFrame = nil :: Frame?,
+		gradient = nil :: UIGradient?,
+		scanLine = nil :: Frame?,
+		animationConn = nil :: RBXScriptConnection?,
+		scanProgress = 0,
+		colorCorrection = nil :: ColorCorrectionEffect?,
+		depthOfField = nil :: DepthOfFieldEffect?,
+		equalizer = nil :: EqualizerSoundEffect?,
+		pitchShift = nil :: PitchShiftSoundEffect?,
+		reverb = nil :: ReverbSoundEffect?,
+		originalAmbientReverb = SoundService.AmbientReverb,
+		trackedPart = nil :: BasePart?,
+		visualActive = false,
+		audioActive = false,
+	}
+
+	local function ensureOverlay()
+		local existingGui = state.overlayGui
+		if existingGui and not existingGui.Parent then
+			state.overlayGui = nil
+			state.gradientFrame = nil
+			state.gradient = nil
+			state.scanLine = nil
+			if state.animationConn then
+				state.animationConn:Disconnect()
+				state.animationConn = nil
+			end
+			existingGui = nil
+		end
+
+		if not existingGui then
+			local foundGui = playerGui:FindFirstChild("StormExposureOverlay")
+			if foundGui and foundGui:IsA("ScreenGui") then
+				state.overlayGui = foundGui
+				existingGui = foundGui
+
+				local container = foundGui:FindFirstChild("Container")
+				if container and container:IsA("Frame") then
+					local gradientFrame = container:FindFirstChild("Gradient")
+					if gradientFrame and gradientFrame:IsA("Frame") then
+						state.gradientFrame = gradientFrame
+						local gradient = gradientFrame:FindFirstChildWhichIsA("UIGradient")
+						state.gradient = gradient
+					end
+
+					local scanLineFrame = container:FindFirstChild("ScanLine")
+					if scanLineFrame and scanLineFrame:IsA("Frame") then
+						state.scanLine = scanLineFrame
+					end
+				end
+			end
+		end
+
+		if existingGui then
+			if existingGui.Parent ~= playerGui then
+				existingGui.Parent = playerGui
+			end
+			return
+		end
+
+		local gui = Instance.new("ScreenGui")
+		gui.Name = "StormExposureOverlay"
+		gui.ResetOnSpawn = false
+		gui.IgnoreGuiInset = true
+		gui.DisplayOrder = 90
+		gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		gui.Enabled = false
+		gui.Parent = playerGui
+		state.overlayGui = gui
+
+		local container = Instance.new("Frame")
+		container.Name = "Container"
+		container.Size = UDim2.fromScale(1, 1)
+		container.BackgroundTransparency = 1
+		container.ClipsDescendants = true
+		container.Parent = gui
+
+		local gradientFrame = Instance.new("Frame")
+		gradientFrame.Name = "Gradient"
+		gradientFrame.Size = UDim2.fromScale(1.4, 1.4)
+		gradientFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+		gradientFrame.Position = UDim2.fromScale(0.5, 0.5)
+		gradientFrame.BackgroundColor3 = Color3.fromRGB(180, 70, 255)
+		gradientFrame.BackgroundTransparency = 0.38
+		gradientFrame.Parent = container
+		state.gradientFrame = gradientFrame
+
+		local gradient = Instance.new("UIGradient")
+		gradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 0, 80)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(150, 50, 190)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 0, 70)),
+		})
+		gradient.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.15),
+			NumberSequenceKeypoint.new(1, 0.65),
+		})
+		gradient.Parent = gradientFrame
+		state.gradient = gradient
+
+		local gradientStroke = Instance.new("UIStroke")
+		gradientStroke.Thickness = 2
+		gradientStroke.Transparency = 0.4
+		gradientStroke.Color = Color3.fromRGB(255, 120, 255)
+		gradientStroke.Parent = gradientFrame
+
+		local veil = Instance.new("Frame")
+		veil.Name = "Veil"
+		veil.Size = UDim2.fromScale(1, 1)
+		veil.BackgroundColor3 = Color3.fromRGB(12, 0, 28)
+		veil.BackgroundTransparency = 0.58
+		veil.Parent = container
+
+		local scanLine = Instance.new("Frame")
+		scanLine.Name = "ScanLine"
+		scanLine.Size = UDim2.new(1, 0, 0, if isTouchDevice then 8 else 6)
+		scanLine.BackgroundColor3 = Color3.fromRGB(220, 120, 255)
+		scanLine.BackgroundTransparency = 0.35
+		scanLine.Position = UDim2.new(0, 0, 0, 0)
+		scanLine.Parent = container
+		state.scanLine = scanLine
+		state.scanProgress = 0
+	end
+
+	local function ensureLightingEffects()
+		local colorCorrection = state.colorCorrection
+		if not colorCorrection then
+			local existingEffect = Lighting:FindFirstChild("StormColorCorrection")
+			if existingEffect and existingEffect:IsA("ColorCorrectionEffect") then
+				colorCorrection = existingEffect
+			end
+		end
+		if not colorCorrection or not colorCorrection.Parent then
+			colorCorrection = Instance.new("ColorCorrectionEffect")
+			colorCorrection.Name = "StormColorCorrection"
+			colorCorrection.Brightness = -0.15
+			colorCorrection.Contrast = -0.25
+			colorCorrection.Saturation = -0.5
+			colorCorrection.TintColor = Color3.fromRGB(90, 140, 255)
+			colorCorrection.Enabled = false
+			colorCorrection.Parent = Lighting
+		end
+		state.colorCorrection = colorCorrection
+
+		local depthEffect = state.depthOfField
+		if not depthEffect then
+			local existingDepth = Lighting:FindFirstChild("StormDepthOfField")
+			if existingDepth and existingDepth:IsA("DepthOfFieldEffect") then
+				depthEffect = existingDepth
+			end
+		end
+		if not depthEffect or not depthEffect.Parent then
+			depthEffect = Instance.new("DepthOfFieldEffect")
+			depthEffect.Name = "StormDepthOfField"
+			depthEffect.InFocusRadius = 18
+			depthEffect.FocusDistance = 45
+			depthEffect.NearIntensity = 0.3
+			depthEffect.FarIntensity = 0.65
+			depthEffect.Enabled = false
+			depthEffect.Parent = Lighting
+		end
+		state.depthOfField = depthEffect
+	end
+
+	local function ensureAudioEffects()
+		local equalizer = state.equalizer
+		if not equalizer then
+			local existingEqualizer = SoundService:FindFirstChild("StormEqualizer")
+			if existingEqualizer and existingEqualizer:IsA("EqualizerSoundEffect") then
+				equalizer = existingEqualizer
+			end
+		end
+		if not equalizer or not equalizer.Parent then
+			equalizer = Instance.new("EqualizerSoundEffect")
+			equalizer.Name = "StormEqualizer"
+			equalizer.LowGain = 8
+			equalizer.MidGain = -10
+			equalizer.HighGain = -18
+			equalizer.Priority = 5
+			equalizer.Enabled = false
+			equalizer.Parent = SoundService
+		else
+			equalizer.Parent = SoundService
+		end
+		state.equalizer = equalizer
+
+		local pitchShift = state.pitchShift
+		if not pitchShift then
+			local existingPitch = SoundService:FindFirstChild("StormPitchShift")
+			if existingPitch and existingPitch:IsA("PitchShiftSoundEffect") then
+				pitchShift = existingPitch
+			end
+		end
+		if not pitchShift or not pitchShift.Parent then
+			pitchShift = Instance.new("PitchShiftSoundEffect")
+			pitchShift.Name = "StormPitchShift"
+			pitchShift.Octave = 0.85
+			pitchShift.Priority = 5
+			pitchShift.Enabled = false
+			pitchShift.Parent = SoundService
+		else
+			pitchShift.Parent = SoundService
+		end
+		state.pitchShift = pitchShift
+
+		local reverb = state.reverb
+		if not reverb then
+			local existingReverb = SoundService:FindFirstChild("StormReverb")
+			if existingReverb and existingReverb:IsA("ReverbSoundEffect") then
+				reverb = existingReverb
+			end
+		end
+		if not reverb or not reverb.Parent then
+			reverb = Instance.new("ReverbSoundEffect")
+			reverb.Name = "StormReverb"
+			reverb.DecayTime = 0.4
+			reverb.DryLevel = -8
+			reverb.WetLevel = -3
+			reverb.Priority = 5
+			reverb.Enabled = false
+			reverb.Parent = SoundService
+		else
+			reverb.Parent = SoundService
+		end
+		state.reverb = reverb
+	end
+
+	local function startOverlayAnimation()
+		if state.animationConn then
+			return
+		end
+
+		state.animationConn = RunService.RenderStepped:Connect(function(dt)
+			local scanLine = state.scanLine
+			if scanLine then
+				state.scanProgress += dt * 0.4
+				if state.scanProgress > 1 then
+					state.scanProgress -= 1
+				end
+				scanLine.Position = UDim2.new(0, 0, state.scanProgress, 0)
+			end
+		end)
+	end
+
+	local function stopOverlayAnimation()
+		if state.animationConn then
+			state.animationConn:Disconnect()
+			state.animationConn = nil
+		end
+	end
+
+	local function enableVisualEffects()
+		ensureOverlay()
+		ensureLightingEffects()
+
+		local overlayGui = state.overlayGui
+		if overlayGui then
+			overlayGui.Enabled = true
+		end
+		local colorCorrection = state.colorCorrection
+		if colorCorrection then
+			colorCorrection.Enabled = true
+		end
+		local depthOfField = state.depthOfField
+		if depthOfField then
+			depthOfField.Enabled = true
+		end
+
+		local gradientFrame = state.gradientFrame
+		if gradientFrame then
+			gradientFrame.Rotation = 0
+		end
+		local gradient = state.gradient
+		if gradient then
+			gradient.Rotation = 0
+			gradient.Offset = Vector2.new(0, 0)
+		end
+
+		startOverlayAnimation()
+	end
+
+	local function disableVisualEffects()
+		local overlayGui = state.overlayGui
+		if overlayGui then
+			overlayGui.Enabled = false
+		end
+		local colorCorrection = state.colorCorrection
+		if colorCorrection then
+			colorCorrection.Enabled = false
+		end
+		local depthOfField = state.depthOfField
+		if depthOfField then
+			depthOfField.Enabled = false
+		end
+
+		stopOverlayAnimation()
+		state.scanProgress = 0
+		local scanLine = state.scanLine
+		if scanLine then
+			scanLine.Position = UDim2.new(0, 0, 0, 0)
+		end
+	end
+
+	local function enableAudioEffects()
+		ensureAudioEffects()
+
+		local equalizer = state.equalizer
+		if equalizer then
+			equalizer.Enabled = true
+		end
+		local pitchShift = state.pitchShift
+		if pitchShift then
+			pitchShift.Enabled = true
+		end
+		local reverb = state.reverb
+		if reverb then
+			reverb.Enabled = true
+		end
+		if SoundService.AmbientReverb ~= Enum.ReverbType.Underwater then
+			state.originalAmbientReverb = state.originalAmbientReverb or SoundService.AmbientReverb
+			SoundService.AmbientReverb = Enum.ReverbType.Underwater
+		end
+	end
+
+	local function disableAudioEffects()
+		local equalizer = state.equalizer
+		if equalizer then
+			equalizer.Enabled = false
+		end
+		local pitchShift = state.pitchShift
+		if pitchShift then
+			pitchShift.Enabled = false
+		end
+		local reverb = state.reverb
+		if reverb then
+			reverb.Enabled = false
+		end
+		local originalReverb = state.originalAmbientReverb
+		if originalReverb then
+			SoundService.AmbientReverb = originalReverb
+		end
+	end
+
+	local function updateExposure(visualActive: boolean, audioActive: boolean)
+		if state.visualActive or visualActive then
+			disableVisualEffects()
+		end
+
+		if state.audioActive or audioActive then
+			disableAudioEffects()
+		end
+
+		state.visualActive = false
+		state.audioActive = false
+	end
+
+	local function refreshPartReference()
+		local existing = Workspace:FindFirstChild("StormPart", true)
+		if existing and existing:IsA("BasePart") then
+			state.trackedPart = existing
+		else
+			state.trackedPart = nil
+			updateExposure(false, false)
+		end
+	end
+
+	local function onDescendantAdded(descendant: Instance)
+		if descendant:IsA("BasePart") and descendant.Name == "StormPart" then
+			state.trackedPart = descendant
+		end
+	end
+
+	local function onDescendantRemoving(descendant: Instance)
+		if descendant == state.trackedPart then
+			state.trackedPart = nil
+			updateExposure(false, false)
+		end
+	end
+
+	local function isPositionInsideStormXZ(stormPart: BasePart, halfSize: Vector3, position: Vector3): boolean
+		local relative = stormPart.CFrame:PointToObjectSpace(position)
+		return math.abs(relative.X) <= halfSize.X and math.abs(relative.Z) <= halfSize.Z
+	end
+
+	local function onHeartbeat()
+		local storm = state.trackedPart
+		if not storm or not storm.Parent then
+			if storm and not storm.Parent then
+				state.trackedPart = nil
+			end
+			updateExposure(false, false)
+			return
+		end
+
+		local character = localPlayer.Character
+		if not character then
+			updateExposure(false, false)
+			return
+		end
+
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if not humanoid or humanoid.Health <= 0 then
+			updateExposure(false, false)
+			return
+		end
+
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+		if not rootPart or not rootPart:IsA("BasePart") then
+			updateExposure(false, false)
+			return
+		end
+
+		local halfSize = storm.Size * 0.5
+		if halfSize.X <= 0 or halfSize.Z <= 0 then
+			updateExposure(false, false)
+			return
+		end
+
+		local characterInStorm = isPositionInsideStormXZ(storm, halfSize, rootPart.Position)
+
+		local camera = Workspace.CurrentCamera
+		local cameraInStorm = false
+		if camera then
+			cameraInStorm = isPositionInsideStormXZ(storm, halfSize, camera.CFrame.Position)
+		end
+
+		updateExposure(characterInStorm, characterInStorm or cameraInStorm)
+	end
+
+	refreshPartReference()
+
+	Workspace.DescendantAdded:Connect(onDescendantAdded)
+	Workspace.DescendantRemoving:Connect(onDescendantRemoving)
+	RunService.Heartbeat:Connect(onHeartbeat)
+
+	return {
+		updateExposure = updateExposure,
+		refreshPartReference = refreshPartReference,
+	}
+end)()
 
 statusRemote.OnClientEvent:Connect(function(payload)
 	if typeof(payload) ~= "table" then
