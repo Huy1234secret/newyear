@@ -826,6 +826,7 @@ do
 
             local cf, _ = getActiveMapBounds()
             local origin = cf.Position
+            local killBotRandom = Random.new()
 
             local SCAN_RADIUS = 180
             local FIRE_RANGE = 140
@@ -836,7 +837,7 @@ do
             local SEEK_STRENGTH = 0.55
             local LOS_CHECK = true
 
-            local ROCKET_SPEED = 140
+            local ROCKET_SPEED = 90
             local ROCKET_LIFETIME = 6
             local ROCKET_BLAST_RADIUS = 12
             local ROCKET_BASE_DAMAGE = 55
@@ -892,15 +893,31 @@ do
                 return (result.Position - toPos).Magnitude < 2
             end
 
-            local function findTarget(botState)
+            local function selectBotTarget(botState, dt: number)
                 local ball = botState.ball
                 if not ball or not ball.Parent then
+                    botState.currentTarget = nil
+                    botState.targetTimer = nil
                     return nil, nil
                 end
 
                 local position = ball.Position
-                local nearestHRP: BasePart? = nil
-                local nearestDistance: number? = nil
+
+                local existingTarget = botState.currentTarget
+                if existingTarget and existingTarget.Parent and existingTarget:IsA("BasePart") then
+                    local newTimer = (botState.targetTimer or 0) - dt
+                    botState.targetTimer = newTimer
+
+                    local distance = (existingTarget.Position - position).Magnitude
+                    if distance <= SCAN_RADIUS and hasLineOfSight(botState.model, position, existingTarget.Position) and newTimer > 0 then
+                        return existingTarget, distance
+                    end
+                end
+
+                botState.currentTarget = nil
+                botState.targetTimer = nil
+
+                local candidates = {}
 
                 for _, record in ipairs(getNeutralParticipantRecords()) do
                     local character = record.player.Character
@@ -927,13 +944,21 @@ do
                         continue
                     end
 
-                    if not nearestDistance or distance < nearestDistance then
-                        nearestHRP = hrp
-                        nearestDistance = distance
-                    end
+                    table.insert(candidates, {
+                        hrp = hrp,
+                        distance = distance,
+                    })
                 end
 
-                return nearestHRP, nearestDistance
+                local candidateCount = #candidates
+                if candidateCount > 0 then
+                    local selected = candidates[killBotRandom:NextInteger(1, candidateCount)]
+                    botState.currentTarget = selected.hrp
+                    botState.targetTimer = killBotRandom:NextNumber(1.5, 3.5)
+                    return selected.hrp, selected.distance
+                end
+
+                return nil, nil
             end
 
             local function stepBot(botState, dt: number, targetHRP: BasePart?)
@@ -952,9 +977,41 @@ do
                 local desiredHoverPosition: Vector3? = nil
 
                 if targetHRP and targetHRP.Parent then
-                    desiredHoverPosition = targetHRP.Position + Vector3.new(0, HOVER_HEIGHT, 0)
+                    botState.wanderTimer = 0
+                    botState.wanderOffset = Vector3.zero
+
+                    local jitterTimer = (botState.jitterTimer or 0) - dt
+                    if jitterTimer <= 0 then
+                        jitterTimer = killBotRandom:NextNumber(0.35, 0.8)
+                        local jitterAngle = killBotRandom:NextNumber(0, math.pi * 2)
+                        local jitterMagnitude = killBotRandom:NextNumber(0, 8)
+                        botState.jitterOffset = Vector3.new(
+                            math.cos(jitterAngle),
+                            0,
+                            math.sin(jitterAngle)
+                        ) * jitterMagnitude
+                    end
+                    botState.jitterTimer = jitterTimer
+
+                    local jitterOffset = botState.jitterOffset or Vector3.zero
+                    desiredHoverPosition = targetHRP.Position + Vector3.new(0, HOVER_HEIGHT, 0) + jitterOffset
                 else
-                    desiredHoverPosition = botState.homePosition or position
+                    local wanderTimer = (botState.wanderTimer or 0) - dt
+                    local wanderOffset = botState.wanderOffset
+                    if wanderTimer <= 0 or not wanderOffset then
+                        wanderTimer = killBotRandom:NextNumber(1.5, 3.5)
+                        local wanderAngle = killBotRandom:NextNumber(0, math.pi * 2)
+                        local wanderDistance = killBotRandom:NextNumber(30, 70)
+                        wanderOffset = Vector3.new(
+                            math.cos(wanderAngle),
+                            0,
+                            math.sin(wanderAngle)
+                        ) * wanderDistance
+                        botState.wanderOffset = wanderOffset
+                    end
+                    botState.wanderTimer = wanderTimer
+                    botState.jitterOffset = Vector3.zero
+                    desiredHoverPosition = (botState.homePosition or position) + wanderOffset + Vector3.new(0, HOVER_HEIGHT, 0)
                 end
 
                 if desiredHoverPosition then
@@ -1189,6 +1246,12 @@ do
                     align = align,
                     lastFire = 0,
                     homePosition = spawnPosition,
+                    wanderOffset = Vector3.zero,
+                    wanderTimer = 0,
+                    jitterOffset = Vector3.zero,
+                    jitterTimer = 0,
+                    currentTarget = nil,
+                    targetTimer = 0,
                 }
 
                 model.Destroying:Connect(function()
@@ -1213,7 +1276,7 @@ do
                         continue
                     end
 
-                    local targetHRP, distance = findTarget(botState)
+                    local targetHRP, distance = selectBotTarget(botState, dt)
                     stepBot(botState, dt, targetHRP)
                     if targetHRP then
                         createRocket(botState, targetHRP, distance)

@@ -1247,6 +1247,7 @@ local invisibleHighlightTweens: {[Highlight]: HighlightTweenBundle} = {}
 local invertedControlState = {
     active = false,
     requested = false,
+    controlsDisabled = false,
     keyboard = {
         forward = false,
         back = false,
@@ -1997,6 +1998,42 @@ local function resetInvertedMovement()
     invertedControlState.thumbstick = Vector2.new(0, 0)
 end
 
+local function enableDefaultControlsIfDisabled()
+    if not invertedControlState.controlsDisabled then
+        return
+    end
+
+    local controls = getPlayerControls()
+    if controls and controls.Enable then
+        local ok, err = pcall(function()
+            controls:Enable()
+        end)
+        if not ok then
+            warn("Failed to re-enable default controls after inverted event:", err)
+        else
+            invertedControlState.controlsDisabled = false
+        end
+    else
+        invertedControlState.controlsDisabled = false
+    end
+end
+
+local function disableDefaultControls()
+    local controls = getPlayerControls()
+    if not controls or not controls.Disable then
+        return
+    end
+
+    local ok, err = pcall(function()
+        controls:Disable()
+    end)
+    if not ok then
+        warn("Failed to disable default controls for inverted event:", err)
+    else
+        invertedControlState.controlsDisabled = true
+    end
+end
+
 local function updateInvertedMovement()
     if not invertedControlState.active then
         return
@@ -2055,15 +2092,7 @@ local function disableInvertedControls()
 
     resetInvertedMovement()
 
-    local controls = getPlayerControls()
-    if controls and controls.Enable then
-        local ok, err = pcall(function()
-            controls:Enable()
-        end)
-        if not ok then
-            warn("Failed to re-enable default controls after inverted event:", err)
-        end
-    end
+    enableDefaultControlsIfDisabled()
 
     invertedControlState.active = false
 end
@@ -2073,15 +2102,7 @@ local function enableInvertedControls()
         return
     end
 
-    local controls = getPlayerControls()
-    if controls and controls.Enable then
-        local ok, err = pcall(function()
-            controls:Disable()
-        end)
-        if not ok then
-            warn("Failed to disable default controls for inverted event:", err)
-        end
-    end
+    disableDefaultControls()
 
     resetInvertedMovement()
 
@@ -2159,6 +2180,8 @@ local function applyInvertedControlState()
     else
         if invertedControlState.active then
             disableInvertedControls()
+        else
+            enableDefaultControlsIfDisabled()
         end
     end
 end
@@ -2875,6 +2898,9 @@ local function onHumanoidAdded(humanoid: Humanoid)
     end
 
     currentHumanoid = humanoid
+    if not invertedControlState.requested then
+        enableDefaultControlsIfDisabled()
+    end
     if humanoidSprintBonusConn then
         humanoidSprintBonusConn:Disconnect()
         humanoidSprintBonusConn = nil
@@ -2967,6 +2993,9 @@ localPlayer.CharacterRemoving:Connect(function()
     currentHumanoid = nil
     if invertedControlState.active then
         resetInvertedMovement()
+    end
+    if not invertedControlState.requested then
+        enableDefaultControlsIfDisabled()
     end
     if characterGearConn then
         characterGearConn:Disconnect()
