@@ -887,69 +887,11 @@ local FIRE_COOLDOWN = 2.25 -- seconds between shots while stationary
 			local HOLD_TIME_BEFORE_FIRST_SHOT = 0.6
 
 			-- Rocket
-			local ROCKET_SPEED = 110
+			local ROCKET_SPEED = 75
 			local ROCKET_LIFETIME = 10
 			local ROCKET_BLAST_RADIUS = 12
 			local ROCKET_BASE_DAMAGE = 55
 			local ROCKET_KNOCKBACK = 85
-
-			local colors = {
-				Color3.fromRGB(255,75,75),
-				Color3.fromRGB(75,255,140),
-				Color3.fromRGB(75,160,255),
-				Color3.fromRGB(255,200,85),
-				Color3.fromRGB(200,110,255),
-			}
-
-			
-
-			-- Keep a rocket's long axis pointing along its velocity so it flies "straight"
-			local function attachOrientationFollower(part: BasePart, getVelFn: () -> Vector3)
-				local conn
-				conn = RunService.Heartbeat:Connect(function()
-					if not part or not part.Parent then
-						if conn then conn:Disconnect() end
-						return
-					end
-					local v = getVelFn()
-					if v.Magnitude > 0.1 then
-						part.CFrame = CFrame.new(part.Position, part.Position + v)
-					end
-				end)
-				return conn
-			end
-
-local function randomXZInArena_DEPRECATED()
-				local stormSize = getStormHorizontalSize()
-				local x = killBotRandom:NextNumber(-stormSize.X/2, stormSize.X/2)
-				local z = killBotRandom:NextNumber(-stormSize.Y/2, stormSize.Y/2)
-				return randomPointInBounds()
-			end
-
-			local function damageInRadius(center: Vector3, radius: number)
-				local params = OverlapParams.new()
-				for _, part in ipairs(Workspace:GetPartBoundsInRadius(center, radius, params)) do
-					local parent = part.Parent
-					if not parent then continue end
-					local humanoid = parent:FindFirstChildWhichIsA("Humanoid")
-					if not humanoid and parent.Parent then
-						humanoid = parent.Parent:FindFirstChildWhichIsA("Humanoid")
-					end
-					if humanoid and humanoid.Health > 0 then
-						local character = humanoid.Parent
-						local hrp = character and character:FindFirstChild("HumanoidRootPart")
-						if hrp then
-							local distance = (hrp.Position - center).Magnitude
-							if distance <= radius then
-								local damage = math.clamp(ROCKET_BASE_DAMAGE * (1 - (distance / radius)), 10, ROCKET_BASE_DAMAGE)
-								humanoid:TakeDamage(damage)
-								local knock = (hrp.Position - center).Unit * ROCKET_KNOCKBACK
-								hrp.AssemblyLinearVelocity += knock
-							end
-						end
-					end
-				end
-			end
 
 			local function buildRocketModel(originCF: CFrame)
 				-- If a prebuilt rocket exists, use it (place a Model named KillBotRocket under ReplicatedStorage).
@@ -1014,6 +956,7 @@ local function randomXZInArena_DEPRECATED()
 				bv.MaxForce = Vector3.new(1e6,1e6,1e6)
 				bv.Velocity = dir * ROCKET_SPEED
 				bv.Parent = root
+				local orientConn = attachOrientationFollower(root, function() return bv.Velocity end)
 
 				-- Simple trail
 				local trail = Instance.new("Trail")
@@ -1043,6 +986,7 @@ local function randomXZInArena_DEPRECATED()
 
 				-- Cleanup
 				table.insert(state.rockets, function()
+					if orientConn then orientConn:Disconnect() end
 					if orientConn then orientConn:Disconnect() end
 					if tConn then tConn:Disconnect() end
 					if model and model.Parent then model:Destroy() end
