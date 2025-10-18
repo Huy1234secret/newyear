@@ -835,7 +835,7 @@ do
 
 	registerSpecialEvent({
 		id = "KillBot",
-		displayName = "KillBot??",
+			displayName = "Killbot🤖",
 		onRoundPrepared = function(context)
 			-- OG‑style KillBot: spawn colored sphere once, fly to ONE random spot, hold position, then fire rockets at random players (any distance).
 			local state = {
@@ -847,7 +847,8 @@ do
 
 			local cf, _ = getActiveMapBounds()
 			local arenaCenter = cf.Position
-			-- Movement bounds: use current storm size for X/Z, and clamp Y within ±100 around arena center
+			local killBotRandom = Random.new()
+-- Movement bounds: use current storm size for X/Z, and clamp Y within ±100 around arena center
 			local function currentBounds()
 				local stormSize = getStormHorizontalSize() -- Vector2 (X, Z)
 				local halfX, halfZ = stormSize.X * 0.5, stormSize.Y * 0.5
@@ -870,10 +871,7 @@ do
 				local y = killBotRandom:NextNumber(minY, maxY)
 				return Vector3.new(x, y, z)
 			end
-
-			local killBotRandom = Random.new()
-
-			-- Tunables (feel free to tweak)
+-- Tunables (feel free to tweak)
 			local BOT_COUNT = 3
 			local HOVER_HEIGHT = 10
 			local TRAVEL_MAX_SPEED = 80
