@@ -9,6 +9,8 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local ContextActionService = game:GetService("ContextActionService")
 local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local SoundService = game:GetService("SoundService")
 
 local localPlayer = Players.LocalPlayer
 if not localPlayer then
@@ -64,6 +66,15 @@ local DEFAULT_BACKGROUND_TRANSPARENCY = 0.15
 local DEFAULT_TEXT_SIZE = if isTouchDevice then 22 else 26
 local EMPHASIZED_TEXT_SIZE = if isTouchDevice then 28 else 32
 local USE_CUSTOM_INVENTORY_UI = false -- Disable the bespoke 10-slot bar in favor of Roblox's default backpack UI
+local MAP_LABEL_WIDTH = if isTouchDevice then 140 else 160
+local MAP_LABEL_PADDING = if isTouchDevice then 18 else 24
+
+local mapDisplayNames = {
+    Crossroad = "Crossroad",
+    SFOTH = "SFOTH",
+    ChaosCanyon = "Chaos Canyon",
+    Doomspire = "Doomspire",
+}
 
 local function setBackpackCoreGuiEnabled(enabled: boolean)
     local success, result = pcall(function()
@@ -108,6 +119,7 @@ local energyBarFill: Frame? = nil
 local energyTextLabel: TextLabel? = nil
 local sprintStatusLabel: TextLabel? = nil
 local centerCursorImage: ImageLabel? = nil
+local mapLabel: TextLabel? = nil
 
 local inventoryFrame: Frame? = nil
 local inventoryToggleButton: ImageButton? = nil
@@ -118,6 +130,19 @@ local setInventoryVisibility: (boolean) -> ()
 local noSprintPart: BasePart? = nil
 local sprintActionButton: ImageButton? = nil
 local sprintActionBound = false
+
+local stormOverlayGui: ScreenGui? = nil
+local stormGradientFrame: Frame? = nil
+local stormGradient: UIGradient? = nil
+local stormScanLine: Frame? = nil
+local stormOverlayAnimationConn: RBXScriptConnection? = nil
+local stormScanProgress = 0
+local stormColorCorrection: ColorCorrectionEffect? = nil
+local stormDepthOfField: DepthOfFieldEffect? = nil
+local stormEqualizer: EqualizerSoundEffect? = nil
+local stormPitchShift: PitchShiftSoundEffect? = nil
+local trackedStormPart: BasePart? = nil
+local stormExposureActive = false
 
 local function updateNoSprintPartReference()
     local found = Workspace:FindFirstChild("NoSprintPart", true)
@@ -222,10 +247,11 @@ padding.Parent = statusFrame
 
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Name = "StatusLabel"
-statusLabel.Size = UDim2.new(1, 0, 1, 0)
+local statusLabelOffset = math.floor((MAP_LABEL_WIDTH + MAP_LABEL_PADDING) * 0.5)
+statusLabel.Size = UDim2.new(1, -(MAP_LABEL_WIDTH + MAP_LABEL_PADDING), 1, 0)
 statusLabel.BackgroundTransparency = 1
 statusLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-statusLabel.Position = UDim2.fromScale(0.5, 0.5)
+statusLabel.Position = UDim2.new(0.5, -statusLabelOffset, 0.5, 0)
 statusLabel.Font = Enum.Font.GothamBold
 statusLabel.Text = ""
 statusLabel.TextSize = DEFAULT_TEXT_SIZE
@@ -240,6 +266,23 @@ labelStroke.Color = Color3.fromRGB(20, 20, 35)
 labelStroke.Thickness = 2
 labelStroke.Transparency = 0.3
 labelStroke.Parent = statusLabel
+
+local createdMapLabel = Instance.new("TextLabel")
+createdMapLabel.Name = "MapLabel"
+createdMapLabel.Size = UDim2.new(0, MAP_LABEL_WIDTH, 1, 0)
+createdMapLabel.AnchorPoint = Vector2.new(1, 0.5)
+createdMapLabel.Position = UDim2.new(1, -math.floor(MAP_LABEL_PADDING * 0.5), 0.5, 0)
+createdMapLabel.BackgroundTransparency = 1
+createdMapLabel.Font = Enum.Font.GothamSemibold
+createdMapLabel.Text = ""
+createdMapLabel.TextSize = math.max(16, DEFAULT_TEXT_SIZE - 4)
+createdMapLabel.TextColor3 = Color3.fromRGB(210, 230, 255)
+createdMapLabel.TextXAlignment = Enum.TextXAlignment.Right
+createdMapLabel.TextYAlignment = Enum.TextYAlignment.Center
+createdMapLabel.ZIndex = statusLabel.ZIndex
+createdMapLabel.Visible = false
+createdMapLabel.Parent = statusFrame
+mapLabel = createdMapLabel
 
 local viewportWidth = 1024
 do
@@ -612,6 +655,7 @@ local highlightStyles = {
 
 local baseFramePosition = statusFrame.Position
 local baseLabelPosition = statusLabel.Position
+local currentMapId: string? = nil
 local currentRemaining = 0
 local flashConnection: RBXScriptConnection? = nil
 local shakeConnection: RBXScriptConnection? = nil
@@ -2111,6 +2155,27 @@ local function hideStatus()
     statusLabel.Text = ""
 end
 
+local function getMapDisplayName(mapId: string): string
+    return mapDisplayNames[mapId] or mapId
+end
+
+local function updateMapLabel(mapId: string?)
+    currentMapId = mapId
+
+    local targetLabel = mapLabel
+    if not targetLabel then
+        return
+    end
+
+    if mapId then
+        targetLabel.Text = string.format("Map: %s", getMapDisplayName(mapId))
+        targetLabel.Visible = true
+    else
+        targetLabel.Text = ""
+        targetLabel.Visible = false
+    end
+end
+
 local function formatCountdown(seconds: number): string
     if seconds <= 0 then
         return "Match starting..."
@@ -2124,6 +2189,359 @@ local function formatTimer(seconds: number): string
     return string.format("%d:%02d", minutes, remainingSeconds)
 end
 
+local function ensureStormOverlay()
+    local existingGui = stormOverlayGui
+    if existingGui and not existingGui.Parent then
+        stormOverlayGui = nil
+        stormGradientFrame = nil
+        stormGradient = nil
+        stormScanLine = nil
+        if stormOverlayAnimationConn then
+            stormOverlayAnimationConn:Disconnect()
+            stormOverlayAnimationConn = nil
+        end
+        existingGui = nil
+    end
+
+    if not existingGui then
+        local foundGui = playerGui:FindFirstChild("StormExposureOverlay")
+        if foundGui and foundGui:IsA("ScreenGui") then
+            stormOverlayGui = foundGui
+            existingGui = foundGui
+
+            local container = foundGui:FindFirstChild("Container")
+            if container and container:IsA("Frame") then
+                local gradientFrame = container:FindFirstChild("Gradient")
+                if gradientFrame and gradientFrame:IsA("Frame") then
+                    stormGradientFrame = gradientFrame
+                    local gradient = gradientFrame:FindFirstChildWhichIsA("UIGradient")
+                    stormGradient = gradient
+                end
+
+                local scanLineFrame = container:FindFirstChild("ScanLine")
+                if scanLineFrame and scanLineFrame:IsA("Frame") then
+                    stormScanLine = scanLineFrame
+                end
+            end
+        end
+    end
+
+    if existingGui then
+        if existingGui.Parent ~= playerGui then
+            existingGui.Parent = playerGui
+        end
+        return
+    end
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "StormExposureOverlay"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.DisplayOrder = 90
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+    gui.Enabled = false
+    gui.Parent = playerGui
+    stormOverlayGui = gui
+
+    local container = Instance.new("Frame")
+    container.Name = "Container"
+    container.Size = UDim2.fromScale(1, 1)
+    container.BackgroundTransparency = 1
+    container.ClipsDescendants = true
+    container.Parent = gui
+
+    local gradientFrame = Instance.new("Frame")
+    gradientFrame.Name = "Gradient"
+    gradientFrame.Size = UDim2.fromScale(1.4, 1.4)
+    gradientFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    gradientFrame.Position = UDim2.fromScale(0.5, 0.5)
+    gradientFrame.BackgroundColor3 = Color3.fromRGB(180, 70, 255)
+    gradientFrame.BackgroundTransparency = 0.38
+    gradientFrame.Parent = container
+    stormGradientFrame = gradientFrame
+
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 0, 80)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(150, 50, 190)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 0, 70)),
+    })
+    gradient.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.15),
+        NumberSequenceKeypoint.new(1, 0.65),
+    })
+    gradient.GradientType = Enum.GradientType.Radial
+    gradient.Parent = gradientFrame
+    stormGradient = gradient
+
+    local gradientStroke = Instance.new("UIStroke")
+    gradientStroke.Thickness = 2
+    gradientStroke.Transparency = 0.4
+    gradientStroke.Color = Color3.fromRGB(255, 120, 255)
+    gradientStroke.Parent = gradientFrame
+
+    local veil = Instance.new("Frame")
+    veil.Name = "Veil"
+    veil.Size = UDim2.fromScale(1, 1)
+    veil.BackgroundColor3 = Color3.fromRGB(12, 0, 28)
+    veil.BackgroundTransparency = 0.58
+    veil.Parent = container
+
+    local scanLine = Instance.new("Frame")
+    scanLine.Name = "ScanLine"
+    scanLine.Size = UDim2.new(1, 0, 0, if isTouchDevice then 8 else 6)
+    scanLine.BackgroundColor3 = Color3.fromRGB(220, 120, 255)
+    scanLine.BackgroundTransparency = 0.35
+    scanLine.Position = UDim2.new(0, 0, 0, 0)
+    scanLine.Parent = container
+    stormScanLine = scanLine
+    stormScanProgress = 0
+end
+
+local function ensureStormLightingEffects()
+    local colorCorrection = stormColorCorrection
+    if not colorCorrection then
+        local existingEffect = Lighting:FindFirstChild("StormColorCorrection")
+        if existingEffect and existingEffect:IsA("ColorCorrectionEffect") then
+            colorCorrection = existingEffect
+        end
+    end
+    if not colorCorrection or not colorCorrection.Parent then
+        colorCorrection = Instance.new("ColorCorrectionEffect")
+        colorCorrection.Name = "StormColorCorrection"
+        colorCorrection.Brightness = -0.15
+        colorCorrection.Contrast = -0.25
+        colorCorrection.Saturation = -0.5
+        colorCorrection.TintColor = Color3.fromRGB(90, 140, 255)
+        colorCorrection.Enabled = false
+        colorCorrection.Parent = Lighting
+    end
+    stormColorCorrection = colorCorrection
+
+    local depthEffect = stormDepthOfField
+    if not depthEffect then
+        local existingDepth = Lighting:FindFirstChild("StormDepthOfField")
+        if existingDepth and existingDepth:IsA("DepthOfFieldEffect") then
+            depthEffect = existingDepth
+        end
+    end
+    if not depthEffect or not depthEffect.Parent then
+        depthEffect = Instance.new("DepthOfFieldEffect")
+        depthEffect.Name = "StormDepthOfField"
+        depthEffect.InFocusRadius = 18
+        depthEffect.FocusDistance = 45
+        depthEffect.NearIntensity = 0.3
+        depthEffect.FarIntensity = 0.65
+        depthEffect.Enabled = false
+        depthEffect.Parent = Lighting
+    end
+    stormDepthOfField = depthEffect
+end
+
+local function ensureStormAudioEffects()
+    local equalizer = stormEqualizer
+    if not equalizer then
+        local existingEqualizer = SoundService:FindFirstChild("StormEqualizer")
+        if existingEqualizer and existingEqualizer:IsA("EqualizerSoundEffect") then
+            equalizer = existingEqualizer
+        end
+    end
+    if not equalizer or not equalizer.Parent then
+        equalizer = Instance.new("EqualizerSoundEffect")
+        equalizer.Name = "StormEqualizer"
+        equalizer.LowGain = 6
+        equalizer.MidGain = -3
+        equalizer.HighGain = -12
+        equalizer.Priority = 5
+        equalizer.Enabled = false
+        equalizer.Parent = SoundService
+    else
+        equalizer.Parent = SoundService
+    end
+    stormEqualizer = equalizer
+
+    local pitchShift = stormPitchShift
+    if not pitchShift then
+        local existingPitch = SoundService:FindFirstChild("StormPitchShift")
+        if existingPitch and existingPitch:IsA("PitchShiftSoundEffect") then
+            pitchShift = existingPitch
+        end
+    end
+    if not pitchShift or not pitchShift.Parent then
+        pitchShift = Instance.new("PitchShiftSoundEffect")
+        pitchShift.Name = "StormPitchShift"
+        pitchShift.Octave = 0.88
+        pitchShift.Priority = 5
+        pitchShift.Enabled = false
+        pitchShift.Parent = SoundService
+    else
+        pitchShift.Parent = SoundService
+    end
+    stormPitchShift = pitchShift
+end
+
+local function startStormOverlayAnimation()
+    if stormOverlayAnimationConn then
+        return
+    end
+
+    stormOverlayAnimationConn = RunService.RenderStepped:Connect(function(dt)
+        local gradient = stormGradient
+        local gradientFrame = stormGradientFrame
+        if gradient and gradientFrame then
+            local now = os.clock()
+            gradient.Rotation = (gradient.Rotation + dt * 45) % 360
+            gradient.Offset = Vector2.new(math.sin(now * 0.6) * 0.35, math.cos(now * 0.7) * 0.35)
+            gradientFrame.Rotation = (gradientFrame.Rotation + dt * 15) % 360
+        end
+
+        local scanLine = stormScanLine
+        if scanLine then
+            stormScanProgress += dt * 0.4
+            if stormScanProgress > 1 then
+                stormScanProgress -= 1
+            end
+            scanLine.Position = UDim2.new(0, 0, stormScanProgress, 0)
+        end
+    end)
+end
+
+local function stopStormOverlayAnimation()
+    if stormOverlayAnimationConn then
+        stormOverlayAnimationConn:Disconnect()
+        stormOverlayAnimationConn = nil
+    end
+end
+
+local function enableStormEffects()
+    ensureStormOverlay()
+    ensureStormLightingEffects()
+    ensureStormAudioEffects()
+
+    if stormOverlayGui then
+        stormOverlayGui.Enabled = true
+    end
+    if stormColorCorrection then
+        stormColorCorrection.Enabled = true
+    end
+    if stormDepthOfField then
+        stormDepthOfField.Enabled = true
+    end
+    if stormEqualizer then
+        stormEqualizer.Enabled = true
+    end
+    if stormPitchShift then
+        stormPitchShift.Enabled = true
+    end
+
+    startStormOverlayAnimation()
+end
+
+local function disableStormEffects()
+    if stormOverlayGui then
+        stormOverlayGui.Enabled = false
+    end
+    if stormColorCorrection then
+        stormColorCorrection.Enabled = false
+    end
+    if stormDepthOfField then
+        stormDepthOfField.Enabled = false
+    end
+    if stormEqualizer then
+        stormEqualizer.Enabled = false
+    end
+    if stormPitchShift then
+        stormPitchShift.Enabled = false
+    end
+
+    stopStormOverlayAnimation()
+    stormScanProgress = 0
+    local scanLine = stormScanLine
+    if scanLine then
+        scanLine.Position = UDim2.new(0, 0, 0, 0)
+    end
+end
+
+local function updateStormExposure(isActive: boolean)
+    if isActive == stormExposureActive then
+        return
+    end
+
+    stormExposureActive = isActive
+
+    if isActive then
+        enableStormEffects()
+    else
+        disableStormEffects()
+    end
+end
+
+local function refreshStormPartReference()
+    local existing = Workspace:FindFirstChild("StormPart", true)
+    if existing and existing:IsA("BasePart") then
+        trackedStormPart = existing
+    else
+        trackedStormPart = nil
+        updateStormExposure(false)
+    end
+end
+
+refreshStormPartReference()
+
+Workspace.DescendantAdded:Connect(function(descendant)
+    if descendant:IsA("BasePart") and descendant.Name == "StormPart" then
+        trackedStormPart = descendant
+    end
+end)
+
+Workspace.DescendantRemoving:Connect(function(descendant)
+    if descendant == trackedStormPart then
+        trackedStormPart = nil
+        updateStormExposure(false)
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    local storm = trackedStormPart
+    if not storm or not storm.Parent then
+        if storm and not storm.Parent then
+            trackedStormPart = nil
+        end
+        updateStormExposure(false)
+        return
+    end
+
+    local character = localPlayer.Character
+    if not character then
+        updateStormExposure(false)
+        return
+    end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then
+        updateStormExposure(false)
+        return
+    end
+
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart or not rootPart:IsA("BasePart") then
+        updateStormExposure(false)
+        return
+    end
+
+    local halfSize = storm.Size * 0.5
+    if halfSize.X <= 0 or halfSize.Z <= 0 then
+        updateStormExposure(false)
+        return
+    end
+
+    local relative = storm.CFrame:PointToObjectSpace(rootPart.Position)
+    local outsideX = math.abs(relative.X) > halfSize.X
+    local outsideZ = math.abs(relative.Z) > halfSize.Z
+
+    updateStormExposure(outsideX or outsideZ)
+end)
+
 statusRemote.OnClientEvent:Connect(function(payload)
     if typeof(payload) ~= "table" then
         return
@@ -2132,6 +2550,9 @@ statusRemote.OnClientEvent:Connect(function(payload)
     local action = payload.action
     if action == "PrepCountdown" then
         currentRemaining = tonumber(payload.remaining) or 0
+        if typeof(payload.map) == "string" then
+            updateMapLabel(payload.map)
+        end
         stopShake()
         stopFlash()
         resetFrameVisual()
@@ -2198,5 +2619,6 @@ statusRemote.OnClientEvent:Connect(function(payload)
         statusLabel.TextSize = DEFAULT_TEXT_SIZE
         statusLabel.Text = "Intermission"
         labelStroke.Transparency = 0.3
+        updateMapLabel(nil)
     end
 end)

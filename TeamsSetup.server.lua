@@ -159,6 +159,17 @@ local mapConfigurations: {[string]: MapConfig} = {
         deathMatchStormSize = Vector2.new(350, 350),
         deathMatchShrinkDuration = 100,
     },
+    Doomspire = {
+        id = "Doomspire",
+        displayName = "Doomspire",
+        modelName = "Doomspire",
+        spawnContainer = "DoomspireSpawns",
+        skyboxName = "",
+        musicId = "79269713968295",
+        deathMatchMusicId = "74999952792352",
+        deathMatchStormSize = Vector2.new(400, 400),
+        deathMatchShrinkDuration = 100,
+    },
 }
 
 local remotesFolder = ReplicatedStorage:FindFirstChild("PVPRemotes")
