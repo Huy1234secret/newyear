@@ -28,7 +28,7 @@ local function formatCountdown(seconds)
 end
 
 -- Minimal StormEffects stub to avoid register overflow
-local StormEffects = {}
+StormEffects = {}
 function StormEffects.enable(...) end
 function StormEffects.disable(...) end
 function StormEffects.setTrackedPart(...) end
@@ -42,9 +42,9 @@ local function resetMovementState(humanoid: Humanoid?)
 
 	-- Unbind any custom actions that may block default controls
 	pcall(function()
-		CAS:UnbindAction("DisableMovement")
-		CAS:UnbindAction("Inverted_Move")
-		CAS:UnbindAction("Inverted_Look")
+		local CAS:UnbindAction("DisableMovement")
+		local CAS:UnbindAction("Inverted_Move")
+		local CAS:UnbindAction("Inverted_Look")
 	end)
 
 	-- Soft reset PlayerModule controls
@@ -64,12 +64,12 @@ local function resetMovementState(humanoid: Humanoid?)
 	if humanoid and humanoid.Parent then
 		pcall(function()
 			-- Zero the movement vector and suppress jump for a tick
-			humanoid:Move(Vector3.new(0,0,0), true)
+			local humanoid:Move(Vector3.new(0,0,0), true)
 			humanoid.Jump = false
 			-- Sometimes RunningNoPhysics -> Running helps clear residual velocity intents
-			humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+			local humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
 			task.wait(0.02)
-			humanoid:ChangeState(Enum.HumanoidStateType.Running)
+			local humanoid:ChangeState(Enum.HumanoidStateType.Running)
 		end)
 	end
 
@@ -98,33 +98,33 @@ local function hardEnableDefaultControls()
 	end
 	-- Also release any ContextAction "Disable" binds commonly used by inverted code
 	pcall(function()
-		game:GetService("ContextActionService"):UnbindAction("DisableMovement")
-		game:GetService("ContextActionService"):UnbindAction("Inverted_Move")
-		game:GetService("ContextActionService"):UnbindAction("Inverted_Look")
+		local game:GetService("ContextActionService"):UnbindAction("DisableMovement")
+		local game:GetService("ContextActionService"):UnbindAction("Inverted_Move")
+		local game:GetService("ContextActionService"):UnbindAction("Inverted_Look")
 	end)
 end
-local Players = game:GetService("Players")
-local StarterGui = game:GetService("StarterGui")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local Workspace = game:GetService("Workspace")
-local ContextActionService = game:GetService("ContextActionService")
-local UserInputService = game:GetService("UserInputService")
-local Lighting = game:GetService("Lighting")
-local SoundService = game:GetService("SoundService")
+Players = game:GetService("Players")
+StarterGui = game:GetService("StarterGui")
+ReplicatedStorage = game:GetService("ReplicatedStorage")
+RunService = game:GetService("RunService")
+TweenService = game:GetService("TweenService")
+Workspace = game:GetService("Workspace")
+ContextActionService = game:GetService("ContextActionService")
+UserInputService = game:GetService("UserInputService")
+Lighting = game:GetService("Lighting")
+SoundService = game:GetService("SoundService")
 
-local localPlayer = Players.LocalPlayer
+localPlayer = Players.LocalPlayer
 if not localPlayer then
 	return
 end
 
-local remotesFolder = ReplicatedStorage:WaitForChild("PVPRemotes", 10)
+remotesFolder = ReplicatedStorage:WaitForChild("PVPRemotes", 10)
 if not remotesFolder or not remotesFolder:IsA("Folder") then
 	return
 end
 
-local statusRemote = remotesFolder:WaitForChild("StatusUpdate", 10)
+statusRemote = remotesFolder:WaitForChild("StatusUpdate", 10)
 if not statusRemote or not statusRemote:IsA("RemoteEvent") then
 	return
 end
@@ -137,11 +137,11 @@ local function setToggleInventoryRemote(candidate: Instance?)
 	end
 end
 
-local existingToggleRemote = remotesFolder:FindFirstChild("ToggleInventorySlot")
+existingToggleRemote = remotesFolder:FindFirstChild("ToggleInventorySlot")
 if existingToggleRemote and existingToggleRemote:IsA("RemoteEvent") then
 	toggleInventorySlotRemote = existingToggleRemote
 else
-	local foundToggle = remotesFolder:WaitForChild("ToggleInventorySlot", 5)
+	foundToggle = remotesFolder:WaitForChild("ToggleInventorySlot", 5)
 	setToggleInventoryRemote(foundToggle)
 end
 
@@ -155,15 +155,15 @@ remotesFolder.ChildRemoved:Connect(function(child)
 	end
 end)
 
-local playerGui = localPlayer:WaitForChild("PlayerGui")
+playerGui = localPlayer:WaitForChild("PlayerGui")
 
-local isTouchDevice = UserInputService.TouchEnabled
+isTouchDevice = UserInputService.TouchEnabled
 
 if isTouchDevice then
 	StarterGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
 end
 
-local UI_CONFIG = {
+UI_CONFIG = {
 	DEFAULT_BACKGROUND_COLOR = Color3.fromRGB(28, 32, 45),
 	DEFAULT_BACKGROUND_TRANSPARENCY = 0.15,
 	DEFAULT_TEXT_SIZE = if isTouchDevice then 22 else 26,
@@ -173,7 +173,7 @@ local UI_CONFIG = {
 	MAP_LABEL_PADDING = if isTouchDevice then 18 else 24,
 }
 
-local mapDisplayNames = {
+mapDisplayNames = {
 	Crossroad = "Crossroad",
 	SFOTH = "SFOTH",
 	ChaosCanyon = "Chaos Canyon",
@@ -197,7 +197,7 @@ local playerControls: any = nil
 
 local function setBackpackCoreGuiEnabled(enabled: boolean)
 	local success, result = pcall(function()
-		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, enabled)
+		local StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, enabled)
 	end)
 
 	if not success then
@@ -228,12 +228,12 @@ local function getPlayerControls()
 		return playerControls
 	end
 
-	local success, moduleOrErr = pcall(function()
-		local playerScripts = localPlayer:WaitForChild("PlayerScripts", 5)
+	success, moduleOrErr = pcall(function()
+		playerScripts = localPlayer:WaitForChild("PlayerScripts", 5)
 		if not playerScripts then
 			return nil
 		end
-		local moduleScript = playerScripts:FindFirstChild("PlayerModule")
+		moduleScript = playerScripts:FindFirstChild("PlayerModule")
 		if not moduleScript then
 			moduleScript = playerScripts:WaitForChild("PlayerModule", 5)
 		end
@@ -249,8 +249,8 @@ local function getPlayerControls()
 	end
 
 	playerModule = moduleOrErr
-	local controls = nil
-	local ok, result = pcall(function()
+	controls = nil
+	ok, result = pcall(function()
 		return playerModule:GetControls()
 	end)
 	if ok then
@@ -261,11 +261,11 @@ local function getPlayerControls()
 	return controls
 end
 
-local GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
-local currentCursorImageAsset = GEAR_CURSOR_IMAGE_ASSET
-local DEFAULT_WALK_SPEED = 16
+GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
+currentCursorImageAsset = GEAR_CURSOR_IMAGE_ASSET
+DEFAULT_WALK_SPEED = 16
 
-local Z_INDEX = {
+Z_INDEX = {
 	INVENTORY_BASE = 60,
 }
 
@@ -278,77 +278,77 @@ Z_INDEX.SPRINT_BAR = Z_INDEX.SPRINT_CONTAINER + 1
 Z_INDEX.SPRINT_TEXT = Z_INDEX.SPRINT_CONTAINER + 2
 
 type UiRefs = {
-	energyBarFill: Frame?,
-	energyTextLabel: TextLabel?,
-	sprintStatusLabel: TextLabel?,
-	centerCursorImage: ImageLabel?,
-	mapLabelContainer: Frame?,
-	mapLabelStroke: UIStroke?,
-	mapLabel: TextLabel?,
-	eventLabel: TextLabel?,
-	statusFrame: Frame?,
-	hotTouchStatusLabel: TextLabel?,
-	inventoryFrame: Frame?,
-	inventoryToggleButton: ImageButton?,
-	sprintActionButton: ImageButton?,
+	local energyBarFill: Frame?,
+	local energyTextLabel: TextLabel?,
+	local sprintStatusLabel: TextLabel?,
+	local centerCursorImage: ImageLabel?,
+	local mapLabelContainer: Frame?,
+	local mapLabelStroke: UIStroke?,
+	local mapLabel: TextLabel?,
+	local eventLabel: TextLabel?,
+	local statusFrame: Frame?,
+	local hotTouchStatusLabel: TextLabel?,
+	local inventoryFrame: Frame?,
+	local inventoryToggleButton: ImageButton?,
+	local sprintActionButton: ImageButton?,
 }
 
 type StatusUI = {
-	frame: Frame,
-	label: TextLabel,
-	labelStroke: UIStroke,
-	stroke: UIStroke,
+	local frame: Frame,
+	local label: TextLabel,
+	local labelStroke: UIStroke,
+	local stroke: UIStroke,
 }
 
 type SpecialEventUI = {
-	frame: Frame,
-	stroke: UIStroke,
-	gradient: UIGradient,
-	header: TextLabel,
-	title: TextLabel,
-	scale: UIScale,
+	local frame: Frame,
+	local stroke: UIStroke,
+	local gradient: UIGradient,
+	local header: TextLabel,
+	local title: TextLabel,
+	local scale: UIScale,
 }
 
 type SprintDefaults = {
-	backgroundColor: Color3,
-	backgroundTransparency: number,
-	strokeColor: Color3,
-	strokeTransparency: number,
-	energyBarFillColor: Color3,
-	energyTextColor: Color3,
-	energyGradientColor: ColorSequence,
+	local backgroundColor: Color3,
+	local backgroundTransparency: number,
+	local strokeColor: Color3,
+	local strokeTransparency: number,
+	local energyBarFillColor: Color3,
+	local energyTextColor: Color3,
+	local energyGradientColor: ColorSequence,
 }
 
 type SprintUI = {
-	container: Frame,
-	background: Frame,
-	backgroundStroke: UIStroke,
-	energyFillGradient: UIGradient,
-	basePosition: UDim2,
-	baseRotation: number,
-	defaults: SprintDefaults,
+	local container: Frame,
+	local background: Frame,
+	local backgroundStroke: UIStroke,
+	local energyFillGradient: UIGradient,
+	local basePosition: UDim2,
+	local baseRotation: number,
+	local defaults: SprintDefaults,
 }
 
 type InventoryState = {
-	basePosition: UDim2,
-	baseRotation: number,
-	setVisibility: ((boolean) -> ())?,
+	local basePosition: UDim2,
+	local baseRotation: number,
+	local setVisibility: ((boolean) -> ())?,
 }
 
 type LayoutConfig = {
-	slotPadding: number,
-	slotSize: number,
-	inventoryWidth: number,
-	inventoryHeight: number,
-	inventoryBottomMargin: number,
-	energyLabelHeight: number,
-	energyBarHeight: number,
-	energyTopPadding: number,
-	energyBottomPadding: number,
-	energySpacing: number,
-	sprintContainerHeight: number,
-	energyTextWidth: number,
-	sprintBottomOffset: number,
+	local slotPadding: number,
+	local slotSize: number,
+	local inventoryWidth: number,
+	local inventoryHeight: number,
+	local inventoryBottomMargin: number,
+	local energyLabelHeight: number,
+	local energyBarHeight: number,
+	local energyTopPadding: number,
+	local energyBottomPadding: number,
+	local energySpacing: number,
+	local sprintContainerHeight: number,
+	local energyTextWidth: number,
+	local sprintBottomOffset: number,
 }
 
 local uiRefs: UiRefs = {
@@ -365,11 +365,11 @@ local uiRefs: UiRefs = {
 	sprintActionButton = nil,
 }
 
-local inventoryVisible = true
-local inventoryAutoOpened = false
+inventoryVisible = true
+inventoryAutoOpened = false
 local setInventoryVisibility: (boolean) -> ()
 
-local hotTouchActive = false
+hotTouchActive = false
 local currentHotTouchHolderId: number? = nil
 
 local function refreshHotTouchStatusVisibility()
@@ -378,7 +378,7 @@ local function refreshHotTouchStatusVisibility()
 		return
 	end
 
-	local statusFrame = uiRefs.statusFrame
+	statusFrame = uiRefs.statusFrame
 	if statusFrame and not statusFrame.Visible then
 		label.Visible = false
 		return
@@ -406,7 +406,7 @@ local function setHotTouchStatusText(text: string?)
 	refreshHotTouchStatusVisibility()
 end
 
-local sprintInteraction = {
+sprintInteraction = {
 	noSprintPart = nil :: BasePart?,
 	actionBound = false,
 }
@@ -448,9 +448,9 @@ local function getHumanoidRootPart(humanoid: Humanoid): BasePart?
 		return rootPart
 	end
 
-	local character = humanoid.Parent
+	character = humanoid.Parent
 	if character then
-		local candidate = character:FindFirstChild("HumanoidRootPart")
+		candidate = character:FindFirstChild("HumanoidRootPart")
 		if candidate and candidate:IsA("BasePart") then
 			return candidate
 		end
@@ -462,23 +462,23 @@ end
 type GuiButton = TextButton | ImageButton
 
 type InventorySlotUI = {
-	frame: Frame,
-	stroke: UIStroke,
-	icon: ImageLabel,
-	label: TextLabel,
-	numberLabel: TextLabel,
-	button: GuiButton,
+	local frame: Frame,
+	local stroke: UIStroke,
+	local icon: ImageLabel,
+	local label: TextLabel,
+	local numberLabel: TextLabel,
+	local button: GuiButton,
 }
 
 local inventorySlots: {InventorySlotUI} = {}
 local slotToolMapping: {Tool?} = {}
 
-local existingGui = playerGui:FindFirstChild("PVPStatusGui")
+existingGui = playerGui:FindFirstChild("PVPStatusGui")
 if existingGui then
-	existingGui:Destroy()
+	local existingGui:Destroy()
 end
 
-local screenGui = Instance.new("ScreenGui")
+screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PVPStatusGui"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
@@ -492,26 +492,26 @@ local function calculateLayout(isTouch: boolean): LayoutConfig
 		viewportWidth = camera.ViewportSize.X
 	end
 
-	local slotPadding = if isTouch then 2 else 6
-	local calculatedAvailableWidth = if isTouch
+	slotPadding = if isTouch then 2 else 6
+	calculatedAvailableWidth = if isTouch
 		then math.max(280, math.min(viewportWidth - 40, 540))
 		else math.clamp(viewportWidth * 0.5, 520, 780)
-	local slotSize = math.clamp(
+	slotSize = math.clamp(
 		math.floor((calculatedAvailableWidth - 24 - slotPadding * 9) / 10),
 		if isTouch then 24 else 40,
 		if isTouch then 40 else 56
 	)
-	local inventoryWidth = slotSize * 10 + slotPadding * 9 + 24
-	local inventoryHeight = slotSize + 20
-	local inventoryBottomMargin = if isTouch then math.max(64, math.floor(slotSize * 1.4)) else 0
-	local energyLabelHeight = if isTouch then 16 else 18
-	local energyBarHeight = if isTouch then 12 else 14
-	local energyTopPadding = if isTouch then 2 else 3
-	local energyBottomPadding = if isTouch then 4 else 5
-	local energySpacing = if isTouch then 3 else 4
-	local sprintContainerHeight = energyTopPadding + energyLabelHeight + energySpacing + energyBarHeight + energyBottomPadding
-	local energyTextWidth = if isTouch then 80 else 92
-	local estimatedInventoryHeight
+	inventoryWidth = slotSize * 10 + slotPadding * 9 + 24
+	inventoryHeight = slotSize + 20
+	inventoryBottomMargin = if isTouch then math.max(64, math.floor(slotSize * 1.4)) else 0
+	energyLabelHeight = if isTouch then 16 else 18
+	energyBarHeight = if isTouch then 12 else 14
+	energyTopPadding = if isTouch then 2 else 3
+	energyBottomPadding = if isTouch then 4 else 5
+	energySpacing = if isTouch then 3 else 4
+	sprintContainerHeight = energyTopPadding + energyLabelHeight + energySpacing + energyBarHeight + energyBottomPadding
+	energyTextWidth = if isTouch then 80 else 92
+	estimatedInventoryHeight
 	if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
 		estimatedInventoryHeight = inventoryHeight
 	elseif isTouch then
@@ -522,7 +522,7 @@ local function calculateLayout(isTouch: boolean): LayoutConfig
 		-- the custom energy meter always renders above the built-in inventory buttons.
 		estimatedInventoryHeight = math.max(60, math.floor(slotSize * 1.1))
 	end
-	local sprintBottomOffset = inventoryBottomMargin + estimatedInventoryHeight
+	sprintBottomOffset = inventoryBottomMargin + estimatedInventoryHeight
 
 	return {
 		slotPadding = slotPadding,
@@ -670,7 +670,7 @@ local function createStatusUI(parent: ScreenGui, isTouch: boolean, refs: UiRefs)
 	})
 
 	refs.mapLabelContainer = mapLabelContainer
-	mapLabelContainer:SetAttribute("HasMap", false)
+	local mapLabelContainer:SetAttribute("HasMap", false)
 
 	refs.hotTouchStatusLabel = createInstance("TextLabel", {
 		Name = "HotTouchStatusLabel",
@@ -691,7 +691,7 @@ local function createStatusUI(parent: ScreenGui, isTouch: boolean, refs: UiRefs)
 		Parent = parent,
 	})
 
-	frame:GetPropertyChangedSignal("Visible"):Connect(function()
+	local frame:GetPropertyChangedSignal("Visible"):Connect(function()
 		local container = refs.mapLabelContainer
 		if container then
 			local hasMap = container:GetAttribute("HasMap")
@@ -1017,7 +1017,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 			state.setVisibility(not isTouch)
 		end
 
-		local slotContainer = createInstance("Frame", {
+		slotContainer = createInstance("Frame", {
 			Name = "SlotContainer",
 			Size = UDim2.new(1, 0, 1, 0),
 			BackgroundTransparency = 1,
@@ -1042,7 +1042,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 		})
 
 		for slotIndex = 1, 10 do
-			local slotUI = {}
+			slotUI = {}
 			slotUI.frame = createInstance("Frame", {
 				Name = string.format("Slot_%d", slotIndex),
 				Size = UDim2.fromOffset(layout.slotSize, layout.slotSize),
@@ -1065,8 +1065,8 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 				Parent = slotUI.frame,
 			})
 
-			local nameLabelHeight = math.max(12, math.floor(layout.slotSize * 0.35))
-			local iconPadding = math.max(8, math.floor(layout.slotSize * 0.3))
+			nameLabelHeight = math.max(12, math.floor(layout.slotSize * 0.35))
+			iconPadding = math.max(8, math.floor(layout.slotSize * 0.3))
 
 			slotUI.numberLabel = createInstance("TextLabel", {
 				Name = "KeyLabel",
@@ -1125,8 +1125,8 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 				Parent = slotUI.frame,
 			})
 
-			local currentSlotIndex = slotIndex
-			local lastTriggerTime = 0
+			currentSlotIndex = slotIndex
+			lastTriggerTime = 0
 			local function triggerSelection()
 				local now = os.clock()
 				if now - lastTriggerTime < 0.08 then
@@ -1141,7 +1141,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 
 			slotUI.button.Activated:Connect(triggerSelection)
 			slotUI.button.InputBegan:Connect(function(input)
-				local inputType = input.UserInputType
+				inputType = input.UserInputType
 				if inputType == Enum.UserInputType.MouseButton1
 					or inputType == Enum.UserInputType.Touch
 					or inputType == Enum.UserInputType.Gamepad1
@@ -1307,9 +1307,9 @@ local flashConnection: RBXScriptConnection? = nil
 local shakeConnection: RBXScriptConnection? = nil
 
 type NeutralButtonShakeTarget = {
-	instance: GuiObject,
-	basePosition: UDim2,
-	baseRotation: number,
+	local instance: GuiObject,
+	local basePosition: UDim2,
+	local baseRotation: number,
 }
 
 local neutralButtonShakeTargets: {NeutralButtonShakeTarget} = {}
@@ -1349,10 +1349,10 @@ type HighlightTweenBundle = {tween: Tween, conn: RBXScriptConnection?}
 local invisibleHighlightTweens: {[Highlight]: HighlightTweenBundle} = {}
 
 type InvisibleCharacterFadeBundle = {
-	value: NumberValue,
-	tween: Tween,
-	conn: RBXScriptConnection?,
-	target: number,
+	local value: NumberValue,
+	local tween: Tween,
+	local conn: RBXScriptConnection?,
+	local target: number,
 }
 
 local invisibleCharacterFades: {[Model]: InvisibleCharacterFadeBundle} = {}
@@ -1482,11 +1482,11 @@ local function startInvisibleCharacterFade(character: Model, owner: Player?, dur
 		end
 
 		invisibleCharacterFades[character] = nil
-		controller:Destroy()
+		local controller:Destroy()
 		applyTransparencyToCharacter(character, bundle.target)
 	end)
 
-	tween:Play()
+	local tween:Play()
 end
 
 local invertedControlState = {
@@ -1508,9 +1508,9 @@ local invertedControlState = {
 type HighlightConnections = {RBXScriptConnection}
 
 type HighlightStyle = {
-	outlineColor: Color3,
-	fillColor: Color3,
-	fillTransparency: number,
+	local outlineColor: Color3,
+	local fillColor: Color3,
+	local fillTransparency: number,
 }
 
 local highlightState = {
@@ -1526,18 +1526,18 @@ local highlightState = {
 local deathMatchHighlightActive = false
 
 type SprintState = {
-	energy: number,
-	isSprinting: boolean,
-	sprintIntent: boolean,
-	keyboardIntent: boolean,
-	touchIntent: boolean,
-	zoneBlocked: boolean,
-	eventDisabled: boolean,
-	rechargeBlockedUntil: number,
-	originalWalkSpeed: number,
-	speedTween: Tween?,
-	cameraTween: Tween?,
-	originalCameraFov: number?,
+	local energy: number,
+	local isSprinting: boolean,
+	local sprintIntent: boolean,
+	local keyboardIntent: boolean,
+	local touchIntent: boolean,
+	local zoneBlocked: boolean,
+	local eventDisabled: boolean,
+	local rechargeBlockedUntil: number,
+	local originalWalkSpeed: number,
+	local speedTween: Tween?,
+	local cameraTween: Tween?,
+	local originalCameraFov: number?,
 }
 
 local MAX_SPRINT_ENERGY = 100
@@ -1588,16 +1588,16 @@ local mouse = if UserInputService.TouchEnabled then nil else localPlayer:GetMous
 local applyingMouseIcon = false
 
 type GearConnections = {
-	equipped: RBXScriptConnection?,
-	unequipped: RBXScriptConnection?,
-	ancestry: RBXScriptConnection?,
-	destroying: RBXScriptConnection?,
+	local equipped: RBXScriptConnection?,
+	local unequipped: RBXScriptConnection?,
+	local ancestry: RBXScriptConnection?,
+	local destroying: RBXScriptConnection?,
 }
 
 type GearTrackingInfo = {
-	tool: Tool,
-	isEquipped: boolean,
-	connections: GearConnections,
+	local tool: Tool,
+	local isEquipped: boolean,
+	local connections: GearConnections,
 }
 
 local trackedGearTools: {[Tool]: GearTrackingInfo} = {}
@@ -1636,19 +1636,19 @@ local function locallyToggleTool(tool: Tool)
 		if backpack then
 			tool.Parent = backpack
 		else
-			humanoid:UnequipTools()
+			local humanoid:UnequipTools()
 		end
 		return
 	end
 
-	humanoid:EquipTool(tool)
+	local humanoid:EquipTool(tool)
 end
 local updateInventorySlots: () -> ()
 
 local function removeHighlightForPlayer(targetPlayer: Player)
 	local highlight = highlightState.highlights[targetPlayer]
 	if highlight then
-		highlight:Destroy()
+		local highlight:Destroy()
 		highlightState.highlights[targetPlayer] = nil
 	end
 end
@@ -1657,7 +1657,7 @@ local function clearConnectionsForPlayer(targetPlayer: Player)
 	local connections = highlightState.playerConnections[targetPlayer]
 	if connections then
 		for _, connection in connections do
-			connection:Disconnect()
+			local connection:Disconnect()
 		end
 		highlightState.playerConnections[targetPlayer] = nil
 	end
@@ -1695,7 +1695,7 @@ local function updateHighlightForPlayer(targetPlayer: Player)
 
 	if not shouldShow then
 		if highlight then
-			highlight:Destroy()
+			local highlight:Destroy()
 			highlightState.highlights[targetPlayer] = nil
 		end
 		return
@@ -1764,13 +1764,13 @@ local function disableHighlights()
 
 	for player, connections in highlightState.playerConnections do
 		for _, connection in connections do
-			connection:Disconnect()
+			local connection:Disconnect()
 		end
 	end
 	table.clear(highlightState.playerConnections)
 
 	for player, highlight in highlightState.highlights do
-		highlight:Destroy()
+		local highlight:Destroy()
 	end
 	table.clear(highlightState.highlights)
 
@@ -1899,8 +1899,8 @@ local function hideSpecialEvent(immediate: boolean?)
 		end
 	end)
 
-	fadeTween:Play()
-	scaleTween:Play()
+	local fadeTween:Play()
+	local scaleTween:Play()
 end
 
 local function showSpecialEvent(titleText: string, keepSeconds: number?)
@@ -1912,11 +1912,11 @@ local function showSpecialEvent(titleText: string, keepSeconds: number?)
 	specialEventUI.frame.BackgroundTransparency = 1
 	specialEventUI.scale.Scale = 0.2
 
-	TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	local TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		BackgroundTransparency = 0.05,
 	}):Play()
 
-	TweenService:Create(specialEventUI.scale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+	local TweenService:Create(specialEventUI.scale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 		Scale = 1,
 	}):Play()
 
@@ -2007,7 +2007,7 @@ local function startInvisibleHighlightFade(highlight: Highlight)
 	end)
 
 	invisibleHighlightTweens[highlight] = {tween = tween, conn = conn}
-	tween:Play()
+	local tween:Play()
 end
 
 local function ensureInvisibleHighlight(character: Model): Highlight
@@ -2034,7 +2034,7 @@ local function clearInvisibleHighlight(character: Model)
 	local highlight = character:FindFirstChild("InvisibleRevealHighlight")
 	if highlight then
 		cancelInvisibleHighlightFade(highlight :: Highlight)
-		highlight:Destroy()
+		local highlight:Destroy()
 	end
 	cancelInvisibleCharacterFade(character)
 
@@ -2083,7 +2083,7 @@ end
 local function clearInvisibilityTracking()
 	for _, connections in invisibilityState.playerConnections do
 		for _, connection in connections do
-			connection:Disconnect()
+			local connection:Disconnect()
 		end
 	end
 
@@ -2103,7 +2103,7 @@ local function trackPlayerForInvisibility(player: Player)
 	local existing = invisibilityState.playerConnections[player]
 	if existing then
 		for _, connection in existing do
-			connection:Disconnect()
+			local connection:Disconnect()
 		end
 	end
 
@@ -2229,7 +2229,7 @@ local function setInvisibilityEnabled(enabled: boolean)
 				local connections = invisibilityState.playerConnections[player]
 				if connections then
 					for _, connection in connections do
-						connection:Disconnect()
+						local connection:Disconnect()
 					end
 					invisibilityState.playerConnections[player] = nil
 				end
@@ -2268,7 +2268,7 @@ local function resetInvertedMovement()
 
 	local humanoid = currentHumanoid
 	if humanoid then
-		humanoid:Move(Vector3.zero, true)
+		local humanoid:Move(Vector3.zero, true)
 	end
 end
 
@@ -2280,7 +2280,7 @@ local function enableDefaultControlsIfDisabled()
 	local controls = getPlayerControls()
 	if controls and controls.Enable then
 		local ok, err = pcall(function()
-			controls:Enable()
+			local controls:Enable()
 		end)
 		if not ok then
 			warn("Failed to re-enable default controls after inverted event:", err)
@@ -2299,7 +2299,7 @@ local function disableDefaultControls()
 	end
 
 	local ok, err = pcall(function()
-		controls:Disable()
+		local controls:Disable()
 	end)
 	if not ok then
 		warn("Failed to disable default controls for inverted event:", err)
@@ -2345,7 +2345,7 @@ local function updateInvertedMovement()
 		moveVector = moveVector.Unit
 	end
 
-	humanoid:Move(moveVector, true)
+	local humanoid:Move(moveVector, true)
 end
 
 local function ensureInvertedHeartbeat()
@@ -2358,7 +2358,7 @@ end
 
 local function disableInvertedControls()
 	for _, connection in invertedControlState.connections do
-		connection:Disconnect()
+		local connection:Disconnect()
 	end
 	table.clear(invertedControlState.connections)
 
@@ -2533,11 +2533,11 @@ local function updateSprintButtonState()
 
 	if not canSprint and not buttonActive then
 		local title = if sprintState.zoneBlocked then "No Sprint" elseif sprintState.eventDisabled then "Event" else "Rest"
-		ContextActionService:SetTitle("SprintAction", title)
+		local ContextActionService:SetTitle("SprintAction", title)
 	elseif buttonActive then
-		ContextActionService:SetTitle("SprintAction", "Unsprint")
+		local ContextActionService:SetTitle("SprintAction", "Unsprint")
 	else
-		ContextActionService:SetTitle("SprintAction", "Sprint")
+		local ContextActionService:SetTitle("SprintAction", "Sprint")
 	end
 
 	local shouldEnable = canSprint or sprintState.touchIntent
@@ -2670,7 +2670,7 @@ local function tweenHumanoidSpeed(targetSpeed: number, instant: boolean)
 			sprintState.speedTween = nil
 		end
 	end)
-	tween:Play()
+	local tween:Play()
 end
 
 local function tweenCameraFov(targetFov: number, instant: boolean, onComplete: (() -> ())?)
@@ -2704,7 +2704,7 @@ local function tweenCameraFov(targetFov: number, instant: boolean, onComplete: (
 			onComplete()
 		end
 	end)
-	tween:Play()
+	local tween:Play()
 end
 
 local function stopSprinting(instant: boolean)
@@ -2933,7 +2933,7 @@ equipInventorySlot = function(slotIndex: number)
 	local isPVPGear = tool:GetAttribute("PVPGenerated") == true
 
 	if toggleInventorySlotRemote and isPVPGear then
-		toggleInventorySlotRemote:FireServer(tool)
+		local toggleInventorySlotRemote:FireServer(tool)
 		return
 	end
 
@@ -2968,7 +2968,7 @@ end
 
 local function clearBackpackConnections()
 	for _, connection in backpackConnections do
-		connection:Disconnect()
+		local connection:Disconnect()
 	end
 	table.clear(backpackConnections)
 end
@@ -2986,7 +2986,7 @@ local function untrackGearTool(tool: Tool)
 
 	for _, connection in tracked.connections do
 		if connection then
-			connection:Disconnect()
+			local connection:Disconnect()
 		end
 	end
 end
@@ -3078,7 +3078,7 @@ end
 
 local function watchCharacterTools(character: Model)
 	if characterGearConn then
-		characterGearConn:Disconnect()
+		local characterGearConn:Disconnect()
 		characterGearConn = nil
 	end
 
@@ -3120,7 +3120,7 @@ local function playDeathMatchCameraSequence()
 	local zoomOutTween = TweenService:Create(camera, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 		FieldOfView = zoomOutFov,
 	})
-	zoomOutTween:Play()
+	local zoomOutTween:Play()
 
 	task.delay(0.3, function()
 		local activeCamera = Workspace.CurrentCamera
@@ -3131,7 +3131,7 @@ local function playDeathMatchCameraSequence()
 		local zoomInTween = TweenService:Create(camera, TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
 			FieldOfView = originalFov,
 		})
-		zoomInTween:Play()
+		local zoomInTween:Play()
 	end)
 end
 
@@ -3161,7 +3161,7 @@ local function startDeathMatchTransition(duration: number?)
 	end)
 end
 
-localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+local localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
 	updateHighlightActivation()
 	setSprintEventDisabled(specialEventState.effects.sprintDisabled)
 	applyInvertedControlState()
@@ -3176,7 +3176,7 @@ localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
 	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end)
 
-localPlayer:GetPropertyChangedSignal("Neutral"):Connect(function()
+local localPlayer:GetPropertyChangedSignal("Neutral"):Connect(function()
 	updateHighlightActivation()
 	setSprintEventDisabled(specialEventState.effects.sprintDisabled)
 	applyInvertedControlState()
@@ -3198,14 +3198,14 @@ if mouse then
 	UserInputService.MouseIconEnabled = true
 	applyDesktopCursorIcon()
 
-	mouse:GetPropertyChangedSignal("Icon"):Connect(function()
+	local mouse:GetPropertyChangedSignal("Icon"):Connect(function()
 		if not applyingMouseIcon then
 			applyDesktopCursorIcon()
 		end
 	end)
 end
 
-UserInputService:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
+local UserInputService:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
 	if mouse then
 		applyDesktopCursorIcon()
 	end
@@ -3225,7 +3225,7 @@ updateHighlightActivation()
 
 local function onHumanoidAdded(humanoid: Humanoid)
 	if humanoidSpeedChangedConn then
-		humanoidSpeedChangedConn:Disconnect()
+		local humanoidSpeedChangedConn:Disconnect()
 		humanoidSpeedChangedConn = nil
 	end
 
@@ -3234,7 +3234,7 @@ local function onHumanoidAdded(humanoid: Humanoid)
 		enableDefaultControlsIfDisabled()
 	end
 	if humanoidSprintBonusConn then
-		humanoidSprintBonusConn:Disconnect()
+		local humanoidSprintBonusConn:Disconnect()
 		humanoidSprintBonusConn = nil
 	end
 	if humanoid.WalkSpeed <= 0 then
@@ -3309,7 +3309,7 @@ local function onCharacterAdded(character: Model)
 		pendingConn = character.ChildAdded:Connect(function(child)
 			if child:IsA("Humanoid") then
 				if pendingConn then
-					pendingConn:Disconnect()
+					local pendingConn:Disconnect()
 					pendingConn = nil
 				end
 				onHumanoidAdded(child)
@@ -3339,18 +3339,18 @@ localPlayer.CharacterRemoving:Connect(function()
 	recomputeSprintIntent()
 	stopSprinting(true)
 	if humanoidSpeedChangedConn then
-		humanoidSpeedChangedConn:Disconnect()
+		local humanoidSpeedChangedConn:Disconnect()
 		humanoidSpeedChangedConn = nil
 	end
 	if humanoidSprintBonusConn then
-		humanoidSprintBonusConn:Disconnect()
+		local humanoidSprintBonusConn:Disconnect()
 		humanoidSprintBonusConn = nil
 	end
 	currentHumanoid = nil
 	if invertedControlState.active then disableInvertedControls() end
 	enableDefaultControlsIfDisabled()
 	if characterGearConn then
-		characterGearConn:Disconnect()
+		local characterGearConn:Disconnect()
 		characterGearConn = nil
 	end
 	updateCursorForGearState()
@@ -3422,7 +3422,7 @@ local function sprintAction(_: string, inputState: Enum.UserInputState, inputObj
 	return Enum.ContextActionResult.Pass
 end
 
-ContextActionService:BindAction(
+local ContextActionService:BindAction(
 	"SprintAction",
 	sprintAction,
 	true,
@@ -3433,8 +3433,8 @@ ContextActionService:BindAction(
 	Enum.KeyCode.ButtonX
 )
 sprintInteraction.actionBound = true
-ContextActionService:SetTitle("SprintAction", "Sprint")
-ContextActionService:SetImage("SprintAction", GEAR_CURSOR_IMAGE_ASSET)
+local ContextActionService:SetTitle("SprintAction", "Sprint")
+local ContextActionService:SetImage("SprintAction", GEAR_CURSOR_IMAGE_ASSET)
 updateSprintButtonState()
 
 local keyToSlotIndex: {[Enum.KeyCode]: number} = {
@@ -3562,7 +3562,7 @@ end
 
 local function stopFlash()
 	if flashConnection then
-		flashConnection:Disconnect()
+		local flashConnection:Disconnect()
 		flashConnection = nil
 	end
 
@@ -3619,7 +3619,7 @@ end
 
 local function stopShake()
 	if shakeConnection then
-		shakeConnection:Disconnect()
+		local shakeConnection:Disconnect()
 		shakeConnection = nil
 	end
 
@@ -3808,12 +3808,14 @@ local function updateMapLabel(mapId: string?)
 
 	if mapId then
 		targetLabel.Text = string.format("Map: %s", getMapDisplayName(mapId))
-		container:SetAttribute("HasMap", true)
-		container.Visible = uiRefs.statusFrame and uiRefs.statusFrame.Visible or false
+		local container:SetAttribute("HasMap", true)
+		container.Visible = statusUI.frame.Visible
+		updateEventLabelText()
 	else
 		targetLabel.Text = ""
-		container:SetAttribute("HasMap", false)
+		local container:SetAttribute("HasMap", false)
 		container.Visible = false
+		updateEventLabelText()
 	end
 end
 
