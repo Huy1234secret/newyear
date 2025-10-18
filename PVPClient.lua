@@ -28,7 +28,7 @@ local function formatCountdown(seconds)
 end
 
 -- Minimal StormEffects stub to avoid register overflow (kept api)
-local StormEffects = {}
+StormEffects = {}
 function StormEffects.enable(...) end
 function StormEffects.disable(...) end
 function StormEffects.setTrackedPart(...) end
@@ -41,10 +41,9 @@ local function resetMovementState(humanoid: Humanoid?)
 	local state = humanoid:GetState()
 	if state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.RunningNoPhysics then
 		humanoid:ChangeState(Enum.HumanoidStateType.Landed)
-	end
 end
 
-game:GetService("Players")
+local Players = game:GetService("Players")
 local CAS = game:GetService("ContextActionService")
 
 -- Unbind any custom actions that may block default controls
@@ -85,6 +84,7 @@ task.wait(0.03)
 if okPM and controls then
 	pcall(function() controls:Enable() end)
 end
+end
 
 -- Place this LocalScript in StarterPlayerScripts so each player can see match updates.
 
@@ -109,33 +109,33 @@ local function hardEnableDefaultControls()
 		game:GetService("ContextActionService"):UnbindAction("Inverted_Look")
 	end)
 end
-local Players = game:GetService("Players")
-local StarterGui = game:GetService("StarterGui")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local Workspace = game:GetService("Workspace")
-local ContextActionService = game:GetService("ContextActionService")
-local UserInputService = game:GetService("UserInputService")
-local Lighting = game:GetService("Lighting")
-local SoundService = game:GetService("SoundService")
+Players = game:GetService("Players")
+StarterGui = game:GetService("StarterGui")
+ReplicatedStorage = game:GetService("ReplicatedStorage")
+RunService = game:GetService("RunService")
+TweenService = game:GetService("TweenService")
+Workspace = game:GetService("Workspace")
+ContextActionService = game:GetService("ContextActionService")
+UserInputService = game:GetService("UserInputService")
+Lighting = game:GetService("Lighting")
+SoundService = game:GetService("SoundService")
 
-local localPlayer = Players.LocalPlayer
+localPlayer = Players.LocalPlayer
 if not localPlayer then
 	return
 end
 
-local remotesFolder = ReplicatedStorage:WaitForChild("PVPRemotes", 10)
+remotesFolder = ReplicatedStorage:WaitForChild("PVPRemotes", 10)
 if not remotesFolder or not remotesFolder:IsA("Folder") then
 	return
 end
 
-local statusRemote = remotesFolder:WaitForChild("StatusUpdate", 10)
+statusRemote = remotesFolder:WaitForChild("StatusUpdate", 10)
 if not statusRemote or not statusRemote:IsA("RemoteEvent") then
 	return
 end
 
-local toggleInventorySlotRemote: RemoteEvent? = nil
+toggleInventorySlotRemote: RemoteEvent? = nil
 
 local function setToggleInventoryRemote(candidate: Instance?)
 	if candidate and candidate:IsA("RemoteEvent") and candidate.Name == "ToggleInventorySlot" then
@@ -143,11 +143,11 @@ local function setToggleInventoryRemote(candidate: Instance?)
 	end
 end
 
-local existingToggleRemote = remotesFolder:FindFirstChild("ToggleInventorySlot")
+existingToggleRemote = remotesFolder:FindFirstChild("ToggleInventorySlot")
 if existingToggleRemote and existingToggleRemote:IsA("RemoteEvent") then
 	toggleInventorySlotRemote = existingToggleRemote
 else
-	local foundToggle = remotesFolder:WaitForChild("ToggleInventorySlot", 5)
+	foundToggle = remotesFolder:WaitForChild("ToggleInventorySlot", 5)
 	setToggleInventoryRemote(foundToggle)
 end
 
@@ -161,15 +161,15 @@ remotesFolder.ChildRemoved:Connect(function(child)
 	end
 end)
 
-local playerGui = localPlayer:WaitForChild("PlayerGui")
+playerGui = localPlayer:WaitForChild("PlayerGui")
 
-local isTouchDevice = UserInputService.TouchEnabled
+isTouchDevice = UserInputService.TouchEnabled
 
 if isTouchDevice then
 	StarterGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
 end
 
-local UI_CONFIG = {
+UI_CONFIG = {
 	DEFAULT_BACKGROUND_COLOR = Color3.fromRGB(28, 32, 45),
 	DEFAULT_BACKGROUND_TRANSPARENCY = 0.15,
 	DEFAULT_TEXT_SIZE = if isTouchDevice then 22 else 26,
@@ -179,7 +179,7 @@ local UI_CONFIG = {
 	MAP_LABEL_PADDING = if isTouchDevice then 18 else 24,
 }
 
-local mapDisplayNames = {
+mapDisplayNames = {
 	Crossroad = "Crossroad",
 	SFOTH = "SFOTH",
 	ChaosCanyon = "Chaos Canyon",
@@ -198,8 +198,8 @@ local function createInstance(className: string, props: {[string]: any})
 	return instance
 end
 
-local playerModule: any = nil
-local playerControls: any = nil
+playerModule: any = nil
+playerControls: any = nil
 
 local function setBackpackCoreGuiEnabled(enabled: boolean)
 	local success, result = pcall(function()
@@ -234,12 +234,12 @@ local function getPlayerControls()
 		return playerControls
 	end
 
-	local success, moduleOrErr = pcall(function()
-		local playerScripts = localPlayer:WaitForChild("PlayerScripts", 5)
+	success, moduleOrErr = pcall(function()
+		playerScripts = localPlayer:WaitForChild("PlayerScripts", 5)
 		if not playerScripts then
 			return nil
 		end
-		local moduleScript = playerScripts:FindFirstChild("PlayerModule")
+		moduleScript = playerScripts:FindFirstChild("PlayerModule")
 		if not moduleScript then
 			moduleScript = playerScripts:WaitForChild("PlayerModule", 5)
 		end
@@ -255,8 +255,8 @@ local function getPlayerControls()
 	end
 
 	playerModule = moduleOrErr
-	local controls = nil
-	local ok, result = pcall(function()
+	controls = nil
+	ok, result = pcall(function()
 		return playerModule:GetControls()
 	end)
 	if ok then
@@ -267,11 +267,11 @@ local function getPlayerControls()
 	return controls
 end
 
-local GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
-local currentCursorImageAsset = GEAR_CURSOR_IMAGE_ASSET
-local DEFAULT_WALK_SPEED = 16
+GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
+currentCursorImageAsset = GEAR_CURSOR_IMAGE_ASSET
+DEFAULT_WALK_SPEED = 16
 
-local Z_INDEX = {
+Z_INDEX = {
 	INVENTORY_BASE = 60,
 }
 
@@ -357,7 +357,7 @@ type LayoutConfig = {
 	sprintBottomOffset: number,
 }
 
-local uiRefs: UiRefs = {
+uiRefs: UiRefs = {
 	energyBarFill = nil,
 	energyTextLabel = nil,
 	sprintStatusLabel = nil,
@@ -371,12 +371,12 @@ local uiRefs: UiRefs = {
 	sprintActionButton = nil,
 }
 
-local inventoryVisible = true
-local inventoryAutoOpened = false
-local setInventoryVisibility: (boolean) -> ()
+inventoryVisible = true
+inventoryAutoOpened = false
+setInventoryVisibility: (boolean) -> ()
 
-local hotTouchActive = false
-local currentHotTouchHolderId: number? = nil
+hotTouchActive = false
+currentHotTouchHolderId: number? = nil
 
 local function refreshHotTouchStatusVisibility()
 	local label = uiRefs.hotTouchStatusLabel
@@ -384,7 +384,7 @@ local function refreshHotTouchStatusVisibility()
 		return
 	end
 
-	local statusFrame = uiRefs.statusFrame
+	statusFrame = uiRefs.statusFrame
 	if statusFrame and not statusFrame.Visible then
 		label.Visible = false
 		return
@@ -412,7 +412,7 @@ local function setHotTouchStatusText(text: string?)
 	refreshHotTouchStatusVisibility()
 end
 
-local sprintInteraction = {
+sprintInteraction = {
 	noSprintPart = nil :: BasePart?,
 	actionBound = false,
 }
@@ -454,9 +454,9 @@ local function getHumanoidRootPart(humanoid: Humanoid): BasePart?
 		return rootPart
 	end
 
-	local character = humanoid.Parent
+	character = humanoid.Parent
 	if character then
-		local candidate = character:FindFirstChild("HumanoidRootPart")
+		candidate = character:FindFirstChild("HumanoidRootPart")
 		if candidate and candidate:IsA("BasePart") then
 			return candidate
 		end
@@ -476,15 +476,15 @@ type InventorySlotUI = {
 	button: GuiButton,
 }
 
-local inventorySlots: {InventorySlotUI} = {}
-local slotToolMapping: {Tool?} = {}
+inventorySlots: {InventorySlotUI} = {}
+slotToolMapping: {Tool?} = {}
 
-local existingGui = playerGui:FindFirstChild("PVPStatusGui")
+existingGui = playerGui:FindFirstChild("PVPStatusGui")
 if existingGui then
 	existingGui:Destroy()
 end
 
-local screenGui = Instance.new("ScreenGui")
+screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PVPStatusGui"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
@@ -498,26 +498,26 @@ local function calculateLayout(isTouch: boolean): LayoutConfig
 		viewportWidth = camera.ViewportSize.X
 	end
 
-	local slotPadding = if isTouch then 2 else 6
-	local calculatedAvailableWidth = if isTouch
+	slotPadding = if isTouch then 2 else 6
+	calculatedAvailableWidth = if isTouch
 		then math.max(280, math.min(viewportWidth - 40, 540))
 		else math.clamp(viewportWidth * 0.5, 520, 780)
-	local slotSize = math.clamp(
+	slotSize = math.clamp(
 		math.floor((calculatedAvailableWidth - 24 - slotPadding * 9) / 10),
 		if isTouch then 24 else 40,
 		if isTouch then 40 else 56
 	)
-	local inventoryWidth = slotSize * 10 + slotPadding * 9 + 24
-	local inventoryHeight = slotSize + 20
-	local inventoryBottomMargin = if isTouch then math.max(64, math.floor(slotSize * 1.4)) else 0
-	local energyLabelHeight = if isTouch then 16 else 18
-	local energyBarHeight = if isTouch then 12 else 14
-	local energyTopPadding = if isTouch then 2 else 3
-	local energyBottomPadding = if isTouch then 4 else 5
-	local energySpacing = if isTouch then 3 else 4
-	local sprintContainerHeight = energyTopPadding + energyLabelHeight + energySpacing + energyBarHeight + energyBottomPadding
-	local energyTextWidth = if isTouch then 80 else 92
-	local estimatedInventoryHeight
+	inventoryWidth = slotSize * 10 + slotPadding * 9 + 24
+	inventoryHeight = slotSize + 20
+	inventoryBottomMargin = if isTouch then math.max(64, math.floor(slotSize * 1.4)) else 0
+	energyLabelHeight = if isTouch then 16 else 18
+	energyBarHeight = if isTouch then 12 else 14
+	energyTopPadding = if isTouch then 2 else 3
+	energyBottomPadding = if isTouch then 4 else 5
+	energySpacing = if isTouch then 3 else 4
+	sprintContainerHeight = energyTopPadding + energyLabelHeight + energySpacing + energyBarHeight + energyBottomPadding
+	energyTextWidth = if isTouch then 80 else 92
+	estimatedInventoryHeight
 	if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
 		estimatedInventoryHeight = inventoryHeight
 	elseif isTouch then
@@ -528,7 +528,7 @@ local function calculateLayout(isTouch: boolean): LayoutConfig
 		-- the custom energy meter always renders above the built-in inventory buttons.
 		estimatedInventoryHeight = math.max(60, math.floor(slotSize * 1.1))
 	end
-	local sprintBottomOffset = inventoryBottomMargin + estimatedInventoryHeight
+	sprintBottomOffset = inventoryBottomMargin + estimatedInventoryHeight
 
 	return {
 		slotPadding = slotPadding,
@@ -1023,7 +1023,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 			state.setVisibility(not isTouch)
 		end
 
-		local slotContainer = createInstance("Frame", {
+		slotContainer = createInstance("Frame", {
 			Name = "SlotContainer",
 			Size = UDim2.new(1, 0, 1, 0),
 			BackgroundTransparency = 1,
@@ -1048,7 +1048,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 		})
 
 		for slotIndex = 1, 10 do
-			local slotUI = {}
+			slotUI = {}
 			slotUI.frame = createInstance("Frame", {
 				Name = string.format("Slot_%d", slotIndex),
 				Size = UDim2.fromOffset(layout.slotSize, layout.slotSize),
@@ -1071,8 +1071,8 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 				Parent = slotUI.frame,
 			})
 
-			local nameLabelHeight = math.max(12, math.floor(layout.slotSize * 0.35))
-			local iconPadding = math.max(8, math.floor(layout.slotSize * 0.3))
+			nameLabelHeight = math.max(12, math.floor(layout.slotSize * 0.35))
+			iconPadding = math.max(8, math.floor(layout.slotSize * 0.3))
 
 			slotUI.numberLabel = createInstance("TextLabel", {
 				Name = "KeyLabel",
@@ -1131,8 +1131,8 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 				Parent = slotUI.frame,
 			})
 
-			local currentSlotIndex = slotIndex
-			local lastTriggerTime = 0
+			currentSlotIndex = slotIndex
+			lastTriggerTime = 0
 			local function triggerSelection()
 				local now = os.clock()
 				if now - lastTriggerTime < 0.08 then
@@ -1147,7 +1147,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 
 			slotUI.button.Activated:Connect(triggerSelection)
 			slotUI.button.InputBegan:Connect(function(input)
-				local inputType = input.UserInputType
+				inputType = input.UserInputType
 				if inputType == Enum.UserInputType.MouseButton1
 					or inputType == Enum.UserInputType.Touch
 					or inputType == Enum.UserInputType.Gamepad1
