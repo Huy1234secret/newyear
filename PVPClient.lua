@@ -1996,6 +1996,11 @@ local function resetInvertedMovement()
     invertedControlState.keyboard.left = false
     invertedControlState.keyboard.right = false
     invertedControlState.thumbstick = Vector2.new(0, 0)
+
+    local humanoid = currentHumanoid
+    if humanoid then
+        humanoid:Move(Vector3.zero, true)
+    end
 end
 
 local function enableDefaultControlsIfDisabled()
@@ -3110,6 +3115,10 @@ RunService.Heartbeat:Connect(function(deltaTime)
         isMoving = humanoid.MoveDirection.Magnitude > 0.01
     end
 
+    if not isMoving and sprintState.rechargeBlockedUntil > now then
+        sprintState.rechargeBlockedUntil = now
+    end
+
     local zoneBlocked = false
     local zonePart = sprintInteraction.noSprintPart
     if zonePart and zonePart.Parent and humanoid then
@@ -3154,20 +3163,23 @@ RunService.Heartbeat:Connect(function(deltaTime)
         if isMoving then
             sprintState.energy = math.max(0, sprintState.energy - dt * SPRINT_DRAIN_RATE)
             sprintState.rechargeBlockedUntil = now + SPRINT_RECHARGE_DELAY
-        else
-            sprintState.rechargeBlockedUntil = math.max(sprintState.rechargeBlockedUntil, now + SPRINT_RECHARGE_DELAY)
-        end
 
-        if sprintState.energy <= 0 then
-            sprintState.energy = 0
-            if sprintState.touchIntent then
-                sprintState.touchIntent = false
+            if sprintState.energy <= 0 then
+                sprintState.energy = 0
+                if sprintState.touchIntent then
+                    sprintState.touchIntent = false
+                end
+                if sprintState.keyboardIntent then
+                    sprintState.keyboardIntent = false
+                end
+                recomputeSprintIntent()
+                stopSprinting(false)
             end
-            if sprintState.keyboardIntent then
-                sprintState.keyboardIntent = false
+        else
+            if sprintState.energy < MAX_SPRINT_ENERGY then
+                sprintState.energy = math.min(MAX_SPRINT_ENERGY, sprintState.energy + dt * SPRINT_RECHARGE_RATE)
             end
-            recomputeSprintIntent()
-            stopSprinting(false)
+            sprintState.rechargeBlockedUntil = now
         end
     elseif sprintState.energy < MAX_SPRINT_ENERGY and now >= sprintState.rechargeBlockedUntil then
         sprintState.energy = math.min(MAX_SPRINT_ENERGY, sprintState.energy + dt * SPRINT_RECHARGE_RATE)
