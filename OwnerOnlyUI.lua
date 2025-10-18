@@ -105,9 +105,26 @@ local specialEventOptions: {EventDefinition} = {
     },
 }
 
+local eventDefinitionById: {[string]: EventDefinition} = {}
+for _, definition in ipairs(specialEventOptions) do
+    eventDefinitionById[definition.id] = definition
+end
+
+local CHECK_ICON_ASSET_ID = "rbxassetid://7072706620"
+local DEFAULT_EVENT_DESCRIPTION = "Pick an optional twist for the round."
+
 local mapButtonDefaultColor = Color3.fromRGB(190, 60, 60)
 local mapButtonSelectedColor = Color3.fromRGB(70, 170, 95)
 local mapButtonTextColor = Color3.fromRGB(255, 255, 255)
+local mapButtonDefaultGradient = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 70, 80)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 40, 50)),
+})
+local mapButtonSelectedGradient = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(85, 190, 120)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(55, 150, 90)),
+})
+local selectionTweenInfo = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local remotesFolder = ReplicatedStorage:FindFirstChild("PVPRemotes")
 if not remotesFolder then
@@ -323,10 +340,16 @@ pvpTitle.TextXAlignment = Enum.TextXAlignment.Left
 pvpTitle.ZIndex = 6
 pvpTitle.Parent = pvpFrame
 
-local function createRowSection(name: string, headerText: string, positionOffset: number)
+local function createRowSection(
+    name: string,
+    headerText: string,
+    positionOffset: number,
+    sectionHeight: number?,
+    listHeight: number?
+)
     local section = Instance.new("Frame")
     section.Name = name
-    section.Size = UDim2.new(1, -40, 0, 120)
+    section.Size = UDim2.new(1, -40, 0, sectionHeight or 120)
     section.Position = UDim2.new(0, 20, 0, positionOffset)
     section.BackgroundTransparency = 1
     section.ZIndex = 6
@@ -346,7 +369,7 @@ local function createRowSection(name: string, headerText: string, positionOffset
 
     local list = Instance.new("ScrollingFrame")
     list.Name = "List"
-    list.Size = UDim2.new(1, 0, 0, 72)
+    list.Size = UDim2.new(1, 0, 0, listHeight or 72)
     list.Position = UDim2.new(0, 0, 0, 32)
     list.BackgroundTransparency = 1
     list.ScrollingDirection = Enum.ScrollingDirection.X
@@ -378,8 +401,24 @@ local function createRowSection(name: string, headerText: string, positionOffset
     return section, list
 end
 
-local mapSection, mapList = createRowSection("MapSection", "Map", 70)
-local eventSection, eventList = createRowSection("EventSection", "Event", 200)
+local mapSection, mapList = createRowSection("MapSection", "Map", 70, 120, 72)
+local eventSection, eventList = createRowSection("EventSection", "Event", 200, 176, 72)
+
+local eventDescriptionLabel = Instance.new("TextLabel")
+eventDescriptionLabel.Name = "EventDescription"
+eventDescriptionLabel.Size = UDim2.new(1, 0, 0, 44)
+eventDescriptionLabel.Position = UDim2.new(0, 0, 0, 108)
+eventDescriptionLabel.BackgroundTransparency = 1
+eventDescriptionLabel.Font = Enum.Font.Gotham
+eventDescriptionLabel.Text = DEFAULT_EVENT_DESCRIPTION
+eventDescriptionLabel.TextColor3 = Color3.fromRGB(210, 220, 245)
+eventDescriptionLabel.TextSize = 16
+eventDescriptionLabel.TextWrapped = true
+eventDescriptionLabel.TextXAlignment = Enum.TextXAlignment.Left
+eventDescriptionLabel.TextYAlignment = Enum.TextYAlignment.Top
+eventDescriptionLabel.TextTransparency = 0.1
+eventDescriptionLabel.ZIndex = 6
+eventDescriptionLabel.Parent = eventSection
 
 local actionContainer = Instance.new("Frame")
 actionContainer.Name = "ActionContainer"
@@ -504,15 +543,36 @@ local function showMessage(text: string, color: Color3?)
     end)
 end
 
-local function updateMapButtonVisual(button: TextButton, isSelected: boolean)
+local function applySelectionVisual(button: TextButton, isSelected: boolean)
     button.BackgroundColor3 = isSelected and mapButtonSelectedColor or mapButtonDefaultColor
     button.TextColor3 = mapButtonTextColor
+    button.AutoButtonColor = not isSelected
 
     local stroke = button:FindFirstChildOfClass("UIStroke")
     if stroke then
         stroke.Color = isSelected and Color3.fromRGB(185, 255, 205) or Color3.fromRGB(120, 40, 40)
         stroke.Transparency = isSelected and 0 or 0.2
     end
+
+    local gradient = button:FindFirstChild("SelectionGradient")
+    if gradient and gradient:IsA("UIGradient") then
+        gradient.Color = isSelected and mapButtonSelectedGradient or mapButtonDefaultGradient
+    end
+
+    local icon = button:FindFirstChild("SelectionIcon")
+    if icon and icon:IsA("ImageLabel") then
+        icon.Visible = isSelected
+        icon.ImageTransparency = isSelected and 0 or 0.35
+    end
+
+    local scale = button:FindFirstChild("SelectionScale")
+    if scale and scale:IsA("UIScale") then
+        TweenService:Create(scale, selectionTweenInfo, {Scale = isSelected and 1.05 or 1}):Play()
+    end
+end
+
+local function updateMapButtonVisual(button: TextButton, isSelected: boolean)
+    applySelectionVisual(button, isSelected)
 end
 
 local function selectMap(mapId: string)
@@ -546,6 +606,29 @@ local function createSelectionButton(parent: Instance, order: number, id: string
     stroke.Color = Color3.fromRGB(120, 40, 40)
     stroke.Parent = button
 
+    local gradient = Instance.new("UIGradient")
+    gradient.Name = "SelectionGradient"
+    gradient.Color = mapButtonDefaultGradient
+    gradient.Rotation = 90
+    gradient.Parent = button
+
+    local scale = Instance.new("UIScale")
+    scale.Name = "SelectionScale"
+    scale.Parent = button
+
+    local icon = Instance.new("ImageLabel")
+    icon.Name = "SelectionIcon"
+    icon.BackgroundTransparency = 1
+    icon.Size = UDim2.fromOffset(20, 20)
+    icon.Position = UDim2.new(1, -10, 0, 10)
+    icon.AnchorPoint = Vector2.new(1, 0)
+    icon.Image = CHECK_ICON_ASSET_ID
+    icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    icon.ImageTransparency = 0.35
+    icon.Visible = false
+    icon.ZIndex = button.ZIndex + 1
+    icon.Parent = button
+
     buttonsTable[id] = button
     updateMapButtonVisual(button, false)
 
@@ -565,7 +648,7 @@ for order, definition in ipairs(mapDefinitions) do
 end
 
 local function updateEventButtonVisual(button: TextButton, isSelected: boolean)
-    updateMapButtonVisual(button, isSelected)
+    applySelectionVisual(button, isSelected)
 end
 
 local function selectEvent(eventId: string?)
@@ -573,12 +656,26 @@ local function selectEvent(eventId: string?)
     for id, button in eventButtons do
         updateEventButtonVisual(button, id == selectedEventId)
     end
+
+    if eventDescriptionLabel then
+        if eventId then
+            local definition = eventDefinitionById[eventId]
+            local description = definition and definition.description or nil
+            if description and #description > 0 then
+                eventDescriptionLabel.Text = description
+            else
+                eventDescriptionLabel.Text = string.format("%s ready to deploy.", definition and definition.displayName or "Event")
+            end
+        else
+            eventDescriptionLabel.Text = DEFAULT_EVENT_DESCRIPTION
+        end
+    end
 end
 
 for order, definition in ipairs(specialEventOptions) do
     createSelectionButton(eventList, order, definition.id, definition.displayName, eventButtons, function(eventId)
         if selectedEventId == eventId then
-            selectEvent(eventId)
+            selectEvent(nil)
         else
             selectEvent(eventId)
         end
