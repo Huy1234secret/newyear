@@ -549,8 +549,40 @@ do
             end
 
             local running = true
+            local activeBombs: {[BasePart]: boolean} = {}
+
+            local function removeBomb(bomb: BasePart?, alreadyDestroying: boolean?)
+                if not bomb then
+                    return
+                end
+
+                if activeBombs[bomb] then
+                    activeBombs[bomb] = nil
+                end
+
+                if not alreadyDestroying and bomb.Parent then
+                    bomb:Destroy()
+                end
+            end
+
+            local function createExplosion(bomb: BasePart)
+                local explosion = Instance.new("Explosion")
+                explosion.BlastRadius = 12
+                explosion.BlastPressure = 500000
+                explosion.Position = bomb.Position
+                explosion.Parent = Workspace
+                removeBomb(bomb)
+            end
+
             state.RainingBomb = {
                 active = true,
+                bombs = activeBombs,
+                stop = function()
+                    running = false
+                    for part in pairs(activeBombs) do
+                        removeBomb(part)
+                    end
+                end,
             }
 
             local stormSize = getStormHorizontalSize()
@@ -562,60 +594,101 @@ do
                 while running and roundInProgress and context.roundId == currentRoundId do
                     local offsetX = rng:NextNumber(-stormSize.X / 2, stormSize.X / 2)
                     local offsetZ = rng:NextNumber(-stormSize.Y / 2, stormSize.Y / 2)
-                    local spawnPosition = Vector3.new(origin.X + offsetX, origin.Y + 100, origin.Z + offsetZ)
+                    local spawnPosition = Vector3.new(origin.X + offsetX, origin.Y + 120, origin.Z + offsetZ)
 
                     local bomb = Instance.new("Part")
                     bomb.Shape = Enum.PartType.Ball
                     bomb.Name = "EventBomb"
-                    bomb.Size = Vector3.new(2, 2, 2)
-                    bomb.Material = Enum.Material.Neon
-                    bomb.Color = Color3.fromRGB(255, 0, 0)
+                    bomb.Size = Vector3.new(2.5, 2.5, 2.5)
+                    bomb.Material = Enum.Material.SmoothPlastic
+                    bomb.Color = Color3.fromRGB(0, 0, 0)
                     bomb.Transparency = 0
                     bomb.CanCollide = true
                     bomb.CanQuery = true
                     bomb.CanTouch = true
+                    bomb.Anchored = false
                     bomb.Position = spawnPosition
                     bomb.Parent = Workspace
 
-                    bomb.Touched:Connect(function() end)
+                    activeBombs[bomb] = true
 
-                    task.delay(2.5, function()
-                        if not bomb.Parent then
+                    bomb.Destroying:Connect(function()
+                        removeBomb(bomb, true)
+                    end)
+
+                    local countdownStarted = false
+                    local exploded = false
+
+                    local function explode()
+                        if exploded or not bomb.Parent then
+                            return
+                        end
+                        exploded = true
+                        createExplosion(bomb)
+                    end
+
+                    local function startCountdown()
+                        if countdownStarted or exploded then
                             return
                         end
 
-                        local flashTween = TweenService:Create(bomb, TweenInfo.new(0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, 2, true), {
-                            Transparency = 0.5,
-                        })
-                        flashTween:Play()
-                    end)
+                        countdownStarted = true
+                        bomb.Anchored = true
 
-                    task.delay(3, function()
-                        if not bomb.Parent then
+                        local totalDuration = 3
+                        local startTime = os.clock()
+                        local flashColors = {Color3.fromRGB(0, 0, 0), Color3.fromRGB(255, 0, 0)}
+
+                        task.spawn(function()
+                            local flashIndex = 1
+                            local intervals = {0.5, 0.3, 0.15, 0.08}
+                            while countdownStarted and not exploded and bomb.Parent do
+                                flashIndex = flashIndex == 1 and 2 or 1
+                                bomb.Color = flashColors[flashIndex]
+                                bomb.Material = Enum.Material.Neon
+
+                                local elapsed = os.clock() - startTime
+                                if elapsed >= totalDuration then
+                                    break
+                                end
+
+                                local phase = math.clamp(math.floor((elapsed / totalDuration) * #intervals) + 1, 1, #intervals)
+                                task.wait(intervals[phase])
+                            end
+                        end)
+
+                        task.delay(totalDuration, function()
+                            if not exploded and bomb.Parent then
+                                explode()
+                            end
+                        end)
+                    end
+
+                    bomb.Touched:Connect(function(hit)
+                        if not hit or not hit:IsA("BasePart") then
                             return
                         end
-
-                        local explosion = Instance.new("Explosion")
-                        explosion.BlastRadius = 12
-                        explosion.BlastPressure = 500000
-                        explosion.Position = bomb.Position
-                        explosion.Parent = Workspace
-                        bomb:Destroy()
+                        startCountdown()
                     end)
 
-                    Debris:AddItem(bomb, 6)
-                    task.wait(1)
+                    Debris:AddItem(bomb, 15)
+                    task.wait(rng:NextNumber(0.75, 1.5))
                 end
             end)
-
-            state.RainingBomb.stop = function()
-                running = false
-            end
         end,
         onRoundEnded = function(context)
             local state = context.state.RainingBomb
-            if state and state.stop then
-                state.stop()
+            if state then
+                if state.stop then
+                    state.stop()
+                end
+                if state.bombs then
+                    for part in pairs(state.bombs) do
+                        if part and part.Parent then
+                            part:Destroy()
+                        end
+                    end
+                end
             end
             context.state.RainingBomb = nil
         end,
@@ -809,14 +882,77 @@ do
                 timer = 30,
                 running = true,
                 connections = {},
+                disableRoundTimer = true,
             }
             state.HotTouch = hotState
+
+            sendStatusUpdate({
+                action = "MatchMessage",
+                text = "Survive",
+            })
 
             local function clearConnections()
                 for _, conn in hotState.connections do
                     conn:Disconnect()
                 end
                 table.clear(hotState.connections)
+            end
+
+            local function applyHolderMovement(record: ParticipantRecord, active: boolean)
+                local character = record.player.Character
+                if not character then
+                    return
+                end
+
+                local humanoid = record.humanoid or character:FindFirstChildOfClass("Humanoid")
+                if not humanoid then
+                    return
+                end
+
+                record.humanoid = humanoid
+
+                if active then
+                    if record.eventData.HotTouchOriginalWalk == nil then
+                        record.eventData.HotTouchOriginalWalk = humanoid.WalkSpeed
+                    end
+
+                    if record.eventData.HotTouchHadSprintBonus == nil then
+                        local existingBonus = humanoid:GetAttribute("SprintSpeedBonus")
+                        if typeof(existingBonus) == "number" then
+                            record.eventData.HotTouchSprintBonus = existingBonus
+                            record.eventData.HotTouchHadSprintBonus = true
+                        else
+                            record.eventData.HotTouchSprintBonus = nil
+                            record.eventData.HotTouchHadSprintBonus = false
+                            existingBonus = 0
+                        end
+
+                        local bonusValue = if typeof(existingBonus) == "number" then existingBonus else 0
+                        humanoid:SetAttribute("SprintSpeedBonus", bonusValue + 2)
+                    else
+                        local storedBonus = record.eventData.HotTouchSprintBonus
+                        local baseValue = if typeof(storedBonus) == "number" then storedBonus else 0
+                        humanoid:SetAttribute("SprintSpeedBonus", baseValue + 2)
+                    end
+
+                    local baseline = record.eventData.HotTouchOriginalWalk or humanoid.WalkSpeed
+                    humanoid.WalkSpeed = baseline + 2
+                else
+                    if record.eventData.HotTouchOriginalWalk ~= nil then
+                        humanoid.WalkSpeed = record.eventData.HotTouchOriginalWalk
+                    end
+                    record.eventData.HotTouchOriginalWalk = nil
+
+                    local hadBonus = record.eventData.HotTouchHadSprintBonus
+                    local originalBonus = record.eventData.HotTouchSprintBonus
+                    if hadBonus then
+                        humanoid:SetAttribute("SprintSpeedBonus", originalBonus)
+                    else
+                        humanoid:SetAttribute("SprintSpeedBonus", nil)
+                    end
+                    record.eventData.HotTouchHadSprintBonus = nil
+                    record.eventData.HotTouchSprintBonus = nil
+                end
             end
 
             local function updateHolderVisual(record: ParticipantRecord?, active: boolean)
@@ -829,19 +965,7 @@ do
                     return
                 end
 
-                local humanoid = record.humanoid or character:FindFirstChildOfClass("Humanoid")
-                if humanoid then
-                    if active then
-                        record.eventData.HotTouchOriginalWalk = record.eventData.HotTouchOriginalWalk or humanoid.WalkSpeed
-                        humanoid.WalkSpeed = (record.eventData.HotTouchOriginalWalk or humanoid.WalkSpeed) + 3
-                    else
-                        local original = record.eventData.HotTouchOriginalWalk
-                        if original then
-                            humanoid.WalkSpeed = original
-                        end
-                        record.eventData.HotTouchOriginalWalk = nil
-                    end
-                end
+                applyHolderMovement(record, active)
 
                 if active then
                     local highlight = character:FindFirstChild("HotTouchHighlight") :: Highlight?
@@ -849,10 +973,14 @@ do
                         highlight = Instance.new("Highlight")
                         highlight.Name = "HotTouchHighlight"
                         highlight.FillColor = Color3.fromRGB(255, 0, 0)
-                        highlight.OutlineColor = Color3.fromRGB(255, 100, 100)
-                        highlight.FillTransparency = 0.3
+                        highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+                        highlight.FillTransparency = 1
+                        highlight.OutlineTransparency = 0
                         highlight.Parent = character
                     end
+                    highlight.FillTransparency = 1
+                    highlight.OutlineTransparency = 0
+                    highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
                 else
                     local highlight = character:FindFirstChild("HotTouchHighlight")
                     if highlight then
@@ -956,7 +1084,7 @@ do
 
                             hotState.timer = math.min(hotState.timer + 5, 60)
                             setParticipantFrozen(targetRecord, true)
-                            task.delay(3, function()
+                            task.delay(2, function()
                                 if context.roundId == currentRoundId and roundInProgress then
                                     setParticipantFrozen(targetRecord, false)
                                 end
@@ -992,6 +1120,9 @@ do
                     attachHolderConnections(newRecord)
                 end
             end
+
+            hotState.setHolder = setHolder
+            hotState.detachHolder = detachHolder
 
             local function selectNextHolder()
                 local candidates = {}
@@ -1061,7 +1192,11 @@ do
             end
 
             if state.holder == record then
-                state.holder = nil
+                if state.setHolder then
+                    state.setHolder(nil, false)
+                else
+                    state.holder = nil
+                end
             end
         end,
         onParticipantCleanup = function(context, record)
@@ -1071,7 +1206,11 @@ do
             end
 
             if state.holder == record then
-                state.holder = nil
+                if state.setHolder then
+                    state.setHolder(nil, false)
+                else
+                    state.holder = nil
+                end
             end
         end,
         onRoundEnded = function(context)
@@ -2438,6 +2577,26 @@ local function startRound(player: Player, mapId: string, requestedEventId: strin
 
     checkRoundCompletion(roundId)
     if not roundInProgress or currentRoundId ~= roundId then
+        return
+    end
+
+    local skipRoundTimer = false
+    if activeSpecialEvent and activeSpecialEvent.state then
+        local stateTable = activeSpecialEvent.state
+        local hotTouchState = (stateTable :: any).HotTouch
+        if hotTouchState and hotTouchState.disableRoundTimer then
+            skipRoundTimer = true
+        end
+    end
+
+    if skipRoundTimer then
+        while roundInProgress and currentRoundId == roundId do
+            task.wait(1)
+            if not roundInProgress or currentRoundId ~= roundId then
+                break
+            end
+            checkRoundCompletion(roundId)
+        end
         return
     end
 
