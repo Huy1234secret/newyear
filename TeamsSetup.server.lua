@@ -1,4033 +1,3296 @@
--- Minimal format helpers (closed to avoid scope leak)
-local function formatTimer(seconds)
-	seconds = tonumber(seconds) or 0
-	if seconds < 0 then seconds = 0 end
-	seconds = math.floor(seconds + 0.5)
-	local h = math.floor(seconds / 3600)
-	local m = math.floor((seconds % 3600) / 60)
-	local s = seconds % 60
-	if h > 0 then
-		return string.format("%d:%02d:%02d", h, m, s)
-	else
-		return string.format("%d:%02d", m, s)
-	end
-end
-
-local function formatCountdown(seconds)
-	seconds = tonumber(seconds) or 0
-	if seconds < 0 then seconds = 0 end
-	seconds = math.floor(seconds + 0.5)
-	local h = math.floor(seconds / 3600)
-	local m = math.floor((seconds % 3600) / 60)
-	local s = seconds % 60
-	if h > 0 then
-		return string.format("%d:%02d:%02d", h, m, s)
-	else
-		return string.format("%d:%02d", m, s)
-	end
-end
-
--- Minimal StormEffects stub to avoid register overflow
-StormEffects = {}
-function StormEffects.enable(...) end
-function StormEffects.disable(...) end
-function StormEffects.setTrackedPart(...) end
-function StormEffects.update(...) end
-
 --!strict
--- === Movement reset helper to stop stuck-forward after respawn ===
-local function resetMovementState(humanoid: Humanoid?)
-	local Players = game:GetService("Players")
-	local CAS = game:GetService("ContextActionService")
 
-	-- Unbind any custom actions that may block default controls
-        pcall(function()
-                CAS:UnbindAction("DisableMovement")
-                CAS:UnbindAction("Inverted_Move")
-                CAS:UnbindAction("Inverted_Look")
-        end)
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local TeamsService = game:GetService("Teams")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local Debris = game:GetService("Debris")
 
-	-- Soft reset PlayerModule controls
-	local okPM, controls = pcall(function()
-		local player = Players.LocalPlayer
-		local ps = player and player:FindFirstChildOfClass("PlayerScripts")
-		local pm = ps and ps:FindFirstChild("PlayerModule")
-		if not pm then return nil end
-		local PM = require(pm)
-		return PM:GetControls()
-	end)
-	if okPM and controls then
-		pcall(function() controls:Disable() end)
+local function getOrCreateTeam(name: string, color: Color3, autoAssignable: boolean): Team
+	local team = TeamsService:FindFirstChild(name) :: Team?
+	if not team then
+		team = Instance.new("Team")
+		team.Name = name
+		team.Parent = TeamsService
 	end
 
-	-- Nudge humanoid state & clear movement intents
-	if humanoid and humanoid.Parent then
-                pcall(function()
-                        -- Zero the movement vector and suppress jump for a tick
-                        humanoid:Move(Vector3.new(0,0,0), true)
-                        humanoid.Jump = false
-                        -- Sometimes RunningNoPhysics -> Running helps clear residual velocity intents
-                        humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
-                        task.wait(0.02)
-                        humanoid:ChangeState(Enum.HumanoidStateType.Running)
-                end)
-	end
+	team.TeamColor = BrickColor.new(color)
+	team.AutoAssignable = autoAssignable
 
-	-- Re-enable controls after a tiny delay so PlayerModule rebinds default actions
-	task.wait(0.03)
-	if okPM and controls then
-		pcall(function() controls:Enable() end)
+	return team
+end
+
+local spectateTeam = getOrCreateTeam("Spectate", Color3.fromRGB(85, 170, 255), true)
+
+spectateTeam.AutoAssignable = true
+
+do
+	local existingNeutralTeam = TeamsService:FindFirstChild("Neutral")
+	if existingNeutralTeam and existingNeutralTeam:IsA("Team") then
+		existingNeutralTeam:Destroy()
 	end
 end
 
--- Place this LocalScript in StarterPlayerScripts so each player can see match updates.
-
-
--- === Safety helper: hard-enable Roblox default controls (idempotent) ===
-local function hardEnableDefaultControls()
-	local player = game:GetService("Players").LocalPlayer
-	local playerScripts = player:FindFirstChildOfClass("PlayerScripts")
-	if not playerScripts then return end
-	local pm = playerScripts:FindFirstChild("PlayerModule")
-	if not pm then return end
-	local ok, PlayerModule = pcall(function() return require(pm) end)
-	if not ok or not PlayerModule then return end
-	local controlsOk, controls = pcall(function() return PlayerModule:GetControls() end)
-	if controlsOk and controls then
-		pcall(function() controls:Enable() end)
-	end
-	-- Also release any ContextAction "Disable" binds commonly used by inverted code
-        pcall(function()
-                game:GetService("ContextActionService"):UnbindAction("DisableMovement")
-                game:GetService("ContextActionService"):UnbindAction("Inverted_Move")
-                game:GetService("ContextActionService"):UnbindAction("Inverted_Look")
-        end)
-end
-Players = game:GetService("Players")
-StarterGui = game:GetService("StarterGui")
-ReplicatedStorage = game:GetService("ReplicatedStorage")
-RunService = game:GetService("RunService")
-TweenService = game:GetService("TweenService")
-Workspace = game:GetService("Workspace")
-ContextActionService = game:GetService("ContextActionService")
-UserInputService = game:GetService("UserInputService")
-Lighting = game:GetService("Lighting")
-SoundService = game:GetService("SoundService")
-
-localPlayer = Players.LocalPlayer
-if not localPlayer then
-	return
+local function assignPlayerToNeutralState(player: Player)
+	player.Team = nil
+	player.Neutral = true
 end
 
-remotesFolder = ReplicatedStorage:WaitForChild("PVPRemotes", 10)
-if not remotesFolder or not remotesFolder:IsA("Folder") then
-	return
+local function isPlayerInNeutralState(player: Player): boolean
+	return player.Team == nil and player.Neutral == true
 end
 
-statusRemote = remotesFolder:WaitForChild("StatusUpdate", 10)
-if not statusRemote or not statusRemote:IsA("RemoteEvent") then
-	return
-end
-
-local toggleInventorySlotRemote: RemoteEvent? = nil
-
-local function setToggleInventoryRemote(candidate: Instance?)
-	if candidate and candidate:IsA("RemoteEvent") and candidate.Name == "ToggleInventorySlot" then
-		toggleInventorySlotRemote = candidate
-	end
-end
-
-existingToggleRemote = remotesFolder:FindFirstChild("ToggleInventorySlot")
-if existingToggleRemote and existingToggleRemote:IsA("RemoteEvent") then
-	toggleInventorySlotRemote = existingToggleRemote
-else
-	foundToggle = remotesFolder:WaitForChild("ToggleInventorySlot", 5)
-	setToggleInventoryRemote(foundToggle)
-end
-
-remotesFolder.ChildAdded:Connect(function(child)
-	setToggleInventoryRemote(child)
-end)
-
-remotesFolder.ChildRemoved:Connect(function(child)
-	if child == toggleInventorySlotRemote then
-		toggleInventorySlotRemote = nil
-	end
-end)
-
-playerGui = localPlayer:WaitForChild("PlayerGui")
-
-isTouchDevice = UserInputService.TouchEnabled
-
-if isTouchDevice then
-	StarterGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
-end
-
-UI_CONFIG = {
-	DEFAULT_BACKGROUND_COLOR = Color3.fromRGB(28, 32, 45),
-	DEFAULT_BACKGROUND_TRANSPARENCY = 0.15,
-	DEFAULT_TEXT_SIZE = if isTouchDevice then 22 else 26,
-	EMPHASIZED_TEXT_SIZE = if isTouchDevice then 28 else 32,
-	USE_CUSTOM_INVENTORY_UI = false, -- Disable the bespoke 10-slot bar in favor of Roblox's default backpack UI
-	MAP_LABEL_WIDTH = if isTouchDevice then 140 else 160,
-	MAP_LABEL_PADDING = if isTouchDevice then 18 else 24,
+local allowedUserIds = {
+	[347735445] = true,
 }
 
-mapDisplayNames = {
-	Crossroad = "Crossroad",
-	SFOTH = "SFOTH",
-	ChaosCanyon = "Chaos Canyon",
-	Doomspire = "Doomspire",
+local HUMANOID_WAIT_TIMEOUT = 5
+
+local TELEPORT_FREEZE_DURATION = 2
+local PREP_COUNTDOWN_DURATION = 10
+local INTERMISSION_MUSIC_ID = "15689444712"
+local DEFAULT_MUSIC_VOLUME = 0.5
+local DEATHMATCH_TRANSITION_DURATION = 3
+local DEATHMATCH_MUSIC_ID = "117047384857700"
+local STORM_MIN_HORIZONTAL_SIZE = 200
+local MAP_ANCHOR_DURATION = 5
+local HOT_TOUCH_TAG_SOUND_ID = "rbxassetid://2866718318"
+
+local SPECIAL_EVENT_MUSIC_IDS = {
+	HotTouch = "101070309888602",
+	Retro = "1837768352",
+	KillBot = "1836075187",
 }
 
-local function createInstance(className: string, props: {[string]: any})
-	local instance = Instance.new(className)
-	for key, value in pairs(props) do
-		if key == "Parent" then
-			instance.Parent = value
-		else
-			instance[key] = value
-		end
-	end
-	return instance
+local remotesFolder = ReplicatedStorage:FindFirstChild("PVPRemotes")
+if not remotesFolder then
+	remotesFolder = Instance.new("Folder")
+	remotesFolder.Name = "PVPRemotes"
+	remotesFolder.Parent = ReplicatedStorage
 end
 
-local playerModule: any = nil
-local playerControls: any = nil
-
-local function setBackpackCoreGuiEnabled(enabled: boolean)
-	local success, result = pcall(function()
-		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, enabled)
-	end)
-
-	if not success then
-		warn("Failed to set backpack CoreGui state:", result)
+local function getOrCreateRemote(name: string): RemoteEvent
+	local remote = remotesFolder:FindFirstChild(name) :: RemoteEvent?
+	if remote then
+		return remote
 	end
+
+	remote = Instance.new("RemoteEvent")
+	remote.Name = name
+	remote.Parent = remotesFolder
+
+	return remote
 end
 
-if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
-	setBackpackCoreGuiEnabled(false)
+local startRoundRemote = getOrCreateRemote("StartRound")
+local statusUpdateRemote = getOrCreateRemote("StatusUpdate")
+local roundStateRemote = getOrCreateRemote("RoundState")
+local toggleInventorySlotRemote = getOrCreateRemote("ToggleInventorySlot")
 
-	local function ensureBackpackDisabled()
-		local success, enabled = pcall(function()
-			return StarterGui:GetCoreGuiEnabled(Enum.CoreGuiType.Backpack)
+local function sendStatusUpdate(data: {})
+	statusUpdateRemote:FireAllClients(data)
+end
+
+local function isGameOwner(player: Player): boolean
+	if allowedUserIds[player.UserId] then
+		return true
+	end
+
+	local creatorId = game.CreatorId
+	local creatorType = game.CreatorType
+
+	if creatorType == Enum.CreatorType.User then
+		return player.UserId == creatorId
+	elseif creatorType == Enum.CreatorType.Group then
+		local success, rank = pcall(function()
+			return player:GetRankInGroup(creatorId)
 		end)
-
-		if success and enabled then
-			setBackpackCoreGuiEnabled(false)
-		end
+		return success and rank == 255
 	end
 
-	RunService.Heartbeat:Connect(ensureBackpackDisabled)
-else
-	setBackpackCoreGuiEnabled(true)
+	return false
 end
 
-local function getPlayerControls()
-	if playerControls then
-		return playerControls
+local function ensureRigIsR6(player: Player, character: Model)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		local existing = character:FindFirstChild("Humanoid")
+		if existing and existing:IsA("Humanoid") then
+			humanoid = existing
+		else
+			local waitResult = character:WaitForChild("Humanoid", HUMANOID_WAIT_TIMEOUT)
+			if waitResult and waitResult:IsA("Humanoid") then
+				humanoid = waitResult
+			end
+		end
 	end
 
-	success, moduleOrErr = pcall(function()
-		playerScripts = localPlayer:WaitForChild("PlayerScripts", 5)
-		if not playerScripts then
-			return nil
-		end
-		moduleScript = playerScripts:FindFirstChild("PlayerModule")
-		if not moduleScript then
-			moduleScript = playerScripts:WaitForChild("PlayerModule", 5)
-		end
-		if not moduleScript then
-			return nil
-		end
-		return require(moduleScript)
+	if not humanoid or humanoid.RigType == Enum.HumanoidRigType.R6 then
+		return
+	end
+
+	local description: HumanoidDescription? = nil
+	local success, result = pcall(function()
+		return Players:GetHumanoidDescriptionFromUserId(player.UserId)
 	end)
 
-	if not success or not moduleOrErr then
-		warn("Unable to load PlayerModule for inverted controls.")
+	if success and result and result:IsA("HumanoidDescription") then
+		description = result
+	end
+
+	if description then
+		pcall(function()
+			humanoid:ApplyDescription(description :: HumanoidDescription, Enum.HumanoidRigType.R6)
+		end)
+	else
+		pcall(function()
+			humanoid.RigType = Enum.HumanoidRigType.R6
+		end)
+	end
+end
+
+type MapConfig = {
+	id: string,
+	displayName: string,
+	modelName: string,
+	spawnContainer: string,
+	skyboxName: string,
+	musicId: string?,
+	deathMatchMusicId: string?,
+	deathMatchMusicStartTime: number?,
+	deathMatchStormSize: Vector2?,
+	deathMatchShrinkDuration: number?,
+}
+
+local mapConfigurations: {[string]: MapConfig} = {
+	Crossroad = {
+		id = "Crossroad",
+		displayName = "Crossroad",
+		modelName = "Crossroad",
+		spawnContainer = "CrossroadSpawns",
+		skyboxName = "CrossroadSky",
+		musicId = "95137069632101",
+	},
+	SFOTH = {
+		id = "SFOTH",
+		displayName = "SFOTH",
+		modelName = "SFOTH",
+		spawnContainer = "SFOTHSpawns",
+		skyboxName = "SFOTHSky",
+		musicId = "11470520383",
+		deathMatchMusicId = "108063319549878",
+		deathMatchMusicStartTime = 8,
+		deathMatchStormSize = Vector2.new(700, 700),
+		deathMatchShrinkDuration = 100,
+	},
+	ChaosCanyon = {
+		id = "ChaosCanyon",
+		displayName = "Chaos Canyon",
+		modelName = "ChaosCanyon",
+		spawnContainer = "ChaosCanyonSpawns",
+		skyboxName = "ChaosCanyonSky",
+		musicId = "100710950168570",
+		deathMatchMusicId = "113378366723798",
+		deathMatchStormSize = Vector2.new(350, 350),
+		deathMatchShrinkDuration = 100,
+	},
+	Doomspire = {
+		id = "Doomspire",
+		displayName = "Doomspire",
+		modelName = "Doomspire",
+		spawnContainer = "DoomspireSpawns",
+		skyboxName = "",
+		musicId = "79269713968295",
+		deathMatchMusicId = "74999952792352",
+		deathMatchStormSize = Vector2.new(400, 400),
+		deathMatchShrinkDuration = 100,
+	},
+}
+
+type ParticipantRecord = {
+	player: Player,
+	roundId: number,
+	spawnPart: BasePart?,
+	characterConn: RBXScriptConnection?,
+	deathConn: RBXScriptConnection?,
+	healConn: RBXScriptConnection?,
+	humanoid: Humanoid?,
+	originalWalkSpeed: number?,
+	originalJumpPower: number?,
+	countdownComplete: boolean?,
+	freezeToken: number?,
+	eventData: {},
+}
+
+type SpecialEventContext = {
+	definition: SpecialEventDefinition,
+	roundId: number,
+	state: {},
+}
+
+type SpecialEventDefinition = {
+	id: string,
+	displayName: string,
+	description: string?,
+	ignoreDefaultGear: boolean?,
+	onRoundPrepared: ((context: SpecialEventContext, config: MapConfig, mapModel: Model) -> ())?,
+	onParticipantCharacter: ((context: SpecialEventContext, record: ParticipantRecord, character: Model, humanoid: Humanoid) -> ())?,
+	onCountdownComplete: ((context: SpecialEventContext) -> ())?,
+	onParticipantCleanup: ((context: SpecialEventContext, record: ParticipantRecord) -> ())?,
+	onParticipantEliminated: ((context: SpecialEventContext, record: ParticipantRecord) -> ())?,
+	onRoundEnded: ((context: SpecialEventContext) -> ())?,
+	provideGear: ((context: SpecialEventContext, record: ParticipantRecord) -> ())?,
+}
+
+local participantRecords: {[Player]: ParticipantRecord} = {}
+local roundInProgress = false
+local currentRoundId = 0
+local activeMapModel: Model? = nil
+local activeMapConfig: MapConfig? = nil
+local activeSkybox: Instance? = nil
+local storedNormalSky: Instance? = nil
+local storedNormalSkyParent: Instance? = nil
+local currentStormPart: BasePart? = nil
+local deathMatchActive = false
+local managedAtmosphere: Atmosphere? = nil
+local createdManagedAtmosphere = false
+local storedAtmosphereProps: {Density: number, Offset: number, Color: Color3, Decay: Color3, Glare: number, Haze: number}? = nil
+local activeAtmosphereTween: Tween? = nil
+local selectedSpecialEventId: string? = nil
+local activeSpecialEvent: SpecialEventContext? = nil
+
+local function performDeathMatchTransition(roundId: number)
+	-- Forward declaration; defined later.
+end
+
+local function endRound(roundId: number)
+end
+
+local function checkRoundCompletion(roundId: number)
+end
+
+local function handleElimination(player: Player, roundId: number)
+end
+
+local specialEventDefinitions: {[string]: SpecialEventDefinition} = {}
+local specialEventList: {SpecialEventDefinition} = {}
+
+local function registerSpecialEvent(definition: SpecialEventDefinition)
+	specialEventDefinitions[definition.id] = definition
+	table.insert(specialEventList, definition)
+end
+
+local function callSpecialEventCallback(context: SpecialEventContext?, methodName: string, ...)
+	if not context then
+		return
+	end
+
+	local definition = context.definition
+	local callback = (definition :: any)[methodName]
+	if typeof(callback) == "function" then
+		local ok, err = pcall(callback, context, ...)
+		if not ok then
+			warn(string.format("Special event '%s' %s error: %s", definition.id, methodName, err))
+		end
+	end
+end
+
+local function setActiveSpecialEvent(eventId: string?, roundId: number): SpecialEventContext?
+	selectedSpecialEventId = eventId
+
+	if not eventId then
+		activeSpecialEvent = nil
 		return nil
 	end
 
-	playerModule = moduleOrErr
-	controls = nil
-	ok, result = pcall(function()
-		return playerModule:GetControls()
+	local definition = specialEventDefinitions[eventId]
+	if not definition then
+		warn(string.format("Unknown special event id '%s'", eventId))
+		selectedSpecialEventId = nil
+		activeSpecialEvent = nil
+		return nil
+	end
+
+	local context: SpecialEventContext = {
+		definition = definition,
+		roundId = roundId,
+		state = {},
+	}
+
+	activeSpecialEvent = context
+	return context
+end
+
+local function clearActiveSpecialEvent()
+	selectedSpecialEventId = nil
+	activeSpecialEvent = nil
+end
+
+local function getRandomSpecialEventId(): string?
+	if #specialEventList == 0 then
+		return nil
+	end
+
+	local rng = Random.new()
+	local index = rng:NextInteger(1, #specialEventList)
+	local definition = specialEventList[index]
+	return if definition then definition.id else nil
+end
+
+local function forEachActiveParticipant(callback: (Player, ParticipantRecord) -> ())
+	for player, record in participantRecords do
+		if record.roundId == currentRoundId then
+			callback(player, record)
+		end
+	end
+end
+
+local function getNeutralParticipantRecords(): {ParticipantRecord}
+	local records: {ParticipantRecord} = {}
+	forEachActiveParticipant(function(player, record)
+		if isPlayerInNeutralState(player) then
+			table.insert(records, record)
+		end
 	end)
-	if ok then
-		controls = result
-	end
-
-	playerControls = controls
-	return controls
+	return records
 end
 
-GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
-currentCursorImageAsset = GEAR_CURSOR_IMAGE_ASSET
-DEFAULT_WALK_SPEED = 16
-
-Z_INDEX = {
-	INVENTORY_BASE = 60,
-}
-
-Z_INDEX.SLOT_CONTENT_BASE = Z_INDEX.INVENTORY_BASE + 1
-Z_INDEX.SLOT_ICON = Z_INDEX.SLOT_CONTENT_BASE + 1
-Z_INDEX.SLOT_TEXT = Z_INDEX.SLOT_CONTENT_BASE + 2
-Z_INDEX.SLOT_BUTTON = Z_INDEX.SLOT_CONTENT_BASE + 4
-Z_INDEX.SPRINT_CONTAINER = Z_INDEX.SLOT_BUTTON + 10
-Z_INDEX.SPRINT_BAR = Z_INDEX.SPRINT_CONTAINER + 1
-Z_INDEX.SPRINT_TEXT = Z_INDEX.SPRINT_CONTAINER + 2
-
-type UiRefs = {
-        energyBarFill: Frame?,
-        energyTextLabel: TextLabel?,
-        sprintStatusLabel: TextLabel?,
-        centerCursorImage: ImageLabel?,
-        mapLabelContainer: Frame?,
-        mapLabelStroke: UIStroke?,
-        mapLabel: TextLabel?,
-        eventLabel: TextLabel?,
-        statusFrame: Frame?,
-        hotTouchStatusLabel: TextLabel?,
-        inventoryFrame: Frame?,
-        inventoryToggleButton: ImageButton?,
-        sprintActionButton: ImageButton?,
-}
-
-type StatusUI = {
-        frame: Frame,
-        label: TextLabel,
-        labelStroke: UIStroke,
-        stroke: UIStroke,
-}
-
-type SpecialEventUI = {
-        frame: Frame,
-        stroke: UIStroke,
-        gradient: UIGradient,
-        header: TextLabel,
-        title: TextLabel,
-        scale: UIScale,
-}
-
-type SprintDefaults = {
-        backgroundColor: Color3,
-        backgroundTransparency: number,
-        strokeColor: Color3,
-        strokeTransparency: number,
-        energyBarFillColor: Color3,
-        energyTextColor: Color3,
-        energyGradientColor: ColorSequence,
-}
-
-type SprintUI = {
-        container: Frame,
-        background: Frame,
-        backgroundStroke: UIStroke,
-        energyFillGradient: UIGradient,
-        basePosition: UDim2,
-        baseRotation: number,
-        defaults: SprintDefaults,
-}
-
-type InventoryState = {
-        basePosition: UDim2,
-        baseRotation: number,
-        setVisibility: ((boolean) -> ())?,
-}
-
-type LayoutConfig = {
-        slotPadding: number,
-        slotSize: number,
-        inventoryWidth: number,
-        inventoryHeight: number,
-        inventoryBottomMargin: number,
-        energyLabelHeight: number,
-        energyBarHeight: number,
-        energyTopPadding: number,
-        energyBottomPadding: number,
-        energySpacing: number,
-        sprintContainerHeight: number,
-        energyTextWidth: number,
-        sprintBottomOffset: number,
-}
-
-local uiRefs: UiRefs = {
-	energyBarFill = nil,
-	energyTextLabel = nil,
-	sprintStatusLabel = nil,
-	centerCursorImage = nil,
-	mapLabelContainer = nil,
-	mapLabelStroke = nil,
-	mapLabel = nil,
-	eventLabel = nil,
-	inventoryFrame = nil,
-	inventoryToggleButton = nil,
-	sprintActionButton = nil,
-}
-
-inventoryVisible = true
-inventoryAutoOpened = false
-local setInventoryVisibility: (boolean) -> ()
-
-hotTouchActive = false
-local currentHotTouchHolderId: number? = nil
-
-local function refreshHotTouchStatusVisibility()
-	local label = uiRefs.hotTouchStatusLabel
-	if not label then
-		return
-	end
-
-	statusFrame = uiRefs.statusFrame
-	if statusFrame and not statusFrame.Visible then
-		label.Visible = false
-		return
-	end
-
-	if not hotTouchActive or label.Text == "" then
-		label.Visible = false
-	else
-		label.Visible = true
-	end
-end
-
-local function setHotTouchStatusText(text: string?)
-	local label = uiRefs.hotTouchStatusLabel
-	if not label then
-		return
-	end
-
-	if text and text ~= "" then
-		label.Text = text
-	else
-		label.Text = ""
-	end
-
-	refreshHotTouchStatusVisibility()
-end
-
-sprintInteraction = {
-	noSprintPart = nil :: BasePart?,
-	actionBound = false,
-}
-
-local function updateNoSprintPartReference()
-	local found = Workspace:FindFirstChild("NoSprintPart", true)
-	if found and found:IsA("BasePart") then
-		sprintInteraction.noSprintPart = found
-	else
-		sprintInteraction.noSprintPart = nil
-	end
-end
-
-updateNoSprintPartReference()
-
-Workspace.DescendantAdded:Connect(function(descendant)
-	if descendant.Name == "NoSprintPart" and descendant:IsA("BasePart") then
-		sprintInteraction.noSprintPart = descendant
-	end
-end)
-
-Workspace.DescendantRemoving:Connect(function(descendant)
-	if descendant == sprintInteraction.noSprintPart then
-		sprintInteraction.noSprintPart = nil
-	end
-end)
-
-local function isPointInsidePart(part: BasePart, point: Vector3): boolean
-	local localPoint = part.CFrame:PointToObjectSpace(point)
-	local halfSize = part.Size * 0.5
-	return math.abs(localPoint.X) <= halfSize.X + 0.05
-		and math.abs(localPoint.Y) <= halfSize.Y + 0.05
-		and math.abs(localPoint.Z) <= halfSize.Z + 0.05
-end
-
-local function getHumanoidRootPart(humanoid: Humanoid): BasePart?
-	local rootPart = humanoid.RootPart
-	if rootPart and rootPart:IsA("BasePart") then
-		return rootPart
-	end
-
-	character = humanoid.Parent
-	if character then
-		candidate = character:FindFirstChild("HumanoidRootPart")
-		if candidate and candidate:IsA("BasePart") then
-			return candidate
+local function clearPVPTools(player: Player)
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if backpack then
+		for _, tool in backpack:GetChildren() do
+			if tool:GetAttribute("PVPGenerated") then
+				tool:Destroy()
+			end
 		end
 	end
 
+	local starterGear = player:FindFirstChild("StarterGear")
+	if starterGear then
+		for _, tool in starterGear:GetChildren() do
+			if tool:GetAttribute("PVPGenerated") then
+				tool:Destroy()
+			end
+		end
+	end
+end
+
+local function getParticipantFromPlayer(targetPlayer: Player): ParticipantRecord?
+	local record = participantRecords[targetPlayer]
+	if record and record.roundId == currentRoundId then
+		return record
+	end
 	return nil
 end
 
-type GuiButton = TextButton | ImageButton
-
-type InventorySlotUI = {
-        frame: Frame,
-        stroke: UIStroke,
-        icon: ImageLabel,
-        label: TextLabel,
-        numberLabel: TextLabel,
-        button: GuiButton,
-}
-
-local inventorySlots: {InventorySlotUI} = {}
-local slotToolMapping: {Tool?} = {}
-
-existingGui = playerGui:FindFirstChild("PVPStatusGui")
-if existingGui then
-	existingGui:Destroy()
-end
-
-screenGui = Instance.new("ScreenGui")
-screenGui.Name = "PVPStatusGui"
-screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true
-screenGui.DisplayOrder = 5
-screenGui.Parent = playerGui
-
-local function calculateLayout(isTouch: boolean): LayoutConfig
-	local viewportWidth = 1024
-	local camera = Workspace.CurrentCamera
-	if camera then
-		viewportWidth = camera.ViewportSize.X
+local function getActiveMapBounds(): (CFrame, Vector3)
+	local mapModel = activeMapModel
+	if mapModel then
+		local cf, size = mapModel:GetBoundingBox()
+		return cf, size
 	end
 
-	slotPadding = if isTouch then 2 else 6
-	calculatedAvailableWidth = if isTouch
-		then math.max(280, math.min(viewportWidth - 40, 540))
-		else math.clamp(viewportWidth * 0.5, 520, 780)
-	slotSize = math.clamp(
-		math.floor((calculatedAvailableWidth - 24 - slotPadding * 9) / 10),
-		if isTouch then 24 else 40,
-		if isTouch then 40 else 56
-	)
-	inventoryWidth = slotSize * 10 + slotPadding * 9 + 24
-	inventoryHeight = slotSize + 20
-	inventoryBottomMargin = if isTouch then math.max(64, math.floor(slotSize * 1.4)) else 0
-	energyLabelHeight = if isTouch then 16 else 18
-	energyBarHeight = if isTouch then 12 else 14
-	energyTopPadding = if isTouch then 2 else 3
-	energyBottomPadding = if isTouch then 4 else 5
-	energySpacing = if isTouch then 3 else 4
-	sprintContainerHeight = energyTopPadding + energyLabelHeight + energySpacing + energyBarHeight + energyBottomPadding
-	energyTextWidth = if isTouch then 80 else 92
-	estimatedInventoryHeight
-	if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
-		estimatedInventoryHeight = inventoryHeight
-	elseif isTouch then
-		estimatedInventoryHeight = math.max(48, math.floor(slotSize * 1.15))
-	else
-		-- When Roblox's default backpack UI is enabled on desktop, the hotbar occupies
-		-- a fixed space near the bottom of the screen. Nudge the sprint container up so
-		-- the custom energy meter always renders above the built-in inventory buttons.
-		estimatedInventoryHeight = math.max(60, math.floor(slotSize * 1.1))
+	return CFrame.new(), Vector3.new(400, 0, 400)
+end
+
+local function getStormHorizontalSize(): Vector2
+	if activeMapConfig and activeMapConfig.deathMatchStormSize then
+		return activeMapConfig.deathMatchStormSize
 	end
-	sprintBottomOffset = inventoryBottomMargin + estimatedInventoryHeight
 
-	return {
-		slotPadding = slotPadding,
-		slotSize = slotSize,
-		inventoryWidth = inventoryWidth,
-		inventoryHeight = inventoryHeight,
-		inventoryBottomMargin = inventoryBottomMargin,
-		energyLabelHeight = energyLabelHeight,
-		energyBarHeight = energyBarHeight,
-		energyTopPadding = energyTopPadding,
-		energyBottomPadding = energyBottomPadding,
-		energySpacing = energySpacing,
-		sprintContainerHeight = sprintContainerHeight,
-		energyTextWidth = energyTextWidth,
-		sprintBottomOffset = sprintBottomOffset,
-	}
+	local _, size = getActiveMapBounds()
+	return Vector2.new(math.max(400, size.X), math.max(400, size.Z))
 end
 
-local function createStatusUI(parent: ScreenGui, isTouch: boolean, refs: UiRefs): StatusUI
-	local frame = Instance.new("Frame")
-	frame.Name = "StatusFrame"
-	frame.Size = UDim2.fromOffset(isTouch and 220 or 260, isTouch and 52 or 56)
-	frame.Position = UDim2.new(0.5, 0, 0, 32)
-	frame.AnchorPoint = Vector2.new(0.5, 0)
-	frame.BackgroundColor3 = UI_CONFIG.DEFAULT_BACKGROUND_COLOR
-	frame.BackgroundTransparency = UI_CONFIG.DEFAULT_BACKGROUND_TRANSPARENCY
-	frame.Visible = false
-	frame.ZIndex = 10
-	frame.Parent = parent
-
-	createInstance("UICorner", {
-		CornerRadius = UDim.new(0, 12),
-		Parent = frame,
-	})
-
-	local stroke = createInstance("UIStroke", {
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-		Thickness = 2,
-		Color = Color3.fromRGB(120, 135, 200),
-		Transparency = 0.35,
-		Parent = frame,
-	})
-
-	createInstance("UIPadding", {
-		PaddingLeft = UDim.new(0, 16),
-		PaddingRight = UDim.new(0, 16),
-		Parent = frame,
-	})
-
-	local label = createInstance("TextLabel", {
-		Name = "StatusLabel",
-		Size = UDim2.new(1, 0, 1, 0),
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Font = Enum.Font.GothamBold,
-		Text = "",
-		TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE,
-		TextColor3 = Color3.fromRGB(245, 245, 255),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextYAlignment = Enum.TextYAlignment.Center,
-		ZIndex = 11,
-		Parent = frame,
-	})
-
-	local labelStroke = createInstance("UIStroke", {
-		Color = Color3.fromRGB(20, 20, 35),
-		Thickness = 2,
-		Transparency = 0.3,
-		Parent = label,
-	})
-
-	local mapLabelContainer = createInstance("Frame", {
-		Name = "MapLabelContainer",
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.new(0, UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING, 0, 0),
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(0, -UI_CONFIG.MAP_LABEL_PADDING, 0.5, 0),
-		BackgroundColor3 = Color3.fromRGB(22, 26, 36),
-		BackgroundTransparency = 0.25,
-		BorderSizePixel = 0,
-		Visible = false,
-		ZIndex = frame.ZIndex,
-		Parent = frame,
-	})
-
-	createInstance("UICorner", {
-		CornerRadius = UDim.new(0, 10),
-		Parent = mapLabelContainer,
-	})
-
-	refs.mapLabelStroke = createInstance("UIStroke", {
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-		Thickness = 1,
-		Transparency = 0.4,
-		Color = Color3.fromRGB(120, 135, 200),
-		Parent = mapLabelContainer,
-	})
-
-	createInstance("UIPadding", {
-		PaddingLeft = UDim.new(0, math.floor(UI_CONFIG.MAP_LABEL_PADDING * 0.4)),
-		PaddingRight = UDim.new(0, math.floor(UI_CONFIG.MAP_LABEL_PADDING * 0.4)),
-		Parent = mapLabelContainer,
-	})
-
-	createInstance("UIListLayout", {
-		FillDirection = Enum.FillDirection.Vertical,
-		HorizontalAlignment = Enum.HorizontalAlignment.Left,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 2),
-		Parent = mapLabelContainer,
-	})
-
-	refs.mapLabel = createInstance("TextLabel", {
-		Name = "MapLabel",
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.new(1, 0, 0, 0),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamSemibold,
-		Text = "",
-		TextSize = math.max(12, UI_CONFIG.DEFAULT_TEXT_SIZE - 8),
-		TextColor3 = Color3.fromRGB(210, 230, 255),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		LayoutOrder = 1,
-		ZIndex = mapLabelContainer.ZIndex + 1,
-		Parent = mapLabelContainer,
-	})
-
-	refs.eventLabel = createInstance("TextLabel", {
-		Name = "EventLabel",
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.new(1, 0, 0, 0),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.Gotham,
-		Text = "",
-		TextSize = math.max(11, UI_CONFIG.DEFAULT_TEXT_SIZE - 10),
-		TextColor3 = Color3.fromRGB(190, 210, 240),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		LayoutOrder = 2,
-		ZIndex = mapLabelContainer.ZIndex + 1,
-		Parent = mapLabelContainer,
-	})
-
-	refs.mapLabelContainer = mapLabelContainer
-	mapLabelContainer:SetAttribute("HasMap", false)
-
-	refs.hotTouchStatusLabel = createInstance("TextLabel", {
-		Name = "HotTouchStatusLabel",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 1, 8),
-		Size = UDim2.fromOffset(frame.Size.X.Offset, if isTouch then 24 else 20),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
-		Text = "",
-		TextSize = if isTouch then 20 else 18,
-		TextColor3 = Color3.fromRGB(255, 130, 130),
-		TextStrokeTransparency = 0.4,
-		TextWrapped = true,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		Visible = false,
-		ZIndex = frame.ZIndex,
-		Parent = parent,
-	})
-
-	frame:GetPropertyChangedSignal("Visible"):Connect(function()
-		local container = refs.mapLabelContainer
-		if container then
-			local hasMap = container:GetAttribute("HasMap")
-			container.Visible = (hasMap == true) and frame.Visible
-		end
-	end)
-
-	refs.statusFrame = frame
-
-	return {
-		frame = frame,
-		label = label,
-		labelStroke = labelStroke,
-		stroke = stroke,
-	}
-end
-
-local function createSpecialEventUI(parent: ScreenGui, isTouch: boolean): SpecialEventUI
-	local frame = createInstance("Frame", {
-		Name = "SpecialEventFrame",
-		Size = UDim2.fromOffset(360, 160),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.35, 0),
-		BackgroundColor3 = Color3.fromRGB(28, 32, 45),
-		BackgroundTransparency = 1,
-		Visible = false,
-		ZIndex = 40,
-		Parent = parent,
-	})
-
-	createInstance("UICorner", {
-		CornerRadius = UDim.new(0, 14),
-		Parent = frame,
-	})
-
-	local stroke = createInstance("UIStroke", {
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-		Thickness = 2,
-		Color = Color3.fromRGB(120, 135, 200),
-		Transparency = 0.35,
-		Parent = frame,
-	})
-
-	local gradient = createInstance("UIGradient", {
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 55, 80)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 32, 45)),
-		}),
-		Rotation = 90,
-		Parent = frame,
-	})
-
-	local header = createInstance("TextLabel", {
-		Name = "Header",
-		Size = UDim2.new(1, -40, 0, 42),
-		Position = UDim2.new(0, 20, 0, 18),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
-		Text = "- Special Round -",
-		TextScaled = false,
-		TextSize = if isTouch then 22 else 24,
-		TextColor3 = Color3.fromRGB(245, 245, 255),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextYAlignment = Enum.TextYAlignment.Center,
-		ZIndex = frame.ZIndex + 1,
-		Parent = frame,
-	})
-
-	local title = createInstance("TextLabel", {
-		Name = "Title",
-		Size = UDim2.new(1, -60, 0, 60),
-		Position = UDim2.new(0, 30, 0, 70),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBlack,
-		Text = "",
-		TextScaled = true,
-		TextWrapped = true,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		ZIndex = frame.ZIndex + 1,
-		Parent = frame,
-	})
-
-	local scale = createInstance("UIScale", {
-		Name = "Scale",
-		Scale = 1,
-		Parent = frame,
-	})
-
-	return {
-		frame = frame,
-		stroke = stroke,
-		gradient = gradient,
-		header = header,
-		title = title,
-		scale = scale,
-	}
-end
-
-local function createSprintUI(parent: ScreenGui, refs: UiRefs, isTouch: boolean, layout: LayoutConfig): SprintUI
-	local container = createInstance("Frame", {
-		Name = "SprintEnergyContainer",
-		Size = UDim2.fromOffset(layout.inventoryWidth, layout.sprintContainerHeight),
-		Position = UDim2.new(0.5, 0, 1, -layout.sprintBottomOffset),
-		AnchorPoint = Vector2.new(0.5, 1),
-		BackgroundTransparency = 1,
-		ZIndex = Z_INDEX.SPRINT_CONTAINER,
-		Parent = parent,
-	})
-
-	createInstance("UIPadding", {
-		PaddingTop = UDim.new(0, layout.energyTopPadding),
-		PaddingBottom = UDim.new(0, layout.energyBottomPadding),
-		PaddingLeft = UDim.new(0, 8),
-		PaddingRight = UDim.new(0, 8),
-		Parent = container,
-	})
-
-	refs.sprintStatusLabel = createInstance("TextLabel", {
-		Name = "SprintStatus",
-		Size = UDim2.new(1, -8, 0, layout.energyLabelHeight),
-		Position = UDim2.new(0.5, 0, 0, 0),
-		AnchorPoint = Vector2.new(0.5, 0),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamSemibold,
-		TextColor3 = Color3.fromRGB(210, 235, 255),
-		TextSize = isTouch and 14 or 16,
-		TextScaled = false,
-		Text = "Sprint OFF",
-		ZIndex = Z_INDEX.SPRINT_TEXT,
-		Parent = container,
-	})
-
-	local background = createInstance("Frame", {
-		Name = "EnergyBackground",
-		Size = UDim2.new(1, -16, 0, layout.energyBarHeight),
-		Position = UDim2.new(0.5, 0, 0, layout.energyLabelHeight + layout.energySpacing),
-		AnchorPoint = Vector2.new(0.5, 0),
-		BackgroundColor3 = Color3.fromRGB(34, 52, 82),
-		BackgroundTransparency = 0.15,
-		ZIndex = Z_INDEX.SPRINT_BAR,
-		Parent = container,
-	})
-
-	createInstance("UICorner", {
-		CornerRadius = UDim.new(0, 10),
-		Parent = background,
-	})
-
-	local backgroundStroke = createInstance("UIStroke", {
-		Thickness = 1.5,
-		Transparency = 0.35,
-		Color = Color3.fromRGB(80, 130, 200),
-		Parent = background,
-	})
-
-	local energyFillContainer = createInstance("Frame", {
-		Name = "EnergyFill",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 6, 0.5, 0),
-		Size = UDim2.new(1, -(layout.energyTextWidth + 20), 1, 0),
-		BackgroundTransparency = 1,
-		ClipsDescendants = true,
-		ZIndex = Z_INDEX.SPRINT_BAR,
-		Parent = background,
-	})
-
-	local energyFillBackground = createInstance("Frame", {
-		Name = "EnergyFillBackground",
-		Size = UDim2.new(1, 0, 1, 0),
-		BackgroundColor3 = Color3.fromRGB(52, 80, 130),
-		BackgroundTransparency = 0.3,
-		ZIndex = Z_INDEX.SPRINT_BAR,
-		Parent = energyFillContainer,
-	})
-
-	createInstance("UICorner", {
-		CornerRadius = UDim.new(0, 7),
-		Parent = energyFillBackground,
-	})
-
-	refs.energyBarFill = createInstance("Frame", {
-		Name = "EnergyFillValue",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 0, 0.5, 0),
-		Size = UDim2.new(1, 0, 1, 0),
-		BackgroundColor3 = Color3.fromRGB(80, 190, 255),
-		ZIndex = Z_INDEX.SPRINT_BAR + 1,
-		Parent = energyFillBackground,
-	})
-
-	createInstance("UICorner", {
-		CornerRadius = UDim.new(0, 7),
-		Parent = refs.energyBarFill,
-	})
-
-	local energyFillGradient = createInstance("UIGradient", {
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 190, 255)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 240, 200)),
-		}),
-		Parent = refs.energyBarFill,
-	})
-
-	refs.energyTextLabel = createInstance("TextLabel", {
-		Name = "EnergyText",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -8, 0.5, 0),
-		Size = UDim2.new(0, layout.energyTextWidth, 0, layout.energyBarHeight),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamSemibold,
-		TextColor3 = Color3.fromRGB(210, 235, 255),
-		TextScaled = false,
-		TextSize = isTouch and 14 or 15,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		TextYAlignment = Enum.TextYAlignment.Center,
-		Text = "Energy 100%",
-		ZIndex = Z_INDEX.SPRINT_TEXT,
-		Parent = background,
-	})
-
-	refs.centerCursorImage = createInstance("ImageLabel", {
-		Name = "ShiftLockCursor",
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(isTouch and 40 or 48, isTouch and 40 or 48),
-		Image = GEAR_CURSOR_IMAGE_ASSET,
-		ZIndex = 50,
-		Visible = false,
-		Parent = parent,
-	})
-
-	local defaults: SprintDefaults = {
-		backgroundColor = background.BackgroundColor3,
-		backgroundTransparency = background.BackgroundTransparency,
-		strokeColor = backgroundStroke.Color,
-		strokeTransparency = backgroundStroke.Transparency,
-		energyBarFillColor = refs.energyBarFill.BackgroundColor3,
-		energyTextColor = refs.energyTextLabel.TextColor3,
-		energyGradientColor = energyFillGradient.Color,
-	}
-
-	return {
-		container = container,
-		background = background,
-		backgroundStroke = backgroundStroke,
-		energyFillGradient = energyFillGradient,
-		basePosition = container.Position,
-		baseRotation = container.Rotation,
-		defaults = defaults,
-	}
-end
-
-local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boolean, layout: LayoutConfig): InventoryState
-	local state: InventoryState = {
-		basePosition = UDim2.new(0.5, 0, 1, -layout.inventoryBottomMargin),
-		baseRotation = 0,
-		setVisibility = nil,
-	}
-
-	if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
-		refs.inventoryFrame = createInstance("Frame", {
-			Name = "InventoryBar",
-			AnchorPoint = Vector2.new(0.5, 1),
-			Size = UDim2.fromOffset(layout.inventoryWidth, layout.inventoryHeight),
-			Position = UDim2.new(0.5, 0, 1, -layout.inventoryBottomMargin),
-			BackgroundTransparency = 1,
-			ZIndex = Z_INDEX.INVENTORY_BASE,
-			Parent = parent,
-		})
-
-		state.basePosition = refs.inventoryFrame.Position
-		state.baseRotation = refs.inventoryFrame.Rotation
-
-		local function updateInventoryToggleVisual()
-			local button = refs.inventoryToggleButton
-			if not button then
+do
+	registerSpecialEvent({
+		id = "ShatteredHeart",
+		displayName = "Shattered Heart??",
+		onParticipantCharacter = function(context, record, _character, humanoid)
+			if not isPlayerInNeutralState(record.player) then
 				return
 			end
 
-			if inventoryVisible then
-				button.ImageTransparency = 0
-				button.ImageColor3 = Color3.fromRGB(255, 255, 255)
-			else
-				button.ImageTransparency = 0.2
-				button.ImageColor3 = Color3.fromRGB(200, 205, 220)
-			end
-		end
-
-		state.setVisibility = function(visible: boolean)
-			inventoryVisible = visible
-
-			if refs.inventoryFrame then
-				refs.inventoryFrame.Visible = visible
+			local data = record.eventData
+			local bundle = data.ShatteredHeart
+			if bundle and bundle.conn then
+				bundle.conn:Disconnect()
 			end
 
-			updateInventoryToggleVisual()
-		end
+			local originalMaxHealth = humanoid.MaxHealth
+			humanoid.MaxHealth = 1
+			if humanoid.Health > 1 then
+				humanoid.Health = 1
+			end
 
-		if isTouch then
-			refs.inventoryToggleButton = createInstance("ImageButton", {
-				Name = "InventoryToggleButton",
-				AnchorPoint = Vector2.new(0.5, 1),
-				Size = UDim2.fromOffset(math.max(56, math.floor(layout.slotSize * 1.1)), math.max(56, math.floor(layout.slotSize * 1.1))),
-				Position = UDim2.new(0.5, 0, 1, -8),
-				BackgroundTransparency = 1,
-				AutoButtonColor = true,
-				Image = "rbxasset://textures/ui/Backpack/BackpackButton.png",
-				ImageColor3 = Color3.fromRGB(255, 255, 255),
-				ZIndex = 50,
-				Parent = parent,
-			})
-
-			refs.inventoryToggleButton.Activated:Connect(function()
-				if state.setVisibility then
-					state.setVisibility(not inventoryVisible)
+			local conn = humanoid.HealthChanged:Connect(function(newHealth)
+				if newHealth > 1 then
+					humanoid.Health = 1
 				end
-				inventoryAutoOpened = true
 			end)
-		end
 
-		if state.setVisibility then
-			state.setVisibility(not isTouch)
-		end
+			data.ShatteredHeart = {
+				conn = conn,
+				originalMax = originalMaxHealth,
+			}
+		end,
+		onParticipantCleanup = function(context, record)
+			local data = record.eventData
+			local bundle = data.ShatteredHeart
+			if not bundle then
+				return
+			end
 
-		slotContainer = createInstance("Frame", {
-			Name = "SlotContainer",
-			Size = UDim2.new(1, 0, 1, 0),
-			BackgroundTransparency = 1,
-			Parent = refs.inventoryFrame,
-		})
+			if bundle.conn then
+				bundle.conn:Disconnect()
+			end
 
-		createInstance("UIPadding", {
-			PaddingLeft = UDim.new(0, 12),
-			PaddingRight = UDim.new(0, 12),
-			PaddingTop = UDim.new(0, 4),
-			PaddingBottom = UDim.new(0, 0),
-			Parent = slotContainer,
-		})
+			local humanoid = record.humanoid
+			if not humanoid then
+				local character = record.player.Character
+				if character then
+					humanoid = character:FindFirstChildOfClass("Humanoid")
+				end
+			end
 
-		createInstance("UIListLayout", {
-			FillDirection = Enum.FillDirection.Horizontal,
-			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, layout.slotPadding),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-			Parent = slotContainer,
-		})
+			if humanoid and bundle.originalMax then
+				humanoid.MaxHealth = bundle.originalMax
+			end
 
-		for slotIndex = 1, 10 do
-			slotUI = {}
-			slotUI.frame = createInstance("Frame", {
-				Name = string.format("Slot_%d", slotIndex),
-				Size = UDim2.fromOffset(layout.slotSize, layout.slotSize),
-				BackgroundColor3 = Color3.fromRGB(24, 28, 40),
-				BackgroundTransparency = 0.2,
-				ZIndex = Z_INDEX.SLOT_CONTENT_BASE,
-				LayoutOrder = slotIndex,
-				Parent = slotContainer,
+			data.ShatteredHeart = nil
+		end,
+		onParticipantEliminated = function(context, record)
+			callSpecialEventCallback(context, "onParticipantCleanup", record)
+		end,
+	})
+
+	registerSpecialEvent({
+		id = "SprintProhibit",
+		displayName = "Sprint Prohibit????",
+		onRoundPrepared = function()
+			sendStatusUpdate({
+				action = "SpecialEventEffect",
+				id = "SprintProhibit",
+				sprintDisabled = true,
 			})
-
-			createInstance("UICorner", {
-				CornerRadius = UDim.new(0, 8),
-				Parent = slotUI.frame,
+		end,
+		onRoundEnded = function()
+			sendStatusUpdate({
+				action = "SpecialEventEffect",
+				id = "SprintProhibit",
+				sprintDisabled = false,
 			})
+		end,
+	})
 
-			slotUI.stroke = createInstance("UIStroke", {
-				Color = Color3.fromRGB(80, 100, 150),
-				Thickness = 1.5,
-				Transparency = 0.3,
-				Parent = slotUI.frame,
+	registerSpecialEvent({
+		id = "Retro",
+		displayName = "RETRO??",
+		ignoreDefaultGear = true,
+		provideGear = function(context, record)
+			local gearRoot = ReplicatedStorage:FindFirstChild("PVPGears")
+			if not gearRoot or not gearRoot:IsA("Folder") then
+				return
+			end
+
+			local available: {Tool} = {}
+			for _, child in gearRoot:GetDescendants() do
+				if child:IsA("Tool") then
+					table.insert(available, child)
+				end
+			end
+
+			if #available == 0 then
+				return
+			end
+
+			local player = record.player
+			local backpack = player:FindFirstChildOfClass("Backpack")
+			if not backpack then
+				return
+			end
+
+			local starterGear = player:FindFirstChild("StarterGear")
+			local rng = Random.new()
+			local taken: {[number]: boolean} = {}
+			local selections = math.min(3, #available)
+
+			while selections > 0 do
+				local index = rng:NextInteger(1, #available)
+				if taken[index] then
+					continue
+				end
+
+				taken[index] = true
+				selections -= 1
+
+				local template = available[index]
+				if template then
+					local backpackTool = template:Clone()
+					backpackTool:SetAttribute("PVPGenerated", true)
+					backpackTool.Parent = backpack
+
+					if starterGear then
+						local starterTool = template:Clone()
+						starterTool:SetAttribute("PVPGenerated", true)
+						starterTool.Parent = starterGear
+					end
+				end
+			end
+		end,
+	})
+
+	registerSpecialEvent({
+		id = "Invisible",
+		displayName = "Invisible??",
+		onRoundPrepared = function()
+			sendStatusUpdate({
+				action = "SpecialEventEffect",
+				id = "Invisible",
+				invisible = true,
+				pulseInterval = 5,
+				pulseDuration = 1,
 			})
-
-			nameLabelHeight = math.max(12, math.floor(layout.slotSize * 0.35))
-			iconPadding = math.max(8, math.floor(layout.slotSize * 0.3))
-
-			slotUI.numberLabel = createInstance("TextLabel", {
-				Name = "KeyLabel",
-				AnchorPoint = Vector2.new(0, 0),
-				Size = UDim2.new(0, 24, 0, 18),
-				Position = UDim2.new(0, 0, 0, 0),
-				BackgroundTransparency = 1,
-				Font = Enum.Font.GothamSemibold,
-				TextColor3 = Color3.fromRGB(140, 150, 180),
-				TextSize = 12,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextYAlignment = Enum.TextYAlignment.Top,
-				Text = slotIndex == 10 and "0" or tostring(slotIndex),
-				ZIndex = Z_INDEX.SLOT_TEXT,
-				Parent = slotUI.frame,
+		end,
+		onRoundEnded = function()
+			sendStatusUpdate({
+				action = "SpecialEventEffect",
+				id = "Invisible",
+				invisible = false,
 			})
+		end,
+	})
 
-			slotUI.icon = createInstance("ImageLabel", {
-				Name = "Icon",
-				BackgroundTransparency = 1,
-				Size = UDim2.new(1, -12, 0, math.max(0, layout.slotSize - (nameLabelHeight + iconPadding))),
-				Position = UDim2.new(0.5, 0, 0, math.floor(iconPadding * 0.5)),
-				AnchorPoint = Vector2.new(0.5, 0),
-				Image = "",
-				ScaleType = Enum.ScaleType.Fit,
-				ZIndex = Z_INDEX.SLOT_ICON,
-				Parent = slotUI.frame,
-			})
+	registerSpecialEvent({
+		id = "Bunny",
+		displayName = "Bunny??",
+		onParticipantCharacter = function(context, record, _character, humanoid)
+			local data = record.eventData
+			local bundle = data.Bunny
+			if bundle and bundle.conn then
+				bundle.conn:Disconnect()
+			end
 
-			slotUI.label = createInstance("TextLabel", {
-				Name = "Name",
-				BackgroundTransparency = 1,
-				Position = UDim2.new(0.5, 0, 1, -4),
-				AnchorPoint = Vector2.new(0.5, 1),
-				Size = UDim2.new(1, -8, 0, nameLabelHeight),
-				Font = Enum.Font.Gotham,
-				Text = "",
-				TextColor3 = Color3.fromRGB(200, 210, 230),
-				TextSize = math.max(10, math.floor(nameLabelHeight * 0.65)),
-				TextScaled = false,
-				TextWrapped = true,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				ZIndex = Z_INDEX.SLOT_TEXT,
-				Parent = slotUI.frame,
-			})
-
-			slotUI.button = createInstance("ImageButton", {
-				Name = "SelectButton",
-				BackgroundTransparency = 1,
-				Size = UDim2.new(1, 0, 1, 0),
-				AutoButtonColor = false,
-				ImageTransparency = 1,
-				Active = true,
-				Selectable = false,
-				ZIndex = Z_INDEX.SLOT_BUTTON,
-				Parent = slotUI.frame,
-			})
-
-			currentSlotIndex = slotIndex
-			lastTriggerTime = 0
-			local function triggerSelection()
-				local now = os.clock()
-				if now - lastTriggerTime < 0.08 then
+			local conn: RBXScriptConnection? = nil
+			conn = RunService.Heartbeat:Connect(function()
+				if context.roundId ~= currentRoundId or not roundInProgress then
+					if conn then
+						conn:Disconnect()
+					end
 					return
 				end
-				lastTriggerTime = now
 
-				if equipInventorySlot then
-					equipInventorySlot(currentSlotIndex)
-				end
-			end
-
-			slotUI.button.Activated:Connect(triggerSelection)
-			slotUI.button.InputBegan:Connect(function(input)
-				inputType = input.UserInputType
-				if inputType == Enum.UserInputType.MouseButton1
-					or inputType == Enum.UserInputType.Touch
-					or inputType == Enum.UserInputType.Gamepad1
-				then
-					triggerSelection()
+				if humanoid.Parent and humanoid.Health > 0 then
+					humanoid.Jump = true
+					if humanoid.FloorMaterial ~= Enum.Material.Air then
+						humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+					end
 				end
 			end)
 
-			inventorySlots[slotIndex] = slotUI
-		end
+			data.Bunny = {
+				conn = conn,
+			}
+		end,
+		onParticipantCleanup = function(context, record)
+			local data = record.eventData
+			local bundle = data.Bunny
+			if bundle and bundle.conn then
+				bundle.conn:Disconnect()
+			end
+			local humanoid = record.humanoid
+			if not humanoid and record.player.Character then
+				humanoid = record.player.Character:FindFirstChildOfClass("Humanoid")
+			end
+			if humanoid then
+				humanoid.Jump = false
+			end
+			data.Bunny = nil
+		end,
+		onParticipantEliminated = function(context, record)
+			callSpecialEventCallback(context, "onParticipantCleanup", record)
+		end,
+	})
+
+	registerSpecialEvent({
+		id = "Slippery",
+		displayName = "Slippery??",
+		onRoundPrepared = function(context, _config, mapModel)
+			local originals: {[BasePart]: PhysicalProperties?} = {}
+			for _, descendant in mapModel:GetDescendants() do
+				if descendant:IsA("BasePart") then
+					originals[descendant] = descendant.CustomPhysicalProperties
+
+					local props = descendant.CustomPhysicalProperties
+					local density = if props then props.Density else 1
+					local elasticity = if props then props.Elasticity else 0
+					local elasticityWeight = if props then props.ElasticityWeight else 0
+					descendant.CustomPhysicalProperties = PhysicalProperties.new(density, 0, elasticity, 100, elasticityWeight)
+				end
+			end
+
+			context.state.Slippery = {
+				originals = originals,
+			}
+		end,
+		onRoundEnded = function(context)
+			local stored = context.state.Slippery
+			if not stored then
+				return
+			end
+
+			for part, props in stored.originals do
+				if part and part.Parent then
+					part.CustomPhysicalProperties = props
+				end
+			end
+
+			context.state.Slippery = nil
+		end,
+	})
+
+	registerSpecialEvent({
+		id = "RainingBomb",
+		displayName = "Raining Bomb??",
+		onCountdownComplete = function(context)
+			local state = context.state
+			if state.RainingBomb and state.RainingBomb.active then
+				return
+			end
+
+			local running = true
+			local activeBombs: {[BasePart]: boolean} = {}
+
+			local function removeBomb(bomb: BasePart?, alreadyDestroying: boolean?)
+				if not bomb then
+					return
+				end
+
+				if activeBombs[bomb] then
+					activeBombs[bomb] = nil
+				end
+
+				if not alreadyDestroying and bomb.Parent then
+					bomb:Destroy()
+				end
+			end
+
+			local function createExplosion(bomb: BasePart)
+				local explosion = Instance.new("Explosion")
+				explosion.BlastRadius = 12
+				explosion.BlastPressure = 500000
+				explosion.Position = bomb.Position
+				explosion.Parent = Workspace
+				removeBomb(bomb)
+			end
+
+			state.RainingBomb = {
+				active = true,
+				bombs = activeBombs,
+				stop = function()
+					running = false
+					for part in pairs(activeBombs) do
+						removeBomb(part)
+					end
+				end,
+			}
+
+			local stormSize = getStormHorizontalSize()
+			local cf, _ = getActiveMapBounds()
+			local origin = cf.Position
+
+			task.spawn(function()
+				local rng = Random.new()
+				while running and roundInProgress and context.roundId == currentRoundId do
+					local offsetX = rng:NextNumber(-stormSize.X / 2, stormSize.X / 2)
+					local offsetZ = rng:NextNumber(-stormSize.Y / 2, stormSize.Y / 2)
+					local spawnPosition = Vector3.new(origin.X + offsetX, origin.Y + 120, origin.Z + offsetZ)
+
+					local bomb = Instance.new("Part")
+					bomb.Shape = Enum.PartType.Ball
+					bomb.Name = "EventBomb"
+					bomb.Size = Vector3.new(2.5, 2.5, 2.5)
+					bomb.Material = Enum.Material.SmoothPlastic
+					bomb.Color = Color3.fromRGB(0, 0, 0)
+					bomb.Transparency = 0
+					bomb.CanCollide = true
+					bomb.CanQuery = true
+					bomb.CanTouch = true
+					bomb.Anchored = false
+					bomb.Position = spawnPosition
+					bomb.Parent = Workspace
+					bomb:SetNetworkOwner(nil)
+
+					activeBombs[bomb] = true
+
+					bomb.Destroying:Connect(function()
+						removeBomb(bomb, true)
+					end)
+
+					local countdownStarted = false
+					local exploded = false
+					local function explode()
+						if exploded or not bomb.Parent then
+							return
+						end
+						exploded = true
+						createExplosion(bomb)
+					end
+
+					local function startCountdown()
+						if countdownStarted or exploded then
+							return
+						end
+
+						countdownStarted = true
+						bomb.Anchored = false
+						bomb.AssemblyLinearVelocity *= 0.5
+						bomb.AssemblyAngularVelocity *= 0.5
+
+						local totalDuration = 3
+						local startTime = os.clock()
+						local flashStyles = {
+							{color = Color3.fromRGB(0, 0, 0), material = Enum.Material.SmoothPlastic},
+							{color = Color3.fromRGB(255, 0, 0), material = Enum.Material.Neon},
+						}
+
+						task.spawn(function()
+							local flashIndex = 1
+							while countdownStarted and not exploded and bomb.Parent do
+								flashIndex = flashIndex == 1 and 2 or 1
+								local style = flashStyles[flashIndex]
+								bomb.Color = style.color
+								bomb.Material = style.material
+
+								local elapsed = os.clock() - startTime
+								if elapsed >= totalDuration then
+									break
+								end
+
+								local progress = math.clamp(elapsed / totalDuration, 0, 1)
+								local interval = math.clamp(0.55 - progress * 0.4, 0.08, 0.55)
+								task.wait(interval)
+							end
+						end)
+
+						task.delay(totalDuration, function()
+							if not exploded and bomb.Parent then
+								explode()
+							end
+						end)
+					end
+
+					bomb.Touched:Connect(function(hit)
+						if not hit or not hit:IsA("BasePart") then
+							return
+						end
+						startCountdown()
+					end)
+
+					Debris:AddItem(bomb, 15)
+					task.wait(0.5)
+				end
+			end)
+		end,
+		onRoundEnded = function(context)
+			local state = context.state.RainingBomb
+			if state then
+				if state.stop then
+					state.stop()
+				end
+				if state.bombs then
+					for part in pairs(state.bombs) do
+						if part and part.Parent then
+							part:Destroy()
+						end
+					end
+				end
+			end
+			context.state.RainingBomb = nil
+		end,
+	})
+
+	registerSpecialEvent({
+		id = "InvertedControl",
+		displayName = "Inverted Control??",
+		onRoundPrepared = function()
+			sendStatusUpdate({
+				action = "SpecialEventEffect",
+				id = "InvertedControl",
+				inverted = true,
+			})
+		end,
+		onRoundEnded = function()
+			sendStatusUpdate({
+				action = "SpecialEventEffect",
+				id = "InvertedControl",
+				inverted = false,
+			})
+		end,
+	})
+
+	registerSpecialEvent({
+		id = "KillBot",
+		displayName = "KillBot??",
+		onRoundPrepared = function(context)
+			local state = {
+				bots = {},
+				rockets = {},
+				heartbeatConn = nil :: RBXScriptConnection?,
+			}
+			context.state.KillBot = state
+
+			local cf, _ = getActiveMapBounds()
+			local origin = cf.Position
+			local killBotRandom = Random.new()
+
+			local SCAN_RADIUS = math.huge
+			local FIRE_COOLDOWN = 2.25
+			local HOVER_HEIGHT = 8
+			local MOVE_FORCE = 6000
+			local MAX_SPEED = 70
+			local SEEK_STRENGTH = 0.55
+			local LOS_CHECK = true
+
+			local HOLD_READY_TIME = 0.4
+			local HOLD_DISTANCE = 6
+			local POST_FIRE_MOVE_DELAY = 0.85
+
+			local ROCKET_SPEED = 55
+			local ROCKET_LIFETIME = 12
+			local ROCKET_ARM_DELAY = 0.3
+			local ROCKET_BLAST_RADIUS = 12
+			local ROCKET_BASE_DAMAGE = 55
+			local ROCKET_KNOCKBACK = 60
+
+			local function damageInRadius(center: Vector3, radius: number)
+				local params = OverlapParams.new()
+				for _, part in ipairs(Workspace:GetPartBoundsInRadius(center, radius, params)) do
+					local parent = part.Parent
+					if not parent then
+						continue
+					end
+
+					local humanoid = parent:FindFirstChildWhichIsA("Humanoid")
+					if not humanoid and parent.Parent then
+						humanoid = parent.Parent:FindFirstChildWhichIsA("Humanoid")
+					end
+
+					if humanoid and humanoid.Health > 0 then
+						local character = humanoid.Parent
+						local hrp = character and character:FindFirstChild("HumanoidRootPart")
+						if hrp then
+							local distance = (hrp.Position - center).Magnitude
+							if distance <= radius then
+								local damage = math.clamp(ROCKET_BASE_DAMAGE * (1 - (distance / radius)), 10, ROCKET_BASE_DAMAGE)
+								humanoid:TakeDamage(damage)
+
+								local knockDir = (hrp.Position - center).Unit
+								hrp.AssemblyLinearVelocity = hrp.AssemblyLinearVelocity + knockDir * ROCKET_KNOCKBACK
+							end
+						end
+					end
+				end
+			end
+
+			local function hasLineOfSight(model: Model?, fromPos: Vector3, toPos: Vector3)
+				if not LOS_CHECK then
+					return true
+				end
+
+				local params = RaycastParams.new()
+				params.FilterType = Enum.RaycastFilterType.Exclude
+				if model then
+					params.FilterDescendantsInstances = {model}
+				end
+
+				local direction = toPos - fromPos
+				local result = Workspace:Raycast(fromPos, direction, params)
+				if not result then
+					return true
+				end
+
+				return (result.Position - toPos).Magnitude < 2
+			end
+
+			local function selectBotTarget(botState, dt: number)
+				local ball = botState.ball
+				if not ball or not ball.Parent then
+					botState.currentTarget = nil
+					botState.targetTimer = nil
+					return nil, nil
+				end
+
+				local position = ball.Position
+
+				local existingTarget = botState.currentTarget
+				if existingTarget and existingTarget.Parent and existingTarget:IsA("BasePart") then
+					local newTimer = (botState.targetTimer or 0) - dt
+					botState.targetTimer = newTimer
+
+					local distance = (existingTarget.Position - position).Magnitude
+					if distance <= SCAN_RADIUS and hasLineOfSight(botState.model, position, existingTarget.Position) and newTimer > 0 then
+						return existingTarget, distance
+					end
+				end
+
+				botState.currentTarget = nil
+				botState.targetTimer = nil
+
+				local candidates = {}
+
+				for _, record in ipairs(getNeutralParticipantRecords()) do
+					local character = record.player.Character
+					if not character then
+						continue
+					end
+
+					local humanoid = record.humanoid or character:FindFirstChildOfClass("Humanoid")
+					if not humanoid or humanoid.Health <= 0 then
+						continue
+					end
+
+					local hrp = character:FindFirstChild("HumanoidRootPart")
+					if not hrp or not hrp:IsA("BasePart") then
+						continue
+					end
+
+					local distance = (hrp.Position - position).Magnitude
+					if distance > SCAN_RADIUS then
+						continue
+					end
+
+					if not hasLineOfSight(botState.model, position, hrp.Position) then
+						continue
+					end
+
+					table.insert(candidates, {
+						hrp = hrp,
+						distance = distance,
+					})
+				end
+
+				local candidateCount = #candidates
+				if candidateCount > 0 then
+					local selected = candidates[killBotRandom:NextInteger(1, candidateCount)]
+					botState.currentTarget = selected.hrp
+					botState.targetTimer = killBotRandom:NextNumber(1.5, 3.5)
+					return selected.hrp, selected.distance
+				end
+
+				return nil, nil
+			end
+
+			local function stepBot(botState, dt: number, targetHRP: BasePart?)
+				local ball = botState.ball
+				local vectorForce = botState.vectorForce
+				if not ball or not ball.Parent or not vectorForce then
+					return
+				end
+
+				local mass = ball.AssemblyMass
+				local gravityForce = Vector3.new(0, mass * Workspace.Gravity, 0)
+				local desiredForce = gravityForce
+
+				local velocity = ball.AssemblyLinearVelocity
+				local position = ball.Position
+				local desiredHoverPosition: Vector3? = nil
+				local holdTimer = botState.holdTimer or HOLD_READY_TIME
+				local postFireCooldown = math.max((botState.afterFireCooldown or 0) - dt, 0)
+				botState.afterFireCooldown = postFireCooldown
+				local holding = botState.isHolding or false
+
+				if targetHRP and targetHRP.Parent then
+					botState.wanderTimer = 0
+					botState.wanderOffset = Vector3.zero
+
+					local jitterTimer = (botState.jitterTimer or 0) - dt
+					if jitterTimer <= 0 then
+						jitterTimer = killBotRandom:NextNumber(0.35, 0.8)
+						local jitterAngle = killBotRandom:NextNumber(0, math.pi * 2)
+						local jitterMagnitude = killBotRandom:NextNumber(0, 8)
+						botState.jitterOffset = Vector3.new(
+							math.cos(jitterAngle),
+							0,
+							math.sin(jitterAngle)
+						) * jitterMagnitude
+					end
+					botState.jitterTimer = jitterTimer
+
+					local jitterOffset = botState.jitterOffset or Vector3.zero
+					desiredHoverPosition = targetHRP.Position + Vector3.new(0, HOVER_HEIGHT, 0) + jitterOffset
+					local offset = desiredHoverPosition - position
+					local shouldHold = postFireCooldown <= 0 and offset.Magnitude <= HOLD_DISTANCE
+
+					if shouldHold then
+						holding = true
+						holdTimer = math.max(holdTimer - dt, 0)
+					else
+						holding = false
+						holdTimer = HOLD_READY_TIME
+					end
+				else
+					local wanderTimer = (botState.wanderTimer or 0) - dt
+					local wanderOffset = botState.wanderOffset
+					if wanderTimer <= 0 or not wanderOffset then
+						wanderTimer = killBotRandom:NextNumber(1.5, 3.5)
+						local wanderAngle = killBotRandom:NextNumber(0, math.pi * 2)
+						local wanderDistance = killBotRandom:NextNumber(30, 70)
+						wanderOffset = Vector3.new(
+							math.cos(wanderAngle),
+							0,
+							math.sin(wanderAngle)
+						) * wanderDistance
+						botState.wanderOffset = wanderOffset
+					end
+					botState.wanderTimer = wanderTimer
+					botState.jitterOffset = Vector3.zero
+					desiredHoverPosition = (botState.homePosition or position) + wanderOffset + Vector3.new(0, HOVER_HEIGHT, 0)
+					holding = false
+					holdTimer = HOLD_READY_TIME
+				end
+
+				if desiredHoverPosition then
+					if botState.homePosition then
+						desiredHoverPosition = Vector3.new(
+							desiredHoverPosition.X,
+							math.max(desiredHoverPosition.Y, botState.homePosition.Y),
+							desiredHoverPosition.Z
+						)
+					end
+
+					local offset = desiredHoverPosition - position
+					if holding then
+						if velocity.Magnitude > 0.5 then
+							local damping = -velocity * SEEK_STRENGTH * 2
+							local adjustedDt = math.max(dt, 1 / 240)
+							local dampingForce = damping * mass / adjustedDt
+							if dampingForce.Magnitude > MOVE_FORCE then
+								dampingForce = dampingForce.Unit * MOVE_FORCE
+							end
+							desiredForce += dampingForce
+						end
+					elseif offset.Magnitude > 0.5 then
+						local direction = offset.Unit
+						local desiredVelocity = direction * MAX_SPEED
+						local steer = (desiredVelocity - velocity) * SEEK_STRENGTH
+						local adjustedDt = math.max(dt, 1 / 240)
+						local steeringForce = steer * mass / adjustedDt
+
+						if steeringForce.Magnitude > MOVE_FORCE then
+							steeringForce = steeringForce.Unit * MOVE_FORCE
+						end
+
+						desiredForce += steeringForce
+					elseif velocity.Magnitude > 1 then
+						local damping = -velocity * SEEK_STRENGTH
+						local adjustedDt = math.max(dt, 1 / 240)
+						local dampingForce = damping * mass / adjustedDt
+						if dampingForce.Magnitude > MOVE_FORCE then
+							dampingForce = dampingForce.Unit * MOVE_FORCE
+						end
+						desiredForce += dampingForce
+					end
+				end
+
+				vectorForce.Force = desiredForce
+
+				botState.isHolding = holding
+				botState.holdTimer = holdTimer
+
+				local align = botState.align
+				if align then
+					local lookDirection: Vector3? = nil
+					if not holding and velocity.Magnitude > 2 then
+						lookDirection = velocity
+					elseif targetHRP then
+						lookDirection = targetHRP.Position - position
+					end
+
+					if lookDirection and lookDirection.Magnitude > 0 then
+						align.CFrame = CFrame.lookAt(position, position + lookDirection.Unit)
+					end
+				end
+			end
+
+			local function createRocket(botState, targetHRP: BasePart)
+				if not targetHRP or not targetHRP.Parent then
+					return false
+				end
+
+				local ball = botState.ball
+				if not ball or not ball.Parent then
+					return false
+				end
+
+				local now = os.clock()
+				if now - (botState.lastFire or 0) < FIRE_COOLDOWN then
+					return false
+				end
+				botState.lastFire = now
+
+				local rocket = Instance.new("Part")
+				rocket.Name = "KillBotRocket"
+				rocket.Shape = Enum.PartType.Ball
+				rocket.Size = Vector3.new(2, 2, 2)
+				rocket.Material = Enum.Material.Neon
+				rocket.Color = Color3.fromRGB(255, 120, 120)
+				rocket.CanCollide = false
+				rocket.CanQuery = false
+				rocket.CanTouch = true
+				rocket.Anchored = false
+				rocket.Massless = true
+
+				local launchOrigin = ball.Position
+				local targetPosition = targetHRP.Position
+				local toTarget = targetPosition - launchOrigin
+				if toTarget.Magnitude == 0 then
+					toTarget = ball.CFrame.LookVector
+					targetPosition = launchOrigin + toTarget
+				end
+				local targetDirection = toTarget.Unit
+				local spawnPosition = launchOrigin + targetDirection * 2
+
+				rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + targetDirection)
+				rocket.Parent = Workspace
+				rocket:SetNetworkOwner(nil)
+
+				local detonated = false
+				local touchedConn: RBXScriptConnection? = nil
+				local destroyingConn: RBXScriptConnection? = nil
+				local spawnTime = os.clock()
+
+				rocket.AssemblyLinearVelocity = targetDirection * ROCKET_SPEED
+
+				local function disconnectAll()
+					if touchedConn then
+						touchedConn:Disconnect()
+						touchedConn = nil
+					end
+					if destroyingConn then
+						destroyingConn:Disconnect()
+						destroyingConn = nil
+					end
+				end
+
+				local function explode()
+					if detonated then
+						return
+					end
+
+					detonated = true
+					disconnectAll()
+
+					local explosion = Instance.new("Explosion")
+					explosion.BlastRadius = ROCKET_BLAST_RADIUS
+					explosion.BlastPressure = 0
+					explosion.DestroyJointRadiusPercent = 0
+					explosion.Position = rocket.Position
+					explosion.Parent = Workspace
+
+					damageInRadius(rocket.Position, ROCKET_BLAST_RADIUS)
+
+					if rocket.Parent then
+						rocket:Destroy()
+					end
+				end
+
+				local function shouldIgnoreHit(hit: Instance?): boolean
+					if not hit then
+						return true
+					end
+
+					if hit:IsDescendantOf(rocket) then
+						return true
+					end
+
+					local model = botState.model
+					if model and hit:IsDescendantOf(model) then
+						return true
+					end
+
+					return false
+				end
+
+				touchedConn = rocket.Touched:Connect(function(hit)
+					if detonated then
+						return
+					end
+
+					if shouldIgnoreHit(hit) then
+						return
+					end
+
+					if os.clock() - spawnTime < ROCKET_ARM_DELAY then
+						return
+					end
+
+					explode()
+				end)
+
+				destroyingConn = rocket.Destroying:Connect(function()
+					disconnectAll()
+				end)
+
+				task.delay(ROCKET_LIFETIME, function()
+					if detonated then
+						return
+					end
+
+					disconnectAll()
+					if rocket.Parent then
+						rocket:Destroy()
+					end
+				end)
+				Debris:AddItem(rocket, ROCKET_LIFETIME + 1)
+
+				table.insert(state.rockets, function()
+					disconnectAll()
+					if not detonated and rocket.Parent then
+						rocket:Destroy()
+					end
+				end)
+
+				return true
+			end
+
+			local function spawnBot(index: number)
+				local model = Instance.new("Model")
+				model.Name = string.format("KillBot_%d", index)
+
+				local ball = Instance.new("Part")
+				ball.Name = "Ball"
+				ball.Shape = Enum.PartType.Ball
+				ball.Size = Vector3.new(6, 6, 6)
+				ball.Material = Enum.Material.Neon
+				ball.Color = Color3.fromRGB(200, 200, 255)
+				ball.CanCollide = false
+				ball.CanTouch = false
+				ball.CanQuery = false
+				ball.Anchored = false
+				local spawnPosition = origin + Vector3.new(0, 50 + index * 10, 0)
+				ball.CFrame = CFrame.new(spawnPosition)
+				ball.Parent = model
+				model.PrimaryPart = ball
+				model.Parent = Workspace
+
+				local attachment = Instance.new("Attachment")
+				attachment.Name = "RootAttachment"
+				attachment.Parent = ball
+
+				local vectorForce = Instance.new("VectorForce")
+				vectorForce.Name = "MoveForce"
+				vectorForce.Attachment0 = attachment
+				vectorForce.RelativeTo = Enum.ActuatorRelativeTo.World
+				vectorForce.Force = Vector3.zero
+				vectorForce.ApplyAtCenterOfMass = true
+				vectorForce.Parent = ball
+
+				local align = Instance.new("AlignOrientation")
+				align.Name = "Align"
+				align.Attachment0 = attachment
+				align.Responsiveness = 50
+				align.MaxTorque = math.huge
+				align.PrimaryAxisOnly = false
+				align.Parent = ball
+
+				ball:SetNetworkOwner(nil)
+
+				local botState = {
+					model = model,
+					ball = ball,
+					attachment = attachment,
+					vectorForce = vectorForce,
+					align = align,
+					lastFire = 0,
+					homePosition = spawnPosition,
+					wanderOffset = Vector3.zero,
+					wanderTimer = 0,
+					jitterOffset = Vector3.zero,
+					jitterTimer = 0,
+					currentTarget = nil,
+					targetTimer = 0,
+					holdTimer = HOLD_READY_TIME,
+					isHolding = false,
+					afterFireCooldown = 0,
+				}
+
+				model.Destroying:Connect(function()
+					botState.ball = nil
+				end)
+
+				table.insert(state.bots, botState)
+			end
+
+			for index = 1, 3 do
+				spawnBot(index)
+			end
+
+			state.heartbeatConn = RunService.Heartbeat:Connect(function(dt)
+				if not roundInProgress or context.roundId ~= currentRoundId then
+					return
+				end
+
+				for _, botState in ipairs(state.bots) do
+					local ball = botState.ball
+					if not ball or not ball.Parent then
+						continue
+					end
+
+					local targetHRP = selectBotTarget(botState, dt)
+					stepBot(botState, dt, targetHRP)
+					if targetHRP and botState.isHolding and (botState.holdTimer or 0) <= 0 then
+						local fired = createRocket(botState, targetHRP)
+						if fired then
+							botState.afterFireCooldown = POST_FIRE_MOVE_DELAY
+							botState.isHolding = false
+							botState.holdTimer = HOLD_READY_TIME
+						end
+					end
+				end
+			end)
+		end,
+		onRoundEnded = function(context)
+			local state = context.state.KillBot
+			if not state then
+				return
+			end
+
+			if state.heartbeatConn then
+				state.heartbeatConn:Disconnect()
+				state.heartbeatConn = nil
+			end
+
+			for _, botState in ipairs(state.bots) do
+				if botState.model and botState.model.Parent then
+					botState.model:Destroy()
+				elseif botState.ball and botState.ball.Parent then
+					botState.ball:Destroy()
+				end
+			end
+
+			for _, cleanup in ipairs(state.rockets) do
+				local ok, err = pcall(cleanup)
+				if not ok then
+					warn("KillBot rocket cleanup error", err)
+				end
+			end
+
+			state.bots = {}
+			state.rockets = {}
+			context.state.KillBot = nil
+		end,
+	})
+
+	registerSpecialEvent({
+		id = "HotTouch",
+		displayName = "Hot Touch??",
+		ignoreDefaultGear = true,
+		onCountdownComplete = function(context)
+			local state = context.state
+			if state.HotTouch then
+				return
+			end
+
+			local hotState = {
+				holder = nil :: ParticipantRecord?,
+				timer = 30,
+				running = true,
+				connections = {},
+				disableRoundTimer = true,
+			}
+			state.HotTouch = hotState
+
+			forEachActiveParticipant(function(_, participant)
+				clearPVPTools(participant.player)
+			end)
+
+			local function broadcastSelecting()
+				sendStatusUpdate({
+					action = "HotTouchStatus",
+					state = "Selecting",
+				})
+			end
+
+			local function playTagSound(record: ParticipantRecord)
+				local character = record.player.Character
+				if not character then
+					return
+				end
+
+				local rootPart = character:FindFirstChild("HumanoidRootPart")
+				if not rootPart or not rootPart:IsA("BasePart") then
+					return
+				end
+
+				local sound = Instance.new("Sound")
+				sound.Name = "HotTouchTagSound"
+				sound.SoundId = HOT_TOUCH_TAG_SOUND_ID
+				sound.RollOffMode = Enum.RollOffMode.Linear
+				sound.RollOffMaxDistance = 100
+				sound.RollOffMinDistance = 15
+				sound.EmitterSize = 10
+				sound.Volume = 1
+				sound.Parent = rootPart
+				sound:Play()
+				Debris:AddItem(sound, 4)
+			end
+
+			local function broadcastHolder(record: ParticipantRecord)
+				local player = record.player
+				sendStatusUpdate({
+					action = "HotTouchStatus",
+					state = "Holder",
+					userId = player.UserId,
+					name = player.Name,
+					displayName = player.DisplayName,
+				})
+				sendStatusUpdate({
+					action = "HotTouchTagged",
+					userId = player.UserId,
+				})
+				playTagSound(record)
+			end
+
+			local function broadcastCompletion(winner: ParticipantRecord?)
+				local payload: {[string]: any} = {
+					action = "HotTouchStatus",
+					state = "Complete",
+				}
+
+				if winner and winner.player then
+					local player = winner.player
+					payload.userId = player.UserId
+					payload.name = player.Name
+					payload.displayName = player.DisplayName
+				end
+
+				sendStatusUpdate(payload)
+			end
+
+			sendStatusUpdate({
+				action = "MatchMessage",
+				text = "Survive",
+			})
+
+			local function clearConnections()
+				for _, conn in hotState.connections do
+					conn:Disconnect()
+				end
+				table.clear(hotState.connections)
+			end
+
+			local function applyHolderMovement(record: ParticipantRecord, active: boolean)
+				local character = record.player.Character
+				if not character then
+					return
+				end
+
+				local humanoid = record.humanoid or character:FindFirstChildOfClass("Humanoid")
+				if not humanoid then
+					return
+				end
+
+				record.humanoid = humanoid
+
+				if active then
+					if record.eventData.HotTouchOriginalWalk == nil then
+						record.eventData.HotTouchOriginalWalk = humanoid.WalkSpeed
+					end
+
+					if record.eventData.HotTouchHadSprintBonus == nil then
+						local existingBonus = humanoid:GetAttribute("SprintSpeedBonus")
+						if typeof(existingBonus) == "number" then
+							record.eventData.HotTouchSprintBonus = existingBonus
+							record.eventData.HotTouchHadSprintBonus = true
+						else
+							record.eventData.HotTouchSprintBonus = nil
+							record.eventData.HotTouchHadSprintBonus = false
+							existingBonus = 0
+						end
+
+						local bonusValue = if typeof(existingBonus) == "number" then existingBonus else 0
+						humanoid:SetAttribute("SprintSpeedBonus", bonusValue + 2)
+					else
+						local storedBonus = record.eventData.HotTouchSprintBonus
+						local baseValue = if typeof(storedBonus) == "number" then storedBonus else 0
+						humanoid:SetAttribute("SprintSpeedBonus", baseValue + 2)
+					end
+
+					local baseline = record.eventData.HotTouchOriginalWalk or humanoid.WalkSpeed
+					humanoid.WalkSpeed = baseline + 2
+				else
+					if record.eventData.HotTouchOriginalWalk ~= nil then
+						humanoid.WalkSpeed = record.eventData.HotTouchOriginalWalk
+					end
+					record.eventData.HotTouchOriginalWalk = nil
+
+					local hadBonus = record.eventData.HotTouchHadSprintBonus
+					local originalBonus = record.eventData.HotTouchSprintBonus
+					if hadBonus then
+						humanoid:SetAttribute("SprintSpeedBonus", originalBonus)
+					else
+						humanoid:SetAttribute("SprintSpeedBonus", nil)
+					end
+					record.eventData.HotTouchHadSprintBonus = nil
+					record.eventData.HotTouchSprintBonus = nil
+				end
+			end
+
+			local function updateHolderVisual(record: ParticipantRecord?, active: boolean)
+				if not record then
+					return
+				end
+
+				local character = record.player.Character
+				if not character then
+					return
+				end
+
+				applyHolderMovement(record, active)
+
+				if active then
+					local highlight = character:FindFirstChild("HotTouchHighlight") :: Highlight?
+					if not highlight then
+						highlight = Instance.new("Highlight")
+						highlight.Name = "HotTouchHighlight"
+						highlight.FillColor = Color3.fromRGB(255, 0, 0)
+						highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+						highlight.FillTransparency = 1
+						highlight.OutlineTransparency = 0
+						highlight.Parent = character
+					end
+					highlight.FillTransparency = 1
+					highlight.OutlineTransparency = 0
+					highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+				else
+					local highlight = character:FindFirstChild("HotTouchHighlight")
+					if highlight then
+						highlight:Destroy()
+					end
+				end
+
+				local head = character:FindFirstChild("Head")
+				local existingBillboard = character:FindFirstChild("HotTouchBillboard")
+				if active then
+					local billboard = if existingBillboard and existingBillboard:IsA("BillboardGui") then existingBillboard else Instance.new("BillboardGui")
+					billboard.Name = "HotTouchBillboard"
+					billboard.Size = UDim2.new(0, 80, 0, 40)
+					billboard.StudsOffset = Vector3.new(0, 3, 0)
+					billboard.AlwaysOnTop = true
+					billboard.MaxDistance = 500
+					billboard.Parent = head or character
+
+					local label = billboard:FindFirstChild("Label") :: TextLabel?
+					if not label then
+						label = Instance.new("TextLabel")
+						label.Name = "Label"
+						label.Size = UDim2.new(1, 0, 1, 0)
+						label.BackgroundTransparency = 1
+						label.TextColor3 = Color3.fromRGB(255, 255, 255)
+						label.TextStrokeTransparency = 0
+						label.Font = Enum.Font.GothamBold
+						label.TextScaled = true
+						label.Parent = billboard
+					end
+
+					label.Text = tostring(hotState.timer)
+				elseif existingBillboard then
+					existingBillboard:Destroy()
+				end
+			end
+
+			local function updateTimerVisual()
+				local holder = hotState.holder
+				if not holder then
+					return
+				end
+
+				local character = holder.player.Character
+				if not character then
+					return
+				end
+
+				local billboard = character:FindFirstChild("HotTouchBillboard")
+				if billboard and billboard:IsA("BillboardGui") then
+					local label = billboard:FindFirstChild("Label")
+					if label and label:IsA("TextLabel") then
+						label.Text = tostring(math.max(0, math.floor(hotState.timer)))
+						local ratio = math.clamp(hotState.timer / 60, 0, 1)
+						local color = Color3.fromRGB(255, 255 * ratio, 255 * ratio)
+						label.TextColor3 = color
+					end
+				end
+			end
+
+			local function detachHolder(record: ParticipantRecord?)
+				if record then
+					updateHolderVisual(record, false)
+				end
+				clearConnections()
+			end
+
+			local function attachHolderConnections(record: ParticipantRecord)
+				clearConnections()
+				local character = record.player.Character
+				if not character then
+					return
+				end
+
+				for _, descendant in character:GetDescendants() do
+					if descendant:IsA("BasePart") then
+						local basePart = descendant
+						if not basePart.CanTouch then
+							basePart.CanTouch = true
+						end
+						hotState.connections[#hotState.connections + 1] = basePart.Touched:Connect(function(hit)
+							if not hotState.running or context.roundId ~= currentRoundId then
+								return
+							end
+
+							if hotState.holder ~= record then
+								return
+							end
+
+							if not hit or not hit.Parent then
+								return
+							end
+
+							local otherCharacter = hit:FindFirstAncestorOfClass("Model")
+							if not otherCharacter then
+								return
+							end
+
+							local otherPlayer = Players:GetPlayerFromCharacter(otherCharacter)
+							if not otherPlayer or otherPlayer == record.player then
+								return
+							end
+
+							local targetRecord = getParticipantFromPlayer(otherPlayer)
+							if not targetRecord or not isPlayerInNeutralState(targetRecord.player) then
+								return
+							end
+
+							hotState.timer = math.min(hotState.timer + 5, 60)
+							setParticipantFrozen(targetRecord, true)
+							task.delay(2, function()
+								if context.roundId == currentRoundId and roundInProgress then
+									setParticipantFrozen(targetRecord, false)
+								end
+							end)
+
+							setHolder(targetRecord, false)
+						end)
+					end
+				end
+			end
+
+			local function setHolder(newRecord: ParticipantRecord?, resetTimer: boolean)
+				if newRecord == hotState.holder then
+					if newRecord then
+						if resetTimer then
+							hotState.timer = 30
+						end
+						updateHolderVisual(newRecord, true)
+						updateTimerVisual()
+						attachHolderConnections(newRecord)
+						broadcastHolder(newRecord)
+					else
+						broadcastSelecting()
+					end
+					return
+				end
+
+				detachHolder(hotState.holder)
+				hotState.holder = newRecord
+				if newRecord then
+					if resetTimer then
+						hotState.timer = 30
+					end
+					updateHolderVisual(newRecord, true)
+					updateTimerVisual()
+					attachHolderConnections(newRecord)
+					broadcastHolder(newRecord)
+				else
+					broadcastSelecting()
+				end
+			end
+
+			hotState.setHolder = setHolder
+			hotState.detachHolder = detachHolder
+
+			local function selectNextHolder()
+				local candidates = {}
+				for _, record in ipairs(getNeutralParticipantRecords()) do
+					local humanoid = record.humanoid
+					if not humanoid or humanoid.Health <= 0 then
+						continue
+					end
+					table.insert(candidates, record)
+				end
+
+				if #candidates <= 1 then
+					local winner = if #candidates == 1 then candidates[1] else nil
+					setHolder(nil, false)
+					hotState.running = false
+					broadcastCompletion(winner)
+					return
+				end
+
+				local rng = Random.new()
+				local chosen = candidates[rng:NextInteger(1, #candidates)]
+				setHolder(chosen, true)
+			end
+
+			broadcastSelecting()
+			selectNextHolder()
+
+			task.spawn(function()
+				while hotState.running and roundInProgress and context.roundId == currentRoundId do
+					if not hotState.holder then
+						task.wait(1)
+						selectNextHolder()
+						continue
+					end
+
+					hotState.timer -= 1
+					updateTimerVisual()
+
+					if hotState.timer <= 0 then
+						local holder = hotState.holder
+						if holder and holder.humanoid then
+							local rootPart = holder.humanoid.RootPart or (holder.player.Character and holder.player.Character:FindFirstChild("HumanoidRootPart"))
+							if rootPart then
+								local explosion = Instance.new("Explosion")
+								explosion.BlastRadius = 15
+								explosion.BlastPressure = 600000
+								explosion.Position = rootPart.Position
+								explosion.Parent = Workspace
+							end
+							holder.humanoid.Health = 0
+						end
+
+						selectNextHolder()
+					end
+
+					task.wait(1)
+				end
+			end)
+
+			hotState.cleanup = function()
+				hotState.running = false
+				detachHolder(hotState.holder)
+				hotState.holder = nil
+				sendStatusUpdate({
+					action = "HotTouchStatus",
+					state = "Clear",
+				})
+			end
+		end,
+		onParticipantEliminated = function(context, record)
+			local state = context.state.HotTouch
+			if not state then
+				return
+			end
+
+			if state.holder == record then
+				if state.setHolder then
+					state.setHolder(nil, false)
+				else
+					state.holder = nil
+				end
+			end
+		end,
+		onParticipantCleanup = function(context, record)
+			local state = context.state.HotTouch
+			if not state then
+				return
+			end
+
+			if state.holder == record then
+				if state.setHolder then
+					state.setHolder(nil, false)
+				else
+					state.holder = nil
+				end
+			end
+		end,
+		onRoundEnded = function(context)
+			local state = context.state.HotTouch
+			if not state then
+				return
+			end
+
+			if state.cleanup then
+				state.cleanup()
+			end
+			context.state.HotTouch = nil
+		end,
+	})
+end
+
+local mapsFolder = ReplicatedStorage:FindFirstChild("Maps")
+local skyboxFolder = ReplicatedStorage:FindFirstChild("Skybox")
+local gearsFolder = ReplicatedStorage:FindFirstChild("PVPGears")
+local stormUnionTemplate: UnionOperation? = nil
+
+local function updateStormTemplate()
+	local templateCandidate = ReplicatedStorage:FindFirstChild("StormPart", true)
+	if templateCandidate and templateCandidate:IsA("UnionOperation") then
+		stormUnionTemplate = templateCandidate
 	else
-		state.setVisibility = function(visible: boolean)
-			inventoryVisible = visible
-		end
+		stormUnionTemplate = nil
 	end
-
-	return state
 end
 
-local layout: LayoutConfig = calculateLayout(isTouchDevice)
-local statusUI = createStatusUI(screenGui, isTouchDevice, uiRefs)
-local specialEventUI = createSpecialEventUI(screenGui, isTouchDevice)
-local sprintUI: SprintUI = createSprintUI(screenGui, uiRefs, isTouchDevice, layout)
-local inventoryState: InventoryState = createInventoryUI(screenGui, uiRefs, isTouchDevice, layout)
-if inventoryState.setVisibility then
-	setInventoryVisibility = inventoryState.setVisibility
-end
+updateStormTemplate()
 
-statusUI.frame:GetPropertyChangedSignal("Visible"):Connect(function()
-	refreshHotTouchStatusVisibility()
+ReplicatedStorage.ChildAdded:Connect(function(child)
+	if child.Name == "Maps" and child:IsA("Folder") then
+		mapsFolder = child
+	elseif child.Name == "Skybox" and child:IsA("Folder") then
+		skyboxFolder = child
+	elseif child.Name == "PVPGears" and child:IsA("Folder") then
+		gearsFolder = child
+	end
 end)
 
-local hotTouchAlertLabel = createInstance("TextLabel", {
-	Name = "HotTouchAlert",
-	Size = UDim2.fromOffset(if isTouchDevice then 480 else 520, if isTouchDevice then 120 else 140),
-	Position = UDim2.new(0.5, 0, 0.45, 0),
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	BackgroundTransparency = 1,
-	Font = Enum.Font.GothamBlack,
-	Text = "You have been tagged",
-	TextColor3 = Color3.fromRGB(255, 80, 80),
-	TextScaled = true,
-	TextWrapped = true,
-	TextStrokeTransparency = 0.05,
-	TextStrokeColor3 = Color3.fromRGB(255, 0, 120),
-	Visible = false,
-	ZIndex = 130,
-	Parent = screenGui,
-})
+ReplicatedStorage.DescendantAdded:Connect(function(descendant)
+	if descendant.Name == "StormPart" and descendant:IsA("UnionOperation") then
+		stormUnionTemplate = descendant
+	end
+end)
 
-local hotTouchAlertStroke = hotTouchAlertLabel:FindFirstChildWhichIsA("UIStroke")
-if not hotTouchAlertStroke then
-	hotTouchAlertStroke = createInstance("UIStroke", {
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-		Color = Color3.fromRGB(255, 30, 120),
-		Thickness = 2.5,
-		Transparency = 0.1,
-		Parent = hotTouchAlertLabel,
-	})
+ReplicatedStorage.ChildRemoved:Connect(function(child)
+	if child == mapsFolder then
+		mapsFolder = nil
+	elseif child == skyboxFolder then
+		skyboxFolder = nil
+	elseif child == gearsFolder then
+		gearsFolder = nil
+	end
+end)
+
+ReplicatedStorage.DescendantRemoving:Connect(function(descendant)
+	if descendant == stormUnionTemplate then
+		task.defer(updateStormTemplate)
+	end
+end)
+
+local function sendRoundState(state: string, extra: {}?)
+	local payload = if type(extra) == "table" then table.clone(extra :: {}) else {}
+	payload.state = state
+	roundStateRemote:FireAllClients(payload)
 end
 
-local hotTouchAlertScale = Instance.new("UIScale")
-hotTouchAlertScale.Name = "HotTouchAlertScale"
-hotTouchAlertScale.Parent = hotTouchAlertLabel
-
-local hotTouchAlertState = {
-	label = hotTouchAlertLabel,
-	stroke = hotTouchAlertStroke,
-	scale = hotTouchAlertScale,
-	connection = nil :: RBXScriptConnection?,
-	token = 0,
-	basePosition = hotTouchAlertLabel.Position,
-}
-
-local function stopHotTouchAlert()
-	if hotTouchAlertState.connection then
-		hotTouchAlertState.connection:Disconnect()
-		hotTouchAlertState.connection = nil
-	end
-
-	local label = hotTouchAlertState.label
-	label.Visible = false
-	label.Position = hotTouchAlertState.basePosition
-	hotTouchAlertState.scale.Scale = 1
-end
-
-local function showHotTouchAlert()
-	hotTouchAlertState.token += 1
-	local token = hotTouchAlertState.token
-
-	local label = hotTouchAlertState.label
-	label.Text = "You have been tagged"
-	label.Visible = true
-
-	if hotTouchAlertState.connection then
-		hotTouchAlertState.connection:Disconnect()
-	end
-
-	local basePosition = hotTouchAlertState.basePosition
-	hotTouchAlertState.connection = RunService.RenderStepped:Connect(function()
-		local now = os.clock()
-		local pulse = (math.sin(now * 10) + 1) * 0.5
-		local wobbleX = math.sin(now * 18) * 6
-		local wobbleY = math.cos(now * 14) * 4
-
-		label.Position = basePosition + UDim2.fromOffset(wobbleX, wobbleY)
-		hotTouchAlertState.scale.Scale = 1.08 + math.sin(now * 12) * 0.08
-
-		local intensity = math.floor(120 + 130 * pulse)
-		label.TextColor3 = Color3.fromRGB(255, intensity, intensity)
-		hotTouchAlertState.stroke.Color = Color3.fromRGB(255, math.max(40, 200 - intensity // 2), 160 + math.floor(80 * pulse))
-		hotTouchAlertState.stroke.Thickness = 2 + pulse * 2
-	end)
-
-	task.delay(2.6, function()
-		if token ~= hotTouchAlertState.token then
-			return
-		end
-		stopHotTouchAlert()
-	end)
-end
-
-local function setHotTouchActive(active: boolean)
-	if hotTouchActive == active then
-		refreshHotTouchStatusVisibility()
-		return
-	end
-
-	hotTouchActive = active
-	if not hotTouchActive then
-		currentHotTouchHolderId = nil
-		setHotTouchStatusText(nil)
-		stopHotTouchAlert()
-	else
-		refreshHotTouchStatusVisibility()
-	end
-end
-
-local defaultColor = statusUI.label.TextColor3
-local countdownColor = Color3.fromRGB(245, 245, 255)
-local matchColor = Color3.fromRGB(210, 235, 255)
-local deathMatchBackground = Color3.fromRGB(60, 10, 10)
-local deathMatchStroke = Color3.fromRGB(255, 90, 90)
-local highlightStyles = {
-	Spectate = {
-		outlineColor = Color3.fromRGB(255, 255, 255),
-		fillColor = Color3.fromRGB(255, 255, 255),
-		fillTransparency = 0.5,
-	},
-	DeathMatch = {
-		outlineColor = Color3.fromRGB(255, 0, 0),
-		fillColor = Color3.fromRGB(255, 0, 0),
-		fillTransparency = 0.5,
-	},
-}
-
-local baseFramePosition = statusUI.frame.Position
-local baseLabelPosition = statusUI.label.Position
-local currentMapId: string? = nil
-local currentEventDisplayName: string? = nil
-local currentRemaining = 0
-local flashConnection: RBXScriptConnection? = nil
-local shakeConnection: RBXScriptConnection? = nil
-
-type NeutralButtonShakeTarget = {
-        instance: GuiObject,
-        basePosition: UDim2,
-        baseRotation: number,
-}
-
-local neutralButtonShakeTargets: {NeutralButtonShakeTarget} = {}
-
-local transitionState = {
-	active = false,
-	token = 0,
-}
-
-local specialEventState = {
-	active = false,
-	id = nil :: string?,
-	displayName = nil :: string?,
-	randomized = false,
-	randomToken = 0,
-	hideToken = 0,
-	options = {} :: {{id: string?, name: string?}},
-	finalName = nil :: string?,
-	effects = {
-		sprintDisabled = false,
-		invisible = false,
-		inverted = false,
-	},
-}
-
-local invisibilityState = {
-	enabled = false,
-	pulseToken = 0,
-	playerConnections = {} :: {[Player]: {RBXScriptConnection}},
-	playerAddedConn = nil :: RBXScriptConnection?,
-	playerRemovingConn = nil :: RBXScriptConnection?,
-}
-
-local pendingInvisiblePulseUpdate = false
-
-type HighlightTweenBundle = {tween: Tween, conn: RBXScriptConnection?}
-local invisibleHighlightTweens: {[Highlight]: HighlightTweenBundle} = {}
-
-type InvisibleCharacterFadeBundle = {
-        value: NumberValue,
-        tween: Tween,
-        conn: RBXScriptConnection?,
-        target: number,
-}
-
-local invisibleCharacterFades: {[Model]: InvisibleCharacterFadeBundle} = {}
-
-local invisibleHumanoidNameDisplay: {[Humanoid]: Enum.HumanoidDisplayDistanceType} = {}
-
-local function setHumanoidNameHidden(humanoid: Humanoid, hidden: boolean)
-	if hidden then
-		if not invisibleHumanoidNameDisplay[humanoid] then
-			invisibleHumanoidNameDisplay[humanoid] = humanoid.DisplayDistanceType
-		end
-		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-	else
-		local previous = invisibleHumanoidNameDisplay[humanoid]
-		invisibleHumanoidNameDisplay[humanoid] = nil
-		if previous then
-			humanoid.DisplayDistanceType = previous
-		elseif humanoid.DisplayDistanceType == Enum.HumanoidDisplayDistanceType.None then
-			humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
-		end
-	end
-end
-
-local function forEachVisibleCharacterPart(character: Model, handler: (BasePart) -> ())
-	for _, descendant in character:GetDescendants() do
-		if descendant:IsA("BasePart") then
-			local belongsToTool = false
-			local ancestor = descendant.Parent
-			while ancestor and ancestor ~= character do
-				if ancestor:IsA("Tool") then
-					belongsToTool = true
-					break
-				end
-				ancestor = ancestor.Parent
-			end
-
-			if not belongsToTool then
-				handler(descendant)
-			end
-		end
-	end
-end
-
-local function applyTransparencyToCharacter(character: Model, transparency: number)
-	forEachVisibleCharacterPart(character, function(part)
-		part.LocalTransparencyModifier = transparency
-	end)
-end
-
-local function computeInvisibilityTransparency(enabled: boolean, owner: Player?): number
-	if not enabled then
-		return 0
-	end
-
-	if owner == localPlayer then
-		return 0.5
-	end
-
-	return 1
-end
-
-local function cancelInvisibleCharacterFade(character: Model, finalTransparency: number?)
-	local bundle = invisibleCharacterFades[character]
-	if not bundle then
-		if finalTransparency ~= nil then
-			applyTransparencyToCharacter(character, finalTransparency)
-		end
-		return
-	end
-
-	if bundle.conn then
-		bundle.conn:Disconnect()
-		bundle.conn = nil
-	end
-	bundle.tween:Cancel()
-	invisibleCharacterFades[character] = nil
-
-	local finalValue = if finalTransparency ~= nil then finalTransparency else bundle.target
-	bundle.value:Destroy()
-	applyTransparencyToCharacter(character, finalValue)
-end
-
-local function flashInvisibleCharacter(character: Model)
-	cancelInvisibleCharacterFade(character)
-	applyTransparencyToCharacter(character, 0)
-end
-
-local function startInvisibleCharacterFade(character: Model, owner: Player?, duration: number)
-	local targetTransparency = computeInvisibilityTransparency(true, owner)
-
-	if targetTransparency <= 0 then
-		return
-	end
-
-	cancelInvisibleCharacterFade(character)
-
-	local controller = Instance.new("NumberValue")
-	controller.Name = "InvisibleCharacterFade"
-	controller.Value = 0
-	controller.Parent = character
-
-	local tween = TweenService:Create(controller, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Value = targetTransparency,
-	})
-
-	local bundle: InvisibleCharacterFadeBundle = {
-		value = controller,
-		tween = tween,
-		conn = nil,
-		target = targetTransparency,
-	}
-
-	bundle.conn = controller:GetPropertyChangedSignal("Value"):Connect(function()
-		applyTransparencyToCharacter(character, controller.Value)
-	end)
-
-	invisibleCharacterFades[character] = bundle
-
-	tween.Completed:Connect(function()
-		if invisibleCharacterFades[character] ~= bundle then
-			return
-		end
-
-		if bundle.conn then
-			bundle.conn:Disconnect()
-			bundle.conn = nil
-		end
-
-		invisibleCharacterFades[character] = nil
-		controller:Destroy()
-		applyTransparencyToCharacter(character, bundle.target)
-	end)
-
-	tween:Play()
-end
-
-local invertedControlState = {
-	active = false,
-	requested = false,
-	controlsDisabled = false,
-	keyboard = {
-		forward = false,
-		back = false,
-		left = false,
-		right = false,
-	},
-	thumbstick = Vector2.new(),
-	connections = {} :: {RBXScriptConnection},
-	heartbeatConn = nil :: RBXScriptConnection?,
-	jumpConn = nil :: RBXScriptConnection?,
-}
-
-type HighlightConnections = {RBXScriptConnection}
-
-type HighlightStyle = {
-        outlineColor: Color3,
-        fillColor: Color3,
-        fillTransparency: number,
-}
-
-local highlightState = {
-	active = false,
-	context = nil :: string?,
-	style = nil :: HighlightStyle?,
-	highlights = {} :: {[Player]: Highlight},
-	playerConnections = {} :: {[Player]: HighlightConnections},
-	playerAddedConn = nil :: RBXScriptConnection?,
-	playerRemovingConn = nil :: RBXScriptConnection?,
-}
-
-local deathMatchHighlightActive = false
-
-type SprintState = {
-        energy: number,
-        isSprinting: boolean,
-        sprintIntent: boolean,
-        keyboardIntent: boolean,
-        touchIntent: boolean,
-        zoneBlocked: boolean,
-        eventDisabled: boolean,
-        rechargeBlockedUntil: number,
-        originalWalkSpeed: number,
-        speedTween: Tween?,
-        cameraTween: Tween?,
-        originalCameraFov: number?,
-}
-
-local MAX_SPRINT_ENERGY = 100
-local SPRINT_DRAIN_RATE = 10
-local SPRINT_RECHARGE_RATE = 20
-local SPRINT_RECHARGE_DELAY = 2
-local BASE_SPRINT_SPEED = 28
-local SPRINT_TWEEN_TIME = 1
-local SPRINT_FOV_OFFSET = 8
-
-local sprintState: SprintState = {
-	energy = MAX_SPRINT_ENERGY,
-	isSprinting = false,
-	sprintIntent = false,
-	keyboardIntent = false,
-	touchIntent = false,
-	zoneBlocked = false,
-	eventDisabled = false,
-	rechargeBlockedUntil = 0,
-	originalWalkSpeed = DEFAULT_WALK_SPEED,
-	speedTween = nil,
-	cameraTween = nil,
-	originalCameraFov = nil,
-}
-
-local currentHumanoid: Humanoid? = nil
-local humanoidSpeedChangedConn: RBXScriptConnection? = nil
-local humanoidSprintBonusConn: RBXScriptConnection? = nil
-
-local function getHumanoidSprintBonus(humanoid: Humanoid?): number
-	if not humanoid then
-		return 0
-	end
-
-	local bonus = humanoid:GetAttribute("SprintSpeedBonus")
-	if typeof(bonus) == "number" then
-		return bonus
-	end
-
-	return 0
-end
-
-local function getSprintTargetSpeed(): number
-	return BASE_SPRINT_SPEED + getHumanoidSprintBonus(currentHumanoid)
-end
-
-local mouse = if UserInputService.TouchEnabled then nil else localPlayer:GetMouse()
-local applyingMouseIcon = false
-
-type GearConnections = {
-        equipped: RBXScriptConnection?,
-        unequipped: RBXScriptConnection?,
-        ancestry: RBXScriptConnection?,
-        destroying: RBXScriptConnection?,
-}
-
-type GearTrackingInfo = {
-        tool: Tool,
-        isEquipped: boolean,
-        connections: GearConnections,
-}
-
-local trackedGearTools: {[Tool]: GearTrackingInfo} = {}
-local equippedGearCount = 0
-local currentBackpack: Backpack? = nil
-local backpackConnections: {RBXScriptConnection} = {}
-local characterGearConn: RBXScriptConnection? = nil
-
-local trackedGearOrder: {Tool} = {}
-
-local function removeToolFromOrder(tool: Tool)
-	for index, candidate in ipairs(trackedGearOrder) do
-		if candidate == tool then
-			table.remove(trackedGearOrder, index)
-			return
-		end
-	end
-end
-
-local equipInventorySlot: (number) -> ()
-local function locallyToggleTool(tool: Tool)
-	local character = localPlayer.Character
-	if not character then
-		return
-	end
-
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
-		return
-	end
-
-	local backpack = currentBackpack or localPlayer:FindFirstChildOfClass("Backpack")
-	local toolEquipped = tool.Parent == character
-
-	if toolEquipped then
-		if backpack then
-			tool.Parent = backpack
-		else
-			humanoid:UnequipTools()
-		end
-		return
-	end
-
-	humanoid:EquipTool(tool)
-end
-local updateInventorySlots: () -> ()
-
-local function removeHighlightForPlayer(targetPlayer: Player)
-	local highlight = highlightState.highlights[targetPlayer]
-	if highlight then
-		highlight:Destroy()
-		highlightState.highlights[targetPlayer] = nil
-	end
-end
-
-local function clearConnectionsForPlayer(targetPlayer: Player)
-	local connections = highlightState.playerConnections[targetPlayer]
-	if connections then
-		for _, connection in connections do
-			connection:Disconnect()
-		end
-		highlightState.playerConnections[targetPlayer] = nil
-	end
-end
-
-local function getHighlightStyleForContext(context: string?): HighlightStyle?
-	if not context then
+local currentMusic: Sound? = nil
+local currentMusicId: string? = nil
+
+local function normalizeSoundId(assetId: string | number | nil): string?
+	local idType = typeof(assetId)
+	if idType == "number" then
+		assetId = tostring(assetId :: number)
+	elseif idType ~= "string" then
 		return nil
 	end
 
-	if context == "Spectate" then
-		local team = localPlayer.Team
-		if team and team.Name == "Spectate" then
-			return highlightStyles.Spectate
-		end
-	elseif context == "DeathMatch" then
-		if localPlayer.Neutral then
-			return highlightStyles.DeathMatch
-		end
+	if assetId == "" then
+		return nil
 	end
 
-	return nil
+	if string.find(assetId, "rbxassetid://", 1, true) then
+		return assetId
+	end
+
+	return "rbxassetid://" .. assetId
 end
 
-local function updateHighlightForPlayer(targetPlayer: Player)
-	if targetPlayer == localPlayer then
-		removeHighlightForPlayer(targetPlayer)
+local function stopCurrentMusic()
+	if currentMusic then
+		currentMusic:Stop()
+		currentMusic:Destroy()
+		currentMusic = nil
+		currentMusicId = nil
+	end
+end
+
+local function playMusic(assetId: string | number | nil)
+	local normalizedId = normalizeSoundId(assetId)
+	if not normalizedId then
+		stopCurrentMusic()
 		return
 	end
 
-	local highlight = highlightState.highlights[targetPlayer]
-	local shouldShow = highlightState.active
-		and highlightState.style ~= nil
-		and targetPlayer.Neutral
-
-	if not shouldShow then
-		if highlight then
-			highlight:Destroy()
-			highlightState.highlights[targetPlayer] = nil
-		end
-		return
-	end
-
-	local character = targetPlayer.Character
-	if not character then
-		if highlight then
-			highlight.Parent = nil
+	if currentMusic and currentMusicId == normalizedId then
+		currentMusic.Volume = DEFAULT_MUSIC_VOLUME
+		currentMusic.PlaybackSpeed = 1
+		if not currentMusic.IsPlaying then
+			currentMusic:Play()
 		end
 		return
 	end
 
-	if not highlight then
-		highlight = Instance.new("Highlight")
-		highlight.Name = "DeathMatchTransitionHighlight"
-		highlight.FillTransparency = 1
-		highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-		highlightState.highlights[targetPlayer] = highlight
-	end
+	stopCurrentMusic()
 
-	local style = highlightState.style or highlightStyles.DeathMatch
-	highlight.OutlineColor = style.outlineColor
-	highlight.FillColor = style.fillColor
-	highlight.FillTransparency = style.fillTransparency
-	highlight.OutlineTransparency = 0
-	highlight.Adornee = character
-	highlight.Parent = character
+	local sound = Instance.new("Sound")
+	sound.Name = "PVPBackgroundMusic"
+	sound.SoundId = normalizedId
+	sound.Looped = true
+	sound.Volume = DEFAULT_MUSIC_VOLUME
+	sound.Parent = SoundService
+	sound:Play()
+
+	currentMusic = sound
+	currentMusicId = normalizedId
 end
 
-local function refreshHighlightStyle()
-	if not highlightState.active then
-		return
-	end
-
-	local newStyle = getHighlightStyleForContext(highlightState.context)
-	if not newStyle then
-		disableHighlights()
-		updateHighlightActivation()
-		return
-	end
-
-	highlightState.style = newStyle
-
-	for _, highlight in highlightState.highlights do
-		highlight.OutlineColor = newStyle.outlineColor
-		highlight.FillColor = newStyle.fillColor
-		highlight.FillTransparency = newStyle.fillTransparency
-	end
-
-	for _, player in Players:GetPlayers() do
-		updateHighlightForPlayer(player)
-	end
+local function playIntermissionMusic()
+	playMusic(INTERMISSION_MUSIC_ID)
 end
 
-local function disableHighlights()
-	if highlightState.playerAddedConn then
-		highlightState.playerAddedConn:Disconnect()
-		highlightState.playerAddedConn = nil
-	end
-
-	if highlightState.playerRemovingConn then
-		highlightState.playerRemovingConn:Disconnect()
-		highlightState.playerRemovingConn = nil
-	end
-
-	for player, connections in highlightState.playerConnections do
-		for _, connection in connections do
-			connection:Disconnect()
-		end
-	end
-	table.clear(highlightState.playerConnections)
-
-	for player, highlight in highlightState.highlights do
-		highlight:Destroy()
-	end
-	table.clear(highlightState.highlights)
-
-	highlightState.active = false
-	highlightState.context = nil
-	highlightState.style = nil
-end
-
-local function trackPlayerForHighlights(targetPlayer: Player)
-	if targetPlayer == localPlayer then
-		return
-	end
-
-	clearConnectionsForPlayer(targetPlayer)
-
-	local connections: HighlightConnections = {}
-
-	connections[#connections + 1] = targetPlayer:GetPropertyChangedSignal("Team"):Connect(function()
-		updateHighlightForPlayer(targetPlayer)
-	end)
-
-	connections[#connections + 1] = targetPlayer:GetPropertyChangedSignal("Neutral"):Connect(function()
-		updateHighlightForPlayer(targetPlayer)
-	end)
-
-	connections[#connections + 1] = targetPlayer.CharacterAdded:Connect(function()
-		task.defer(function()
-			updateHighlightForPlayer(targetPlayer)
-		end)
-	end)
-
-	connections[#connections + 1] = targetPlayer.CharacterRemoving:Connect(function()
-		resetMovementState(humanoid)if invertedControlState and invertedControlState.active then disableInvertedControls() end
-		hardEnableDefaultControls()
-		removeHighlightForPlayer(targetPlayer)
-	end)
-
-	highlightState.playerConnections[targetPlayer] = connections
-
-	updateHighlightForPlayer(targetPlayer)
-end
-
-local function enableHighlights(context: string)
-	if highlightState.active and highlightState.context == context then
-		highlightState.style = getHighlightStyleForContext(context)
-		refreshHighlightStyle()
-		return
-	end
-
-	disableHighlights()
-
-	local style = getHighlightStyleForContext(context)
-	if not style then
-		return
-	end
-
-	highlightState.context = context
-	highlightState.active = true
-	highlightState.style = style
-
-	for _, player in Players:GetPlayers() do
-		trackPlayerForHighlights(player)
-	end
-
-	highlightState.playerAddedConn = Players.PlayerAdded:Connect(function(player)
-		if highlightState.active then
-			trackPlayerForHighlights(player)
-		end
-	end)
-
-	highlightState.playerRemovingConn = Players.PlayerRemoving:Connect(function(player)
-		clearConnectionsForPlayer(player)
-		removeHighlightForPlayer(player)
-	end)
-
-	refreshHighlightStyle()
-end
-
-local function updateHighlightActivation()
-	local desiredContext: string? = nil
-
-	local team = localPlayer.Team
-	if team and team.Name == "Spectate" then
-		desiredContext = "Spectate"
-	elseif deathMatchHighlightActive and localPlayer.Neutral and not invisibilityState.enabled then
-		desiredContext = "DeathMatch"
-	end
-
-	if desiredContext then
-		enableHighlights(desiredContext)
+local function playMapMusic(config: MapConfig)
+	if config.musicId then
+		playMusic(config.musicId)
 	else
-		disableHighlights()
+		playIntermissionMusic()
+	end
+end
+
+local function playDeathMatchMusic(config: MapConfig?)
+	local musicId = DEATHMATCH_MUSIC_ID
+	if config and config.deathMatchMusicId then
+		musicId = config.deathMatchMusicId
 	end
 
-	if updateInvisiblePulseState then
-		updateInvisiblePulseState()
+	playMusic(musicId)
+
+	if currentMusic and config then
+		local startTime = config.deathMatchMusicStartTime
+		if typeof(startTime) == "number" then
+			currentMusic.TimePosition = math.max(0, startTime)
+		end
+	end
+end
+
+playIntermissionMusic()
+
+local function cancelAtmosphereTween()
+	if activeAtmosphereTween then
+		activeAtmosphereTween:Cancel()
+		activeAtmosphereTween = nil
+	end
+end
+
+local function ensureManagedAtmosphere(): Atmosphere?
+	if managedAtmosphere and managedAtmosphere.Parent then
+		return managedAtmosphere
+	end
+
+	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+	if atmosphere then
+		managedAtmosphere = atmosphere
+		createdManagedAtmosphere = false
 	else
-		pendingInvisiblePulseUpdate = true
+		atmosphere = Instance.new("Atmosphere")
+		atmosphere.Name = "PVPAtmosphere"
+		atmosphere.Parent = Lighting
+		managedAtmosphere = atmosphere
+		createdManagedAtmosphere = true
 	end
+
+	if atmosphere and not storedAtmosphereProps then
+		storedAtmosphereProps = {
+			Density = atmosphere.Density,
+			Offset = atmosphere.Offset,
+			Color = atmosphere.Color,
+			Decay = atmosphere.Decay,
+			Glare = atmosphere.Glare,
+			Haze = atmosphere.Haze,
+		}
+	end
+
+	return managedAtmosphere
 end
 
-local function hideSpecialEvent(immediate: boolean?)
-	specialEventState.hideToken += 1
-	local token = specialEventState.hideToken
+local function restoreAtmosphere()
+	cancelAtmosphereTween()
 
-	if not specialEventUI.frame then
+	local atmosphere = managedAtmosphere
+	local created = createdManagedAtmosphere
+
+	if not atmosphere or not atmosphere.Parent then
+		managedAtmosphere = nil
+		createdManagedAtmosphere = false
+		storedAtmosphereProps = nil
 		return
 	end
 
-	if immediate then
-		specialEventUI.frame.Visible = false
+	if storedAtmosphereProps then
+		atmosphere.Density = storedAtmosphereProps.Density
+		atmosphere.Offset = storedAtmosphereProps.Offset
+		atmosphere.Color = storedAtmosphereProps.Color
+		atmosphere.Decay = storedAtmosphereProps.Decay
+		atmosphere.Glare = storedAtmosphereProps.Glare
+		atmosphere.Haze = storedAtmosphereProps.Haze
+	end
+
+	if created then
+		atmosphere:Destroy()
+		managedAtmosphere = nil
+		createdManagedAtmosphere = false
+		storedAtmosphereProps = nil
+	end
+end
+
+local function tweenAtmosphereForDeathMatch()
+	local atmosphere = ensureManagedAtmosphere()
+	if not atmosphere then
 		return
 	end
 
-	local fadeTween = TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		BackgroundTransparency = 1,
-	})
-	local scaleTween = TweenService:Create(specialEventUI.scale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-		Scale = 0.85,
-	})
+	cancelAtmosphereTween()
 
-	fadeTween.Completed:Connect(function()
-		if specialEventState.hideToken == token then
-			specialEventUI.frame.Visible = false
-			specialEventUI.scale.Scale = 1
-		end
-	end)
+	local tweenInfo = TweenInfo.new(DEATHMATCH_TRANSITION_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+	local goal = {
+		Density = 0.5,
+		Offset = 1,
+		Color = Color3.fromRGB(255, 0, 0),
+		Decay = Color3.fromRGB(255, 0, 0),
+		Glare = 0.5,
+		Haze = 5,
+	}
 
-	fadeTween:Play()
-	scaleTween:Play()
-end
+	activeAtmosphereTween = TweenService:Create(atmosphere, tweenInfo, goal)
+	local thisTween = activeAtmosphereTween
+	thisTween:Play()
 
-local function showSpecialEvent(titleText: string, keepSeconds: number?)
-	specialEventState.hideToken += 1
-	local token = specialEventState.hideToken
-
-	specialEventUI.title.Text = titleText
-	specialEventUI.frame.Visible = true
-	specialEventUI.frame.BackgroundTransparency = 1
-	specialEventUI.scale.Scale = 0.2
-
-	TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		BackgroundTransparency = 0.05,
-	}):Play()
-
-	TweenService:Create(specialEventUI.scale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Scale = 1,
-	}):Play()
-
-	if keepSeconds and keepSeconds > 0 then
-		task.delay(keepSeconds, function()
-			if specialEventState.hideToken == token then
-				hideSpecialEvent(false)
-			end
-		end)
-	end
-end
-
-local function beginSpecialEventRandomization(options: {{id: string?, name: string?}}, finalName: string?, duration: number?)
-	specialEventState.options = options
-	specialEventState.finalName = finalName
-	specialEventState.randomized = true
-	specialEventState.randomToken += 1
-	local token = specialEventState.randomToken
-
-	if #options == 0 then
-		options = {{id = "", name = "???"}}
-		specialEventState.options = options
-	end
-
-	showSpecialEvent("Randomizing...", duration or 3)
-
-	task.spawn(function()
-		local index = 1
-		local count = math.max(1, #options)
-		local elapsed = 0
-		local totalDuration = duration or 3
-		local step = 0.12
-
-		while specialEventState.randomized and specialEventState.randomToken == token do
-			local option = options[((index - 1) % count) + 1]
-			if option then
-				specialEventUI.title.Text = option.name or option.id or "???"
-			end
-			index += 1
-
-			task.wait(step)
-			elapsed += step
-
-			if totalDuration > 0 and elapsed > totalDuration then
-				step = math.min(0.25, step + 0.03)
-			end
+	task.delay(DEATHMATCH_TRANSITION_DURATION, function()
+		if activeAtmosphereTween == thisTween then
+			activeAtmosphereTween = nil
 		end
 	end)
 end
 
-local function completeSpecialEventRandomization(finalName: string)
-	if not specialEventState.randomized then
-		showSpecialEvent(finalName, 3)
+local function applyDeathMatchAtmosphere()
+	local atmosphere = ensureManagedAtmosphere()
+	if not atmosphere then
 		return
 	end
 
-	specialEventState.randomized = false
-	specialEventUI.title.Text = finalName
-	showSpecialEvent(finalName, 3)
+	cancelAtmosphereTween()
+
+	atmosphere.Density = 0.5
+	atmosphere.Offset = 1
+	atmosphere.Color = Color3.fromRGB(255, 0, 0)
+	atmosphere.Decay = Color3.fromRGB(255, 0, 0)
+	atmosphere.Glare = 0.5
+	atmosphere.Haze = 5
 end
 
-local function cancelInvisibleHighlightFade(highlight: Highlight)
-	local bundle = invisibleHighlightTweens[highlight]
-	if not bundle then
+local function clearStorm()
+	if currentStormPart then
+		currentStormPart:Destroy()
+		currentStormPart = nil
+	end
+	deathMatchActive = false
+	restoreAtmosphere()
+end
+
+local function restoreSkybox()
+	if activeSkybox then
+		activeSkybox:Destroy()
+		activeSkybox = nil
+	end
+
+	if storedNormalSky then
+		storedNormalSky.Parent = storedNormalSkyParent or Lighting
+		storedNormalSky = nil
+		storedNormalSkyParent = nil
+	end
+end
+
+local function applySkybox(config: MapConfig)
+	if not skyboxFolder then
 		return
 	end
 
-	if bundle.conn then
-		bundle.conn:Disconnect()
+	local skyboxName = config.skyboxName
+	if config.id == "ChaosCanyon" then
+		skyboxName = "ChaosCanyonSky"
 	end
-	bundle.tween:Cancel()
-	invisibleHighlightTweens[highlight] = nil
-end
 
-local function startInvisibleHighlightFade(highlight: Highlight)
-	cancelInvisibleHighlightFade(highlight)
+	local targetSky = skyboxFolder:FindFirstChild(skyboxName)
+	if not targetSky then
+		return
+	end
 
-	local tween = TweenService:Create(highlight, TweenInfo.new(2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		FillTransparency = 1,
-		OutlineTransparency = 1,
-	})
-
-	local conn = tween.Completed:Connect(function()
-		local bundle = invisibleHighlightTweens[highlight]
-		if bundle and bundle.tween == tween then
-			invisibleHighlightTweens[highlight] = nil
+	if not storedNormalSky then
+		local normalSky = Lighting:FindFirstChild("NormalSky")
+		if normalSky then
+			storedNormalSky = normalSky
+			storedNormalSkyParent = normalSky.Parent
+			normalSky.Parent = nil
 		end
-	end)
-
-	invisibleHighlightTweens[highlight] = {tween = tween, conn = conn}
-	tween:Play()
-end
-
-local function ensureInvisibleHighlight(character: Model): Highlight
-	local highlight = character:FindFirstChild("InvisibleRevealHighlight") :: Highlight?
-	if not highlight then
-		highlight = Instance.new("Highlight")
-		highlight.Name = "InvisibleRevealHighlight"
-		highlight.FillColor = Color3.fromRGB(255, 255, 255)
-		highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-		highlight.FillTransparency = 1
-		highlight.OutlineTransparency = 1
-		highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-		highlight.Parent = character
-		highlight.Enabled = true
-		highlight.Destroying:Connect(function()
-			cancelInvisibleHighlightFade(highlight)
-		end)
 	end
 
-	return highlight
+	if activeSkybox then
+		activeSkybox:Destroy()
+	end
+
+	local skyClone = targetSky:Clone()
+	skyClone.Name = string.format("%s_Active", skyboxName)
+	skyClone.Parent = Lighting
+	activeSkybox = skyClone
 end
 
-local function clearInvisibleHighlight(character: Model)
-	local highlight = character:FindFirstChild("InvisibleRevealHighlight")
-	if highlight then
-		cancelInvisibleHighlightFade(highlight :: Highlight)
-		highlight:Destroy()
+local function clearParticipantConnections(record: ParticipantRecord)
+	if record.characterConn then
+		record.characterConn:Disconnect()
+		record.characterConn = nil
 	end
-	cancelInvisibleCharacterFade(character)
 
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
-		setHumanoidNameHidden(humanoid, false)
+	if record.deathConn then
+		record.deathConn:Disconnect()
+		record.deathConn = nil
+	end
+
+	if record.healConn then
+		record.healConn:Disconnect()
+		record.healConn = nil
 	end
 end
 
-local function applyCharacterInvisibility(character: Model, enabled: boolean, owner: Player?)
-	local targetTransparency = computeInvisibilityTransparency(enabled, owner)
-	local bundle = invisibleCharacterFades[character]
-
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
-		setHumanoidNameHidden(humanoid, enabled)
-	end
-
-	if not enabled then
-		cancelInvisibleCharacterFade(character, targetTransparency)
-		return
-	end
-
-	if bundle then
-		bundle.target = targetTransparency
-		return
-	end
-
-	applyTransparencyToCharacter(character, targetTransparency)
-end
-
-local function updateInvisibilityForPlayer(player: Player)
+local function setParticipantFrozen(record: ParticipantRecord, freeze: boolean)
+	local player = record.player
 	local character = player.Character
 	if not character then
 		return
 	end
 
-	local shouldBeInvisible = invisibilityState.enabled and player.Neutral
-	applyCharacterInvisibility(character, shouldBeInvisible, player)
-
-	if not shouldBeInvisible then
-		clearInvisibleHighlight(character)
-	end
-end
-
-local function clearInvisibilityTracking()
-	for _, connections in invisibilityState.playerConnections do
-		for _, connection in connections do
-			connection:Disconnect()
-		end
-	end
-
-	table.clear(invisibilityState.playerConnections)
-
-	for _, player in Players:GetPlayers() do
-		if player.Character then
-			applyCharacterInvisibility(player.Character, false, player)
-			clearInvisibleHighlight(player.Character)
-		end
-	end
-
-	table.clear(invisibleHumanoidNameDisplay)
-end
-
-local function trackPlayerForInvisibility(player: Player)
-	local existing = invisibilityState.playerConnections[player]
-	if existing then
-		for _, connection in existing do
-			connection:Disconnect()
-		end
-	end
-
-	local connections: {RBXScriptConnection} = {}
-	connections[#connections + 1] = player:GetPropertyChangedSignal("Neutral"):Connect(function()
-		updateInvisibilityForPlayer(player)
-	end)
-	connections[#connections + 1] = player.CharacterAdded:Connect(function()
-		task.defer(function()
-			updateInvisibilityForPlayer(player)
-		end)
-	end)
-	connections[#connections + 1] = player.CharacterRemoving:Connect(function(character)
-		clearInvisibleHighlight(character)
-	end)
-
-	invisibilityState.playerConnections[player] = connections
-	updateInvisibilityForPlayer(player)
-end
-
-local function updateInvisiblePulseState()
-	invisibilityState.pulseToken += 1
-	local token = invisibilityState.pulseToken
-
-	if not invisibilityState.enabled then
-		for _, player in Players:GetPlayers() do
-			local character = player.Character
-			if character then
-				local highlight = character:FindFirstChild("InvisibleRevealHighlight") :: Highlight?
-				if highlight then
-					cancelInvisibleHighlightFade(highlight)
-					highlight.FillTransparency = 1
-					highlight.OutlineTransparency = 1
-				end
-				cancelInvisibleCharacterFade(character, computeInvisibilityTransparency(false, player))
-			end
-		end
-		return
-	end
-
-	task.spawn(function()
-		while invisibilityState.enabled and invisibilityState.pulseToken == token do
-			for _, player in Players:GetPlayers() do
-				if player.Neutral then
-					local character = player.Character
-					if character then
-						local highlight = ensureInvisibleHighlight(character)
-						cancelInvisibleHighlightFade(highlight)
-						highlight.FillColor = Color3.fromRGB(255, 255, 255)
-						highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-						highlight.FillTransparency = 0.5
-						highlight.OutlineTransparency = 0
-						highlight.Enabled = true
-						flashInvisibleCharacter(character)
-					end
-				else
-					local character = player.Character
-					if character then
-						cancelInvisibleCharacterFade(character, computeInvisibilityTransparency(false, player))
-					end
-				end
-			end
-
-			local pulseToken = token
-			task.delay(1, function()
-				if invisibilityState.pulseToken == pulseToken then
-					for _, player in Players:GetPlayers() do
-						local character = player.Character
-						if character then
-							local highlight = character:FindFirstChild("InvisibleRevealHighlight") :: Highlight?
-							if highlight then
-								startInvisibleHighlightFade(highlight)
-							end
-							if player.Neutral then
-								startInvisibleCharacterFade(character, player, 2)
-							end
-						end
-					end
-				end
-			end)
-
-			local elapsed = 0
-			while elapsed < 5 and invisibilityState.enabled and invisibilityState.pulseToken == token do
-				task.wait(0.2)
-				elapsed += 0.2
-			end
-		end
-	end)
-end
-
-if pendingInvisiblePulseUpdate then
-	pendingInvisiblePulseUpdate = false
-	updateInvisiblePulseState()
-end
-
-local function setInvisibilityEnabled(enabled: boolean)
-	if invisibilityState.enabled == enabled then
-		updateInvisiblePulseState()
-		for _, player in Players:GetPlayers() do
-			updateInvisibilityForPlayer(player)
-		end
-		if updateHighlightActivation then
-			updateHighlightActivation()
-		end
-		return
-	end
-
-	invisibilityState.enabled = enabled
-
-	if enabled then
-		for _, player in Players:GetPlayers() do
-			trackPlayerForInvisibility(player)
-		end
-
-		if not invisibilityState.playerAddedConn then
-			invisibilityState.playerAddedConn = Players.PlayerAdded:Connect(function(player)
-				trackPlayerForInvisibility(player)
-			end)
-		end
-
-		if not invisibilityState.playerRemovingConn then
-			invisibilityState.playerRemovingConn = Players.PlayerRemoving:Connect(function(player)
-				local connections = invisibilityState.playerConnections[player]
-				if connections then
-					for _, connection in connections do
-						connection:Disconnect()
-					end
-					invisibilityState.playerConnections[player] = nil
-				end
-
-				local character = player.Character
-				if character then
-					clearInvisibleHighlight(character)
-				end
-			end)
-		end
-	else
-		if invisibilityState.playerAddedConn then
-			invisibilityState.playerAddedConn:Disconnect()
-			invisibilityState.playerAddedConn = nil
-		end
-		if invisibilityState.playerRemovingConn then
-			invisibilityState.playerRemovingConn:Disconnect()
-			invisibilityState.playerRemovingConn = nil
-		end
-
-		clearInvisibilityTracking()
-	end
-
-	updateInvisiblePulseState()
-	if updateHighlightActivation then
-		updateHighlightActivation()
-	end
-end
-
-local function resetInvertedMovement()
-	invertedControlState.keyboard.forward = false
-	invertedControlState.keyboard.back = false
-	invertedControlState.keyboard.left = false
-	invertedControlState.keyboard.right = false
-	invertedControlState.thumbstick = Vector2.new(0, 0)
-
-	local humanoid = currentHumanoid
-	if humanoid then
-		humanoid:Move(Vector3.zero, true)
-	end
-end
-
-local function enableDefaultControlsIfDisabled()
-	if not invertedControlState.controlsDisabled then
-		return
-	end
-
-	local controls = getPlayerControls()
-	if controls and controls.Enable then
-		local ok, err = pcall(function()
-			controls:Enable()
-		end)
-		if not ok then
-			warn("Failed to re-enable default controls after inverted event:", err)
-		else
-			invertedControlState.controlsDisabled = false
-		end
-	else
-		invertedControlState.controlsDisabled = false
-	end
-end
-
-local function disableDefaultControls()
-	local controls = getPlayerControls()
-	if not controls or not controls.Disable then
-		return
-	end
-
-	local ok, err = pcall(function()
-		controls:Disable()
-	end)
-	if not ok then
-		warn("Failed to disable default controls for inverted event:", err)
-	else
-		invertedControlState.controlsDisabled = true
-	end
-end
-
-local function updateInvertedMovement()
-	if not invertedControlState.active then
-		return
-	end
-
-	local humanoid = currentHumanoid
+	local humanoid = record.humanoid or character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then
 		return
 	end
 
-	local moveX = 0
-	if invertedControlState.keyboard.left then
-		moveX += 1
-	end
-	if invertedControlState.keyboard.right then
-		moveX -= 1
+	record.humanoid = humanoid
+
+	if freeze then
+		if not record.originalWalkSpeed then
+			record.originalWalkSpeed = humanoid.WalkSpeed
+		end
+		if not record.originalJumpPower then
+			record.originalJumpPower = humanoid.JumpPower
+		end
+		humanoid.WalkSpeed = 0
+		humanoid.JumpPower = 0
+		humanoid.AutoRotate = false
+	else
+		if record.originalWalkSpeed then
+			humanoid.WalkSpeed = record.originalWalkSpeed
+			record.originalWalkSpeed = nil
+		end
+		if record.originalJumpPower then
+			humanoid.JumpPower = record.originalJumpPower
+			record.originalJumpPower = nil
+		end
+		humanoid.AutoRotate = true
 	end
 
-	local moveZ = 0
-	if invertedControlState.keyboard.forward then
-		moveZ += 1
+	local rootPart = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if rootPart then
+		rootPart.Anchored = freeze
+		if not freeze then
+			rootPart.AssemblyLinearVelocity = Vector3.zero
+			rootPart.AssemblyAngularVelocity = Vector3.zero
+		end
 	end
-	if invertedControlState.keyboard.back then
-		moveZ -= 1
-	end
-
-	local thumb = invertedControlState.thumbstick
-	if thumb.Magnitude > 0 then
-		moveX += -thumb.X
-		moveZ += -thumb.Y
-	end
-
-	local moveVector = Vector3.new(moveX, 0, moveZ)
-	if moveVector.Magnitude > 1 then
-		moveVector = moveVector.Unit
-	end
-
-	humanoid:Move(moveVector, true)
 end
 
-local function ensureInvertedHeartbeat()
-	if invertedControlState.heartbeatConn then
-		invertedControlState.heartbeatConn:Disconnect()
-	end
-
-	invertedControlState.heartbeatConn = RunService.Heartbeat:Connect(updateInvertedMovement)
-end
-
-local function disableInvertedControls()
-	for _, connection in invertedControlState.connections do
-		connection:Disconnect()
-	end
-	table.clear(invertedControlState.connections)
-
-	if invertedControlState.jumpConn then
-		invertedControlState.jumpConn:Disconnect()
-		invertedControlState.jumpConn = nil
-	end
-
-	if invertedControlState.heartbeatConn then
-		invertedControlState.heartbeatConn:Disconnect()
-		invertedControlState.heartbeatConn = nil
-	end
-
-	resetInvertedMovement()
-
-	enableDefaultControlsIfDisabled()
-
-	invertedControlState.active = false
-end
-
-local function enableInvertedControls()
-	disableDefaultControls()
-
-	resetInvertedMovement()
-
-	if invertedControlState.active then
-		ensureInvertedHeartbeat()
+local function teleportParticipant(record: ParticipantRecord)
+	local player = record.player
+	local character = player.Character
+	local spawnPart = record.spawnPart
+	if not character or not spawnPart then
 		return
 	end
 
-	local function onInputBegan(input: InputObject, processed: boolean)
-		if processed then
-			return
-		end
-
-		local key = input.KeyCode
-		if key == Enum.KeyCode.W or key == Enum.KeyCode.Up then
-			invertedControlState.keyboard.forward = true
-		elseif key == Enum.KeyCode.S or key == Enum.KeyCode.Down then
-			invertedControlState.keyboard.back = true
-		elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left then
-			invertedControlState.keyboard.left = true
-		elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
-			invertedControlState.keyboard.right = true
-		elseif key == Enum.KeyCode.DPadUp then
-			invertedControlState.keyboard.forward = true
-		elseif key == Enum.KeyCode.DPadDown then
-			invertedControlState.keyboard.back = true
-		elseif key == Enum.KeyCode.DPadLeft then
-			invertedControlState.keyboard.left = true
-		elseif key == Enum.KeyCode.DPadRight then
-			invertedControlState.keyboard.right = true
-		elseif key == Enum.KeyCode.Space or key == Enum.KeyCode.ButtonA then
-			local humanoid = currentHumanoid
-			if humanoid then
-				humanoid.Jump = true
-			end
-		end
+	local rootPart = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not rootPart then
+		return
 	end
 
-	local function onInputEnded(input: InputObject)
-		local key = input.KeyCode
-		if key == Enum.KeyCode.W or key == Enum.KeyCode.Up then
-			invertedControlState.keyboard.forward = false
-		elseif key == Enum.KeyCode.S or key == Enum.KeyCode.Down then
-			invertedControlState.keyboard.back = false
-		elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left then
-			invertedControlState.keyboard.left = false
-		elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
-			invertedControlState.keyboard.right = false
-		elseif key == Enum.KeyCode.DPadUp then
-			invertedControlState.keyboard.forward = false
-		elseif key == Enum.KeyCode.DPadDown then
-			invertedControlState.keyboard.back = false
-		elseif key == Enum.KeyCode.DPadLeft then
-			invertedControlState.keyboard.left = false
-		elseif key == Enum.KeyCode.DPadRight then
-			invertedControlState.keyboard.right = false
-		elseif key == Enum.KeyCode.Thumbstick1 then
-			invertedControlState.thumbstick = Vector2.new(0, 0)
+	local offset = spawnPart.CFrame.UpVector * (spawnPart.Size.Y / 2 + 3)
+	character:PivotTo(spawnPart.CFrame + offset)
+end
+
+local function cleanupParticipant(player: Player)
+	local record = participantRecords[player]
+	if not record then
+		return
+	end
+
+	record.freezeToken = (record.freezeToken or 0) + 1
+
+	clearParticipantConnections(record)
+
+	callSpecialEventCallback(activeSpecialEvent, "onParticipantCleanup", record)
+
+	local character = player.Character
+	if character then
+		local rootPart = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if rootPart then
+			rootPart.Anchored = false
 		end
-	end
 
-	local function onInputChanged(input: InputObject)
-		if input.KeyCode == Enum.KeyCode.Thumbstick1 then
-			invertedControlState.thumbstick = Vector2.new(input.Position.X, input.Position.Y)
-		end
-	end
-
-	invertedControlState.connections = {
-		UserInputService.InputBegan:Connect(onInputBegan),
-		UserInputService.InputEnded:Connect(onInputEnded),
-		UserInputService.InputChanged:Connect(onInputChanged),
-	}
-
-	if invertedControlState.jumpConn then
-		invertedControlState.jumpConn:Disconnect()
-	end
-	invertedControlState.jumpConn = UserInputService.JumpRequest:Connect(function()
-		local humanoid = currentHumanoid
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
 		if humanoid then
-			humanoid.Jump = true
-		end
-	end)
-
-	ensureInvertedHeartbeat()
-
-	invertedControlState.active = true
-end
-
-local function applyInvertedControlState()
-	-- Reset any stuck inputs immediately and shortly after spawn
-	resetMovementState(humanoid)
-	task.delay(0.20, function() resetMovementState(humanoid) end)
-	task.delay(0.60, function() resetMovementState(humanoid) end)
-	-- safety: if not inverted after spawn, re-enable defaults
-	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	local shouldEnable = invertedControlState.requested and localPlayer.Neutral
-	if shouldEnable then
-		enableInvertedControls()
-	else
-		if invertedControlState.active then
-			disableInvertedControls()
-		else
-			enableDefaultControlsIfDisabled()
+			if record.originalWalkSpeed then
+				humanoid.WalkSpeed = record.originalWalkSpeed
+			end
+			if record.originalJumpPower then
+				humanoid.JumpPower = record.originalJumpPower
+			end
+			humanoid.AutoRotate = true
 		end
 	end
+
+	participantRecords[player] = nil
 end
 
-local function setInvertedControlsEnabled(enabled: boolean)
-	invertedControlState.requested = enabled
-	applyInvertedControlState()
-	-- Reset any stuck inputs immediately and shortly after spawn
-	resetMovementState(humanoid)
-	task.delay(0.20, function() resetMovementState(humanoid) end)
-	task.delay(0.60, function() resetMovementState(humanoid) end)
-	-- safety: if not inverted after spawn, re-enable defaults
-	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-end
-
-local function getSprintActionButton(): ImageButton?
-	local button = uiRefs.sprintActionButton
-	if button and button.Parent then
-		return button
+local function findToolByName(root: Instance?, targetName: string): Tool?
+	if not root then
+		return nil
 	end
 
-	button = ContextActionService:GetButton("SprintAction")
-	if button and button:IsA("ImageButton") then
-		uiRefs.sprintActionButton = button
-		return button
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant:IsA("Tool") and descendant.Name == targetName then
+			return descendant
+		end
 	end
 
-	uiRefs.sprintActionButton = nil
 	return nil
 end
 
-local function updateSprintButtonState()
-	if not sprintInteraction.actionBound then
+local function giveParticipantGear(record: ParticipantRecord)
+	local player = record.player
+	clearPVPTools(player)
+
+	local backpack = player:FindFirstChildOfClass("Backpack") or player:FindFirstChild("Backpack")
+	if not backpack then
+		backpack = player:WaitForChild("Backpack", 5)
+	end
+
+	if not backpack then
 		return
 	end
 
-	local hasEnergy = sprintState.energy > 0
-	local sprintBlocked = sprintState.zoneBlocked or sprintState.eventDisabled
-	local canSprint = hasEnergy and not sprintBlocked
-	local buttonActive = sprintState.touchIntent and canSprint
-
-	if not canSprint and not buttonActive then
-		local title = if sprintState.zoneBlocked then "No Sprint" elseif sprintState.eventDisabled then "Event" else "Rest"
-		ContextActionService:SetTitle("SprintAction", title)
-	elseif buttonActive then
-		ContextActionService:SetTitle("SprintAction", "Unsprint")
-	else
-		ContextActionService:SetTitle("SprintAction", "Sprint")
-	end
-
-	local shouldEnable = canSprint or sprintState.touchIntent
-
-	local sprintButton = getSprintActionButton()
-	if sprintButton then
-		sprintButton.Visible = shouldEnable
-		sprintButton.Active = shouldEnable
-		sprintButton.AutoButtonColor = shouldEnable
-		sprintButton.Selectable = shouldEnable
-	end
-end
-
-local function recomputeSprintIntent()
-	local desiredIntent = sprintState.keyboardIntent or sprintState.touchIntent
-	if sprintState.zoneBlocked or sprintState.eventDisabled then
-		desiredIntent = false
-	end
-
-	sprintState.sprintIntent = desiredIntent
-	updateSprintButtonState()
-end
-
-local function setSprintEventDisabled(disabled: boolean)
-	local shouldDisable = disabled and localPlayer.Neutral
-	if sprintState.eventDisabled == shouldDisable then
-		return
-	end
-
-	sprintState.eventDisabled = shouldDisable
-
-	if shouldDisable then
-		if sprintState.isSprinting then
-			stopSprinting(true)
+	local specialContext = activeSpecialEvent
+	if specialContext then
+		callSpecialEventCallback(specialContext, "provideGear", record)
+		if specialContext.definition.ignoreDefaultGear then
+			return
 		end
-		sprintState.touchIntent = false
-		sprintState.keyboardIntent = false
 	end
 
-	recomputeSprintIntent()
-	updateEnergyUI()
-end
-
-local function updateEnergyUI()
-	if not uiRefs.energyBarFill or not uiRefs.energyTextLabel then
+	local classicSwordTemplate = findToolByName(gearsFolder, "ClassicSword")
+	if not classicSwordTemplate then
 		return
 	end
 
-	local normalized = math.clamp(sprintState.energy / MAX_SPRINT_ENERGY, 0, 1)
-	if normalized <= 0 then
-		uiRefs.energyBarFill.Visible = false
-	else
-		uiRefs.energyBarFill.Visible = true
-		uiRefs.energyBarFill.Size = UDim2.new(normalized, 0, 1, 0)
+	local starterGear = player:FindFirstChild("StarterGear")
+
+	local backpackTool = classicSwordTemplate:Clone()
+	backpackTool:SetAttribute("PVPGenerated", true)
+	backpackTool.Parent = backpack
+
+	if starterGear and starterGear:IsA("Folder") then
+		local starterTool = classicSwordTemplate:Clone()
+		starterTool:SetAttribute("PVPGenerated", true)
+		starterTool.Parent = starterGear
+	end
+end
+
+local function handleToggleInventorySlot(player: Player, tool: Tool?)
+	if not tool or not tool:IsA("Tool") then
+		return
 	end
 
-	local percent = math.clamp(math.floor(normalized * 100 + 0.5), 0, 100)
-	uiRefs.energyTextLabel.Text = string.format("Energy %d%%", percent)
-
-	if percent <= 15 then
-		uiRefs.energyTextLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
-	elseif sprintState.isSprinting then
-		uiRefs.energyTextLabel.TextColor3 = Color3.fromRGB(180, 255, 220)
-	else
-		uiRefs.energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
+	if tool:GetAttribute("PVPGenerated") ~= true then
+		return
 	end
 
-	if uiRefs.sprintStatusLabel then
-		if sprintState.isSprinting then
-			uiRefs.sprintStatusLabel.Text = "Sprint ON"
-			uiRefs.sprintStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 220)
+	local character = player.Character
+	local backpack = player:FindFirstChildOfClass("Backpack")
+
+	if tool.Parent ~= character and tool.Parent ~= backpack then
+		return
+	end
+
+	if tool.Parent == character then
+		if backpack then
+			tool.Parent = backpack
 		else
-			uiRefs.sprintStatusLabel.Text = "Sprint OFF"
-			if sprintState.energy <= 0 or sprintState.zoneBlocked or sprintState.eventDisabled then
-				uiRefs.sprintStatusLabel.TextColor3 = Color3.fromRGB(255, 140, 140)
-			else
-				uiRefs.sprintStatusLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
-			end
-		end
-	end
-
-	updateSprintButtonState()
-end
-
-local function toggleTouchSprintIntent()
-	if sprintState.touchIntent then
-		sprintState.touchIntent = false
-		recomputeSprintIntent()
-		if not sprintState.sprintIntent then
-			stopSprinting(false)
+			tool.Parent = nil
 		end
 		return
 	end
 
-	if sprintState.energy <= 0 or sprintState.zoneBlocked or sprintState.eventDisabled then
-		sprintState.touchIntent = false
-		recomputeSprintIntent()
-		return
-	end
-
-	sprintState.touchIntent = true
-	recomputeSprintIntent()
-	if not sprintState.isSprinting then
-		startSprinting()
+	if backpack and tool.Parent == backpack and character then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid:EquipTool(tool)
+		end
 	end
 end
 
-local function tweenHumanoidSpeed(targetSpeed: number, instant: boolean)
-	local humanoid = currentHumanoid
+toggleInventorySlotRemote.OnServerEvent:Connect(handleToggleInventorySlot)
+
+local function disableParticipantHealing(record: ParticipantRecord)
+	if not isPlayerInNeutralState(record.player) then
+		return
+	end
+
+	local humanoid = record.humanoid
+	if not humanoid then
+		local character = record.player.Character
+		if character then
+			humanoid = character:FindFirstChildOfClass("Humanoid")
+		end
+	end
+
 	if not humanoid then
 		return
 	end
 
-	if sprintState.speedTween then
-		sprintState.speedTween:Cancel()
-		sprintState.speedTween = nil
+	record.humanoid = humanoid
+
+	if record.healConn then
+		record.healConn:Disconnect()
+		record.healConn = nil
 	end
 
-	if instant then
-		humanoid.WalkSpeed = targetSpeed
-		return
-	end
+	local adjusting = false
+	local lastHealth = humanoid.Health
 
-	local tween = TweenService:Create(humanoid, TweenInfo.new(SPRINT_TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		WalkSpeed = targetSpeed,
-	})
-	sprintState.speedTween = tween
-	tween.Completed:Connect(function()
-		if sprintState.speedTween == tween then
-			sprintState.speedTween = nil
+	record.healConn = humanoid.HealthChanged:Connect(function(newHealth)
+		if adjusting then
+			lastHealth = newHealth
+			return
 		end
-	end)
-	tween:Play()
-end
 
-local function tweenCameraFov(targetFov: number, instant: boolean, onComplete: (() -> ())?)
-	local camera = Workspace.CurrentCamera
-	if not camera then
-		return
-	end
-
-	if sprintState.cameraTween then
-		sprintState.cameraTween:Cancel()
-		sprintState.cameraTween = nil
-	end
-
-	if instant then
-		camera.FieldOfView = targetFov
-		if onComplete then
-			onComplete()
-		end
-		return
-	end
-
-	local tween = TweenService:Create(camera, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		FieldOfView = targetFov,
-	})
-	sprintState.cameraTween = tween
-	tween.Completed:Connect(function(playbackState)
-		if sprintState.cameraTween == tween then
-			sprintState.cameraTween = nil
-		end
-		if playbackState == Enum.PlaybackState.Completed and onComplete then
-			onComplete()
-		end
-	end)
-	tween:Play()
-end
-
-local function stopSprinting(instant: boolean)
-	local wasSprinting = sprintState.isSprinting
-	sprintState.isSprinting = false
-
-	if wasSprinting then
-		sprintState.rechargeBlockedUntil = os.clock() + SPRINT_RECHARGE_DELAY
-	end
-
-	if currentHumanoid then
-		tweenHumanoidSpeed(sprintState.originalWalkSpeed, instant)
-	end
-
-	if sprintState.originalCameraFov then
-		local targetFov = sprintState.originalCameraFov
-		if instant then
-			tweenCameraFov(targetFov, true)
-			sprintState.originalCameraFov = nil
+		if newHealth > lastHealth then
+			adjusting = true
+			humanoid.Health = math.min(lastHealth, humanoid.MaxHealth)
+			adjusting = false
 		else
-			tweenCameraFov(targetFov, false, function()
-				sprintState.originalCameraFov = nil
+			lastHealth = newHealth
+		end
+	end)
+end
+
+local function prepareParticipant(record: ParticipantRecord, spawnPart: BasePart, roundId: number)
+	record.spawnPart = spawnPart
+
+	local function onCharacter(character: Model)
+		if roundId ~= currentRoundId or not roundInProgress then
+			return
+		end
+
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+
+		if not humanoid then
+			humanoid = character:WaitForChild("Humanoid", 5) :: Humanoid?
+		end
+
+		if not rootPart then
+			rootPart = character:WaitForChild("HumanoidRootPart", 5) :: BasePart?
+		end
+
+		if not humanoid or not rootPart then
+			return
+		end
+
+		record.humanoid = humanoid
+		record.eventData = record.eventData or {}
+		callSpecialEventCallback(activeSpecialEvent, "onParticipantCharacter", record, character, humanoid)
+		setParticipantFrozen(record, true)
+		teleportParticipant(record)
+
+		record.freezeToken = (record.freezeToken or 0) + 1
+		local activeFreezeToken = record.freezeToken
+
+		local function releaseTeleportFreeze()
+			if roundId ~= currentRoundId or not roundInProgress then
+				return
+			end
+
+			if record.freezeToken ~= activeFreezeToken then
+				return
+			end
+
+			setParticipantFrozen(record, false)
+		end
+
+		if TELEPORT_FREEZE_DURATION > 0 then
+			task.delay(TELEPORT_FREEZE_DURATION, releaseTeleportFreeze)
+		else
+			task.defer(releaseTeleportFreeze)
+		end
+
+		if record.deathConn then
+			record.deathConn:Disconnect()
+		end
+
+		record.deathConn = humanoid.Died:Connect(function()
+			handleElimination(record.player, roundId)
+		end)
+
+		assignPlayerToNeutralState(record.player)
+
+		if record.countdownComplete then
+			task.defer(function()
+				if roundId ~= currentRoundId or not roundInProgress then
+					return
+				end
+
+				setParticipantFrozen(record, false)
+				giveParticipantGear(record)
+
+				if deathMatchActive and isPlayerInNeutralState(record.player) then
+					disableParticipantHealing(record)
+				end
 			end)
 		end
 	end
 
-	updateEnergyUI()
-end
-
-local function startSprinting()
-	if sprintState.isSprinting then
-		return
+	if record.characterConn then
+		record.characterConn:Disconnect()
 	end
 
-	if sprintState.zoneBlocked or sprintState.eventDisabled then
-		return
-	end
+	record.characterConn = record.player.CharacterAdded:Connect(onCharacter)
 
-	if sprintState.energy <= 0 then
-		return
-	end
-
-	local humanoid = currentHumanoid
-	if not humanoid then
-		return
-	end
-
-	sprintState.isSprinting = true
-
-	local baselineSpeed = sprintState.originalWalkSpeed
-	if not baselineSpeed or baselineSpeed <= 0 then
-		baselineSpeed = humanoid.WalkSpeed
-	end
-
-	local sprintTarget = getSprintTargetSpeed()
-
-	if math.abs(baselineSpeed - sprintTarget) < 0.001 then
-		baselineSpeed = DEFAULT_WALK_SPEED
-	elseif baselineSpeed <= 0 then
-		baselineSpeed = DEFAULT_WALK_SPEED
-	end
-
-	sprintState.originalWalkSpeed = baselineSpeed
-
-	tweenHumanoidSpeed(sprintTarget, false)
-
-	local camera = Workspace.CurrentCamera
-	if camera then
-		if not sprintState.originalCameraFov then
-			sprintState.originalCameraFov = camera.FieldOfView
-		end
-		local targetFov = math.clamp(sprintState.originalCameraFov + SPRINT_FOV_OFFSET, 5, 120)
-		tweenCameraFov(targetFov, false)
-	end
-
-	updateEnergyUI()
-end
-
-local function resetSprintState()
-	stopSprinting(true)
-	sprintState.keyboardIntent = false
-	sprintState.touchIntent = false
-	sprintState.zoneBlocked = false
-	recomputeSprintIntent()
-	sprintState.energy = MAX_SPRINT_ENERGY
-	sprintState.rechargeBlockedUntil = 0
-	sprintState.speedTween = nil
-	sprintState.cameraTween = nil
-	sprintState.originalCameraFov = nil
-	sprintState.originalWalkSpeed = DEFAULT_WALK_SPEED
-	updateEnergyUI()
-end
-
-local function applyDesktopCursorIcon()
-	if not mouse then
-		return
-	end
-
-	local iconAsset = currentCursorImageAsset
-	if mouse.Icon ~= iconAsset then
-		applyingMouseIcon = true
-		mouse.Icon = iconAsset
-		applyingMouseIcon = false
-	end
-
-	if uiRefs.centerCursorImage then
-		uiRefs.centerCursorImage.Image = if iconAsset ~= "" then iconAsset else ""
-	end
-end
-
-local function updateCenterCursorVisibility()
-	if not uiRefs.centerCursorImage then
-		return
-	end
-
-	local shouldShow = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
-		and currentCursorImageAsset ~= ""
-	uiRefs.centerCursorImage.Visible = shouldShow
-	if shouldShow then
-		uiRefs.centerCursorImage.Image = currentCursorImageAsset
-	end
-end
-
-local function setCursorAsset(assetId: string)
-	if currentCursorImageAsset == assetId then
-		return
-	end
-
-	currentCursorImageAsset = assetId
-
-	if mouse then
-		applyDesktopCursorIcon()
-	end
-
-	updateCenterCursorVisibility()
-end
-
-local function updateCursorForGearState()
-	setCursorAsset(GEAR_CURSOR_IMAGE_ASSET)
-end
-
-local function getToolIcon(tool: Tool): string
-	local textureId = tool.TextureId
-	if textureId and textureId ~= "" then
-		return textureId
-	end
-
-	local handle = tool:FindFirstChild("Handle")
-	if handle and handle:IsA("BasePart") then
-		if handle:IsA("MeshPart") then
-			local meshTexture = handle.TextureID
-			if meshTexture and meshTexture ~= "" then
-				return meshTexture
-			end
-		end
-
-		local specialMesh = handle:FindFirstChildOfClass("SpecialMesh")
-		if specialMesh and specialMesh.TextureId ~= "" then
-			return specialMesh.TextureId
-		end
-	end
-
-	return ""
-end
-
-updateInventorySlots = function()
-	local cleanedOrder: {Tool} = {}
-	for _, tool in ipairs(trackedGearOrder) do
-		if trackedGearTools[tool] then
-			table.insert(cleanedOrder, tool)
-		end
-	end
-	trackedGearOrder = cleanedOrder
-
-	local toolCount = #trackedGearOrder
-	if toolCount == 0 then
-		inventoryAutoOpened = false
-	elseif isTouchDevice and not inventoryVisible and not inventoryAutoOpened then
-		inventoryAutoOpened = true
-		setInventoryVisibility(true)
-	end
-
-	for slotIndex = 1, 10 do
-		local slot = inventorySlots[slotIndex]
-		if slot then
-			local tool = trackedGearOrder[slotIndex]
-			slotToolMapping[slotIndex] = tool
-
-			if tool then
-				local iconId = getToolIcon(tool)
-				slot.icon.Image = iconId
-				slot.icon.Visible = iconId ~= ""
-				slot.label.Text = tool.Name
-				slot.frame.BackgroundTransparency = 0.15
-				slot.button.Active = true
-				slot.button.Selectable = true
-				slot.numberLabel.TextColor3 = Color3.fromRGB(210, 220, 240)
-			else
-				slot.icon.Image = ""
-				slot.icon.Visible = false
-				slot.label.Text = ""
-				slot.frame.BackgroundTransparency = 0.4
-				slot.button.Active = false
-				slot.button.Selectable = false
-				slot.numberLabel.TextColor3 = Color3.fromRGB(140, 150, 180)
-			end
-
-			local isEquipped = tool ~= nil and tool.Parent == localPlayer.Character
-			if isEquipped then
-				slot.stroke.Color = Color3.fromRGB(80, 190, 255)
-				slot.frame.BackgroundColor3 = Color3.fromRGB(30, 40, 60)
-			else
-				slot.stroke.Color = Color3.fromRGB(80, 100, 150)
-				slot.frame.BackgroundColor3 = Color3.fromRGB(24, 28, 40)
-			end
-		end
-	end
-end
-
-equipInventorySlot = function(slotIndex: number)
-	local tool = slotToolMapping[slotIndex]
-	if not tool then
-		return
-	end
-
-	local isPVPGear = tool:GetAttribute("PVPGenerated") == true
-
-	if toggleInventorySlotRemote and isPVPGear then
-		toggleInventorySlotRemote:FireServer(tool)
-		return
-	end
-
-	locallyToggleTool(tool)
-end
-
-updateInventorySlots()
-
-local function handleGearEquipped(info: GearTrackingInfo)
-	if info.isEquipped then
-		return
-	end
-
-	info.isEquipped = true
-	equippedGearCount += 1
-	updateCursorForGearState()
-	updateInventorySlots()
-end
-
-local function handleGearUnequipped(info: GearTrackingInfo)
-	if not info.isEquipped then
-		return
-	end
-
-	info.isEquipped = false
-	if equippedGearCount > 0 then
-		equippedGearCount -= 1
-	end
-	updateCursorForGearState()
-	updateInventorySlots()
-end
-
-local function clearBackpackConnections()
-	for _, connection in backpackConnections do
-		connection:Disconnect()
-	end
-	table.clear(backpackConnections)
-end
-
-local function untrackGearTool(tool: Tool)
-	local tracked = trackedGearTools[tool]
-	if not tracked then
-		return
-	end
-
-	trackedGearTools[tool] = nil
-	handleGearUnequipped(tracked)
-	removeToolFromOrder(tool)
-	updateInventorySlots()
-
-	for _, connection in tracked.connections do
-		if connection then
-			connection:Disconnect()
-		end
-	end
-end
-
-local function isPVPGear(instance: Instance): boolean
-	if not instance:IsA("Tool") then
-		return false
-	end
-
-	return instance:GetAttribute("PVPGenerated") == true
-end
-
-local function trackGearTool(tool: Tool)
-	if trackedGearTools[tool] or not isPVPGear(tool) then
-		return
-	end
-
-	local info: GearTrackingInfo = {
-		tool = tool,
-		isEquipped = false,
-		connections = {} :: GearConnections,
-	}
-
-	trackedGearTools[tool] = info
-	table.insert(trackedGearOrder, tool)
-	updateInventorySlots()
-
-	info.connections.equipped = tool.Equipped:Connect(function()
-		handleGearEquipped(info)
-	end)
-
-	info.connections.unequipped = tool.Unequipped:Connect(function()
-		handleGearUnequipped(info)
-	end)
-
-	info.connections.ancestry = tool.AncestryChanged:Connect(function(_, parent)
-		if parent == localPlayer.Character then
-			handleGearEquipped(info)
-		else
-			handleGearUnequipped(info)
-			if parent == nil then
-				untrackGearTool(tool)
-			end
-		end
-	end)
-
-	info.connections.destroying = tool.Destroying:Connect(function()
-		untrackGearTool(tool)
-	end)
-
-	if tool.Parent == localPlayer.Character then
-		handleGearEquipped(info)
+	if record.player.Character then
+		onCharacter(record.player.Character)
 	else
-		updateCursorForGearState()
+		record.player:LoadCharacter()
 	end
 end
 
-local function trackToolsIn(container: Instance)
-	for _, child in container:GetChildren() do
-		if child:IsA("Tool") then
-			trackGearTool(child)
-		end
-	end
-end
-
-local function watchBackpack(backpack: Backpack?)
-	if currentBackpack == backpack then
+handleElimination = function(player: Player, roundId: number)
+	local record = participantRecords[player]
+	if not record or record.roundId ~= roundId then
 		return
 	end
 
-	clearBackpackConnections()
-	currentBackpack = backpack
+	callSpecialEventCallback(activeSpecialEvent, "onParticipantEliminated", record)
+	cleanupParticipant(player)
+	clearPVPTools(player)
+	player.Team = spectateTeam
+	player.Neutral = false
 
-	if not backpack then
-		updateCursorForGearState()
-		updateInventorySlots()
+	task.defer(function()
+		checkRoundCompletion(roundId)
+	end)
+end
+
+checkRoundCompletion = function(roundId: number)
+	if roundId ~= currentRoundId or not roundInProgress then
 		return
 	end
 
-	trackToolsIn(backpack)
-
-	local addedConn = backpack.ChildAdded:Connect(function(child)
-		if child:IsA("Tool") then
-			trackGearTool(child)
-		end
-	end)
-	table.insert(backpackConnections, addedConn)
-end
-
-local function watchCharacterTools(character: Model)
-	if characterGearConn then
-		characterGearConn:Disconnect()
-		characterGearConn = nil
-	end
-
-	trackToolsIn(character)
-
-	characterGearConn = character.ChildAdded:Connect(function(child)
-		if child:IsA("Tool") then
-			trackGearTool(child)
-		end
-	end)
-end
-
-local function initializeBackpackTracking()
-	local backpack = localPlayer:FindFirstChildOfClass("Backpack")
-	watchBackpack(backpack)
-
-	localPlayer.ChildAdded:Connect(function(child)
-		if child:IsA("Backpack") then
-			watchBackpack(child)
-		end
-	end)
-
-	localPlayer.ChildRemoved:Connect(function(child)
-		if child:IsA("Backpack") then
-			watchBackpack(nil)
-		end
-	end)
-end
-
-local function playDeathMatchCameraSequence()
-	local camera = Workspace.CurrentCamera
-	if not camera then
-		return
-	end
-
-	local originalFov = camera.FieldOfView
-	local zoomOutFov = math.clamp(originalFov + 25, 5, 120)
-
-	local zoomOutTween = TweenService:Create(camera, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-		FieldOfView = zoomOutFov,
-	})
-	zoomOutTween:Play()
-
-	task.delay(0.3, function()
-		local activeCamera = Workspace.CurrentCamera
-		if activeCamera ~= camera then
-			return
-		end
-
-		local zoomInTween = TweenService:Create(camera, TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
-			FieldOfView = originalFov,
-		})
-		zoomInTween:Play()
-	end)
-end
-
-local function stopDeathMatchTransition()
-	if transitionState.active then
-		transitionState.token += 1
-		transitionState.active = false
-	end
-
-	updateHighlightActivation()
-end
-
-local function startDeathMatchTransition(duration: number?)
-	transitionState.token += 1
-	transitionState.active = true
-	local currentToken = transitionState.token
-
-	deathMatchHighlightActive = true
-	updateHighlightActivation()
-	playDeathMatchCameraSequence()
-
-	local delayTime = duration or 3
-	task.delay(delayTime, function()
-		if transitionState.active and transitionState.token == currentToken then
-			stopDeathMatchTransition()
-		end
-	end)
-end
-
-localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
-	updateHighlightActivation()
-	setSprintEventDisabled(specialEventState.effects.sprintDisabled)
-	applyInvertedControlState()
-	-- Reset any stuck inputs immediately and shortly after spawn
-	resetMovementState(humanoid)
-	task.delay(0.20, function() resetMovementState(humanoid) end)
-	task.delay(0.60, function() resetMovementState(humanoid) end)
-	-- safety: if not inverted after spawn, re-enable defaults
-	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-end)
-
-localPlayer:GetPropertyChangedSignal("Neutral"):Connect(function()
-	updateHighlightActivation()
-	setSprintEventDisabled(specialEventState.effects.sprintDisabled)
-	applyInvertedControlState()
-	-- Reset any stuck inputs immediately and shortly after spawn
-	resetMovementState(humanoid)
-	task.delay(0.20, function() resetMovementState(humanoid) end)
-	task.delay(0.60, function() resetMovementState(humanoid) end)
-	-- safety: if not inverted after spawn, re-enable defaults
-	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-end)
-
-initializeBackpackTracking()
-updateCursorForGearState()
-
-if mouse then
-	UserInputService.MouseIconEnabled = true
-	applyDesktopCursorIcon()
-
-	mouse:GetPropertyChangedSignal("Icon"):Connect(function()
-		if not applyingMouseIcon then
-			applyDesktopCursorIcon()
-		end
-	end)
-end
-
-UserInputService:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
-	if mouse then
-		applyDesktopCursorIcon()
-	end
-	updateCenterCursorVisibility()
-end)
-
-UserInputService.WindowFocusReleased:Connect(function()
-	sprintState.keyboardIntent = false
-	sprintState.touchIntent = false
-	recomputeSprintIntent()
-	stopSprinting(true)
-end)
-
-updateCenterCursorVisibility()
-updateEnergyUI()
-updateHighlightActivation()
-
-local function onHumanoidAdded(humanoid: Humanoid)
-	if humanoidSpeedChangedConn then
-		humanoidSpeedChangedConn:Disconnect()
-		humanoidSpeedChangedConn = nil
-	end
-
-	currentHumanoid = humanoid
-	if not invertedControlState.requested then
-		enableDefaultControlsIfDisabled()
-	end
-	if humanoidSprintBonusConn then
-		humanoidSprintBonusConn:Disconnect()
-		humanoidSprintBonusConn = nil
-	end
-	if humanoid.WalkSpeed <= 0 then
-		humanoid.WalkSpeed = DEFAULT_WALK_SPEED
-	end
-
-	local currentSpeed = humanoid.WalkSpeed
-	local sprintTarget = getSprintTargetSpeed()
-	if math.abs(currentSpeed - sprintTarget) < 0.001 then
-		currentSpeed = DEFAULT_WALK_SPEED
-	end
-	sprintState.originalWalkSpeed = currentSpeed
-
-	humanoidSprintBonusConn = humanoid:GetAttributeChangedSignal("SprintSpeedBonus"):Connect(function()
-		if sprintState.isSprinting then
-			tweenHumanoidSpeed(getSprintTargetSpeed(), true)
-		end
-	end)
-
-	humanoidSpeedChangedConn = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-		if sprintState.isSprinting then
-			return
-		end
-
-		if sprintState.speedTween then
-			return
-		end
-
-		local newSpeed = humanoid.WalkSpeed
-		local target = getSprintTargetSpeed()
-		if newSpeed <= 0 then
-			newSpeed = DEFAULT_WALK_SPEED
-		elseif math.abs(newSpeed - target) < 0.001 then
-			newSpeed = DEFAULT_WALK_SPEED
-		end
-
-		sprintState.originalWalkSpeed = newSpeed
-	end)
-
-	humanoid.Died:Connect(function()
-		sprintState.keyboardIntent = false
-		sprintState.touchIntent = false
-		recomputeSprintIntent()
-		stopSprinting(true)
-		if invertedControlState.active then disableInvertedControls() end
-		hardEnableDefaultControls()
-		resetMovementState(humanoid)
-	end)
-
-	applyInvertedControlState()
-	-- Reset any stuck inputs immediately and shortly after spawn
-	resetMovementState(humanoid)
-	task.delay(0.20, function() resetMovementState(humanoid) end)
-	task.delay(0.60, function() resetMovementState(humanoid) end)
-	-- safety: if not inverted after spawn, re-enable defaults
-	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-end
-
-local function onCharacterAdded(character: Model)
-	resetSprintState()
-	watchCharacterTools(character)
-	updateInventorySlots()
-
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
-		onHumanoidAdded(humanoid)
-	else
-		local pendingConn: RBXScriptConnection?
-		pendingConn = character.ChildAdded:Connect(function(child)
-			if child:IsA("Humanoid") then
-				if pendingConn then
-					pendingConn:Disconnect()
-					pendingConn = nil
+	for player, record in participantRecords do
+		if record.roundId == roundId and isPlayerInNeutralState(player) then
+			local humanoid = record.humanoid
+			if not humanoid then
+				local character = player.Character
+				if character then
+					humanoid = character:FindFirstChildOfClass("Humanoid")
+					record.humanoid = humanoid
 				end
-				onHumanoidAdded(child)
+			end
+
+			if humanoid and humanoid.Health > 0 then
+				return
+			end
+		end
+	end
+
+	endRound(roundId)
+end
+
+endRound = function(roundId: number)
+	if roundId ~= currentRoundId or not roundInProgress then
+		return
+	end
+
+	callSpecialEventCallback(activeSpecialEvent, "onRoundEnded")
+	clearActiveSpecialEvent()
+
+	roundInProgress = false
+	activeMapConfig = nil
+
+	local wasDeathMatch = deathMatchActive
+
+	clearStorm()
+	restoreSkybox()
+
+	if activeMapModel then
+		activeMapModel:Destroy()
+		activeMapModel = nil
+	end
+
+	for player, record in participantRecords do
+		cleanupParticipant(player)
+		clearPVPTools(player)
+		player.Team = spectateTeam
+		player.Neutral = false
+
+		task.defer(function()
+			local currentCharacter = player.Character
+			if currentCharacter then
+				moveCharacterToLobby(currentCharacter)
 			end
 		end)
 	end
 
-	applyInvertedControlState()
-	-- Reset any stuck inputs immediately and shortly after spawn
-	resetMovementState(humanoid)
-	task.delay(0.20, function() resetMovementState(humanoid) end)
-	task.delay(0.60, function() resetMovementState(humanoid) end)
-	-- safety: if not inverted after spawn, re-enable defaults
-	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
-	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	table.clear(participantRecords)
+
+	if wasDeathMatch then
+		sendStatusUpdate({
+			action = "DeathMatch",
+			active = false,
+		})
+	end
+
+	sendStatusUpdate({action = "RoundEnded"})
+	sendRoundState("Idle")
+	playIntermissionMusic()
 end
 
-localPlayer.CharacterAdded:Connect(onCharacterAdded)
-
-localPlayer.CharacterRemoving:Connect(function()
-	resetMovementState(humanoid)if invertedControlState and invertedControlState.active then disableInvertedControls() end
-	hardEnableDefaultControls()
-	sprintState.keyboardIntent = false
-	sprintState.touchIntent = false
-	recomputeSprintIntent()
-	stopSprinting(true)
-	if humanoidSpeedChangedConn then
-		humanoidSpeedChangedConn:Disconnect()
-		humanoidSpeedChangedConn = nil
-	end
-	if humanoidSprintBonusConn then
-		humanoidSprintBonusConn:Disconnect()
-		humanoidSprintBonusConn = nil
-	end
-	currentHumanoid = nil
-	if invertedControlState.active then disableInvertedControls() end
-	enableDefaultControlsIfDisabled()
-	if characterGearConn then
-		characterGearConn:Disconnect()
-		characterGearConn = nil
-	end
-	updateCursorForGearState()
-	updateInventorySlots()
-end)
-
-if localPlayer.Character then
-	onCharacterAdded(localPlayer.Character)
-else
-	resetSprintState()
-end
-
-local function toggleKeyboardSprintIntent()
-	if sprintState.keyboardIntent then
-		sprintState.keyboardIntent = false
-		recomputeSprintIntent()
-		if not sprintState.sprintIntent then
-			stopSprinting(false)
-		end
-	else
-		sprintState.keyboardIntent = true
-		recomputeSprintIntent()
-		if sprintState.energy > 0 then
-			startSprinting()
-		end
-	end
-end
-
-local function sprintAction(_: string, inputState: Enum.UserInputState, inputObject: InputObject?): Enum.ContextActionResult
-	local keyCode = if inputObject then inputObject.KeyCode else nil
-
-	if keyCode == Enum.KeyCode.LeftControl or keyCode == Enum.KeyCode.RightControl then
-		if inputState == Enum.UserInputState.Begin then
-			toggleKeyboardSprintIntent()
-		end
-		return Enum.ContextActionResult.Sink
-	elseif keyCode == Enum.KeyCode.ButtonL3 or keyCode == Enum.KeyCode.ButtonR3 then
-		if inputState == Enum.UserInputState.Begin then
-			sprintState.keyboardIntent = true
-			recomputeSprintIntent()
-			if sprintState.energy > 0 then
-				startSprinting()
-			end
-			return Enum.ContextActionResult.Sink
-		elseif inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
-			sprintState.keyboardIntent = false
-			recomputeSprintIntent()
-			if not sprintState.sprintIntent then
-				stopSprinting(false)
-			end
-			return Enum.ContextActionResult.Sink
-		end
-	elseif keyCode == Enum.KeyCode.ButtonX then
-		if inputState == Enum.UserInputState.Begin then
-			toggleKeyboardSprintIntent()
-			return Enum.ContextActionResult.Sink
-		elseif inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
-			return Enum.ContextActionResult.Sink
-		end
-	elseif not inputObject then
-		if inputState == Enum.UserInputState.Begin then
-			toggleTouchSprintIntent()
-			return Enum.ContextActionResult.Sink
-		elseif inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
-			return Enum.ContextActionResult.Sink
-		end
-	end
-
-	return Enum.ContextActionResult.Pass
-end
-
-ContextActionService:BindAction(
-	"SprintAction",
-	sprintAction,
-	true,
-	Enum.KeyCode.LeftControl,
-	Enum.KeyCode.RightControl,
-	Enum.KeyCode.ButtonL3,
-	Enum.KeyCode.ButtonR3,
-	Enum.KeyCode.ButtonX
-)
-sprintInteraction.actionBound = true
-ContextActionService:SetTitle("SprintAction", "Sprint")
-ContextActionService:SetImage("SprintAction", GEAR_CURSOR_IMAGE_ASSET)
-updateSprintButtonState()
-
-local keyToSlotIndex: {[Enum.KeyCode]: number} = {
-	[Enum.KeyCode.One] = 1,
-	[Enum.KeyCode.Two] = 2,
-	[Enum.KeyCode.Three] = 3,
-	[Enum.KeyCode.Four] = 4,
-	[Enum.KeyCode.Five] = 5,
-	[Enum.KeyCode.Six] = 6,
-	[Enum.KeyCode.Seven] = 7,
-	[Enum.KeyCode.Eight] = 8,
-	[Enum.KeyCode.Nine] = 9,
-	[Enum.KeyCode.Zero] = 10,
-}
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then
+local function beginDeathMatch(roundId: number)
+	if roundId ~= currentRoundId or not roundInProgress then
 		return
 	end
 
-	local slotIndex = keyToSlotIndex[input.KeyCode]
-	if slotIndex then
-		equipInventorySlot(slotIndex)
-	end
-end)
+	deathMatchActive = true
 
-RunService.Heartbeat:Connect(function(deltaTime)
-	local dt = math.max(deltaTime, 0)
-	local now = os.clock()
-	local humanoid = currentHumanoid
-	local isMoving = false
-	if humanoid then
-		isMoving = humanoid.MoveDirection.Magnitude > 0.01
+	local config = activeMapConfig
+	playDeathMatchMusic(config)
+
+	sendStatusUpdate({
+		action = "DeathMatch",
+		active = true,
+	})
+
+	applyDeathMatchAtmosphere()
+
+	local stormPart: BasePart
+	local usedTemplate = false
+	if stormUnionTemplate then
+		stormPart = stormUnionTemplate:Clone()
+		usedTemplate = true
+	else
+		stormPart = Instance.new("Part")
+		stormPart.Name = "StormPart"
 	end
 
-	if not isMoving and sprintState.rechargeBlockedUntil > now then
-		sprintState.rechargeBlockedUntil = now
+	stormPart.Name = "StormPart"
+
+	stormPart.CanCollide = false
+	stormPart.CanTouch = false
+	stormPart.CanQuery = false
+	stormPart.Anchored = true
+	stormPart.CastShadow = false
+
+	if not usedTemplate then
+		stormPart.Transparency = 0.5
+		stormPart.Color = Color3.fromRGB(255, 0, 0)
+		stormPart.Material = Enum.Material.Neon
+		stormPart.Size = Vector3.new(600, 1000, 600)
 	end
 
-	local zoneBlocked = false
-	local zonePart = sprintInteraction.noSprintPart
-	if zonePart and zonePart.Parent and humanoid then
-		local rootPart = getHumanoidRootPart(humanoid)
-		if rootPart then
-			zoneBlocked = isPointInsidePart(zonePart, rootPart.Position)
+	if config and config.deathMatchStormSize then
+		local override = config.deathMatchStormSize
+		local currentSize = stormPart.Size
+		local overrideX = math.max(override.X, STORM_MIN_HORIZONTAL_SIZE)
+		local overrideZ = math.max(override.Y, STORM_MIN_HORIZONTAL_SIZE)
+		stormPart.Size = Vector3.new(overrideX, currentSize.Y, overrideZ)
+	end
+
+	local currentSize = stormPart.Size
+	local adjustedSize = Vector3.new(
+		math.max(currentSize.X, STORM_MIN_HORIZONTAL_SIZE),
+		if currentSize.Y > 0 then currentSize.Y else 100,
+		math.max(currentSize.Z, STORM_MIN_HORIZONTAL_SIZE)
+	)
+
+	if adjustedSize ~= currentSize then
+		stormPart.Size = adjustedSize
+	end
+
+	stormPart:PivotTo(CFrame.new(0, 0, 0))
+	stormPart.Parent = activeMapModel or Workspace
+	currentStormPart = stormPart
+
+	for _, record in participantRecords do
+		if record.roundId == roundId and isPlayerInNeutralState(record.player) then
+			disableParticipantHealing(record)
 		end
 	end
 
-	if zoneBlocked ~= sprintState.zoneBlocked then
-		sprintState.zoneBlocked = zoneBlocked
-
-		if zoneBlocked then
-			local wasSprinting = sprintState.isSprinting
-			if sprintState.touchIntent then
-				sprintState.touchIntent = false
-			end
-			if sprintState.keyboardIntent then
-				sprintState.keyboardIntent = false
-			end
-
-			if wasSprinting then
-				stopSprinting(true)
-				sprintState.rechargeBlockedUntil = 0
-			else
-				updateEnergyUI()
-			end
-		end
-
-		recomputeSprintIntent()
-
-		if not zoneBlocked then
-			updateEnergyUI()
-		end
+	local shrinkDuration = 60
+	if config and typeof(config.deathMatchShrinkDuration) == "number" then
+		shrinkDuration = math.max(config.deathMatchShrinkDuration, 0)
 	end
 
-	if sprintState.sprintIntent and not sprintState.isSprinting and sprintState.energy > 0 then
-		startSprinting()
+	if shrinkDuration > 0 then
+		local shrinkTween = TweenService:Create(stormPart, TweenInfo.new(shrinkDuration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
+			Size = Vector3.new(0, stormPart.Size.Y, 0),
+		})
+		shrinkTween:Play()
+	else
+		stormPart.Size = Vector3.new(0, stormPart.Size.Y, 0)
 	end
 
-	if sprintState.isSprinting then
-		if isMoving then
-			sprintState.energy = math.max(0, sprintState.energy - dt * SPRINT_DRAIN_RATE)
-			sprintState.rechargeBlockedUntil = now + SPRINT_RECHARGE_DELAY
+	task.spawn(function()
+		while deathMatchActive and roundInProgress and currentRoundId == roundId do
+			task.wait(0.1)
 
-			if sprintState.energy <= 0 then
-				sprintState.energy = 0
-				if sprintState.touchIntent then
-					sprintState.touchIntent = false
+			local activeStorm = currentStormPart
+			if not activeStorm or not activeStorm.Parent then
+				break
+			end
+
+			local halfSize = activeStorm.Size * 0.5
+			local stormCFrame = activeStorm.CFrame
+
+			if halfSize.X <= 0 or halfSize.Z <= 0 then
+				continue
+			end
+
+			for player, record in participantRecords do
+				if record.roundId ~= roundId or not isPlayerInNeutralState(player) then
+					continue
 				end
-				if sprintState.keyboardIntent then
-					sprintState.keyboardIntent = false
+
+				local character = player.Character
+				if not character then
+					continue
 				end
-				recomputeSprintIntent()
-				stopSprinting(false)
+
+				local humanoid = record.humanoid or character:FindFirstChildOfClass("Humanoid")
+				local rootPart = character:FindFirstChild("HumanoidRootPart")
+
+				if not humanoid or humanoid.Health <= 0 or not rootPart then
+					continue
+				end
+
+				record.humanoid = humanoid
+
+				local relative = stormCFrame:PointToObjectSpace(rootPart.Position)
+				local outsideX = math.abs(relative.X) > halfSize.X
+				local outsideZ = math.abs(relative.Z) > halfSize.Z
+
+				if outsideX or outsideZ then
+					humanoid:TakeDamage(1)
+				end
 			end
-		else
-			if sprintState.energy < MAX_SPRINT_ENERGY then
-				sprintState.energy = math.min(MAX_SPRINT_ENERGY, sprintState.energy + dt * SPRINT_RECHARGE_RATE)
-			end
-			sprintState.rechargeBlockedUntil = now
 		end
-	elseif sprintState.energy < MAX_SPRINT_ENERGY and now >= sprintState.rechargeBlockedUntil then
-		sprintState.energy = math.min(MAX_SPRINT_ENERGY, sprintState.energy + dt * SPRINT_RECHARGE_RATE)
-	end
-
-	updateEnergyUI()
-
-	if mouse and not applyingMouseIcon and mouse.Icon ~= currentCursorImageAsset then
-		applyDesktopCursorIcon()
-	end
-end)
-
-local function resetFrameVisual()
-	statusUI.frame.BackgroundColor3 = UI_CONFIG.DEFAULT_BACKGROUND_COLOR
-	statusUI.frame.BackgroundTransparency = UI_CONFIG.DEFAULT_BACKGROUND_TRANSPARENCY
-	statusUI.stroke.Color = Color3.fromRGB(120, 135, 200)
-	statusUI.stroke.Transparency = 0.35
-	statusUI.frame.Position = baseFramePosition
-	statusUI.label.TextColor3 = defaultColor
-	statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
-	statusUI.label.Position = baseLabelPosition
-	statusUI.label.Rotation = 0
-	statusUI.labelStroke.Transparency = 0.3
-end
-
-local function stopFlash()
-	if flashConnection then
-		flashConnection:Disconnect()
-		flashConnection = nil
-	end
-
-	statusUI.label.TextColor3 = matchColor
-	statusUI.labelStroke.Color = Color3.fromRGB(20, 20, 35)
-	statusUI.labelStroke.Transparency = 0.3
-end
-
-local function startFlash()
-	stopFlash()
-
-	statusUI.labelStroke.Color = Color3.fromRGB(255, 110, 110)
-	statusUI.labelStroke.Transparency = 0
-
-	flashConnection = RunService.RenderStepped:Connect(function()
-		local timeScale = math.clamp(currentRemaining / 30, 0, 1)
-		local frequency = 3 + (1 - timeScale) * 6
-		local pulse = math.abs(math.sin(os.clock() * frequency))
-		local green = 60 + math.floor(140 * (1 - pulse))
-		statusUI.label.TextColor3 = Color3.fromRGB(255, green, green)
 	end)
 end
 
-local function resetNeutralButtonShakeTargets()
-	for _, target in neutralButtonShakeTargets do
-		local instance = target.instance
-		if instance and instance.Parent then
-			instance.Position = target.basePosition
-			instance.Rotation = target.baseRotation or 0
-		end
-	end
-
-	table.clear(neutralButtonShakeTargets)
-end
-
-local function collectNeutralButtonShakeTargets()
-	resetNeutralButtonShakeTargets()
-
-	if not localPlayer.Neutral then
+performDeathMatchTransition = function(roundId: number)
+	if roundId ~= currentRoundId or not roundInProgress then
 		return
 	end
 
-	for _, slot in inventorySlots do
-		local frame = slot.frame
-		if frame then
-			table.insert(neutralButtonShakeTargets, {
-				instance = frame,
-				basePosition = frame.Position,
-				baseRotation = frame.Rotation,
+	sendStatusUpdate({
+		action = "DeathMatchTransition",
+		duration = DEATHMATCH_TRANSITION_DURATION,
+	})
+
+	tweenAtmosphereForDeathMatch()
+
+	local tweens: {Tween} = {}
+
+	local activeMusic = currentMusic
+	if activeMusic then
+		local tweenInfo = TweenInfo.new(DEATHMATCH_TRANSITION_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+
+		local speedTween = TweenService:Create(activeMusic, tweenInfo, {
+			PlaybackSpeed = 0.5,
+		})
+		local volumeTween = TweenService:Create(activeMusic, tweenInfo, {
+			Volume = 0,
+		})
+
+		speedTween:Play()
+		volumeTween:Play()
+
+		tweens = {speedTween, volumeTween}
+	end
+
+	local function cancelTransition(shouldRestoreMusic: boolean)
+		for _, tween in tweens do
+			tween:Cancel()
+		end
+
+		if shouldRestoreMusic and activeMusic then
+			activeMusic.PlaybackSpeed = 1
+			activeMusic.Volume = DEFAULT_MUSIC_VOLUME
+		end
+
+		restoreAtmosphere()
+	end
+
+	local elapsed = 0
+	while elapsed < DEATHMATCH_TRANSITION_DURATION do
+		local waitTime = task.wait(0.1)
+		if not waitTime then
+			waitTime = 0.1
+		end
+		elapsed += waitTime
+
+		if roundId ~= currentRoundId or not roundInProgress then
+			cancelTransition(true)
+			return
+		end
+	end
+
+	for _, tween in tweens do
+		tween:Cancel()
+	end
+
+	if roundId ~= currentRoundId or not roundInProgress then
+		cancelTransition(true)
+		return
+	end
+
+	if activeMusic then
+		activeMusic.PlaybackSpeed = 1
+	end
+
+	stopCurrentMusic()
+
+	beginDeathMatch(roundId)
+end
+
+local function startRound(player: Player, mapId: string, requestedEventId: string?)
+	if roundInProgress then
+		sendRoundState("Error", {
+			message = "A round is already running.",
+		})
+		return
+	end
+
+	local config = mapConfigurations[mapId]
+	if not config then
+		sendRoundState("Error", {
+			message = "Unknown map selection.",
+		})
+		return
+	end
+
+	if not mapsFolder then
+		mapsFolder = ReplicatedStorage:FindFirstChild("Maps")
+	end
+
+	if not mapsFolder then
+		sendRoundState("Error", {
+			message = "Maps folder is missing from ReplicatedStorage.",
+		})
+		return
+	end
+
+	local mapTemplate = mapsFolder:FindFirstChild(config.modelName)
+	if not mapTemplate or not mapTemplate:IsA("Model") then
+		sendRoundState("Error", {
+			message = string.format("Map '%s' could not be found.", config.displayName),
+		})
+		return
+	end
+
+	local readyPlayers: {Player} = {}
+	for _, targetPlayer in Players:GetPlayers() do
+		if targetPlayer.Team == spectateTeam then
+			table.insert(readyPlayers, targetPlayer)
+		end
+	end
+
+	if #readyPlayers == 0 then
+		sendRoundState("Error", {
+			message = "No players are waiting in the Spectate team.",
+		})
+		return
+	end
+
+	clearActiveSpecialEvent()
+
+	local resolvedEventId: string? = nil
+	local requestedEventRaw = if typeof(requestedEventId) == "string" then requestedEventId else nil
+	local rolledRandomEvent = false
+
+	if requestedEventRaw and requestedEventRaw ~= "" then
+		if string.upper(requestedEventRaw) == "RANDOM" then
+			rolledRandomEvent = true
+			resolvedEventId = getRandomSpecialEventId()
+		else
+			if specialEventDefinitions[requestedEventRaw] then
+				resolvedEventId = requestedEventRaw
+			else
+				local searchKey = string.upper(requestedEventRaw)
+				for candidateId in pairs(specialEventDefinitions) do
+					if string.upper(candidateId) == searchKey then
+						resolvedEventId = candidateId
+						break
+					end
+				end
+			end
+		end
+	end
+
+	if rolledRandomEvent and not resolvedEventId then
+		resolvedEventId = getRandomSpecialEventId()
+	end
+
+	roundInProgress = true
+	currentRoundId += 1
+	local roundId = currentRoundId
+
+	table.clear(participantRecords)
+
+	sendRoundState("Starting", {
+		map = mapId,
+	})
+	local eventMusicId = if resolvedEventId then SPECIAL_EVENT_MUSIC_IDS[resolvedEventId] else nil
+	if eventMusicId then
+		playMusic(eventMusicId)
+	else
+		playMapMusic(config)
+	end
+	activeMapConfig = config
+
+	local mapClone = mapTemplate:Clone()
+	mapClone.Name = string.format("Active_%s", config.modelName)
+	local originalAnchoredStates: {[BasePart]: boolean} = {}
+
+	if mapClone:IsA("BasePart") then
+		originalAnchoredStates[mapClone] = mapClone.Anchored
+		mapClone.Anchored = true
+	end
+
+	for _, descendant in mapClone:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			originalAnchoredStates[descendant] = descendant.Anchored
+			descendant.Anchored = true
+		end
+	end
+
+	mapClone.Parent = Workspace
+	activeMapModel = mapClone
+
+	local eventContext = setActiveSpecialEvent(resolvedEventId, roundId)
+
+	local randomRevealDuration = 3
+
+	local function dispatchSpecialEventStatus(context: SpecialEventContext?, randomized: boolean)
+		if context then
+			sendStatusUpdate({
+				action = "SpecialEvent",
+				header = "- Special Round -",
+				id = context.definition.id,
+				name = context.definition.displayName,
+				randomized = randomized,
+			})
+		else
+			sendStatusUpdate({
+				action = "SpecialEvent",
+				active = false,
 			})
 		end
 	end
-end
 
-local function stopShake()
-	if shakeConnection then
-		shakeConnection:Disconnect()
-		shakeConnection = nil
-	end
-
-	resetNeutralButtonShakeTargets()
-
-	statusUI.frame.Position = baseFramePosition
-	statusUI.label.Position = baseLabelPosition
-	statusUI.label.Rotation = 0
-	statusUI.label.TextColor3 = defaultColor
-	statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
-
-	if uiRefs.inventoryFrame then
-		uiRefs.inventoryFrame.Position = inventoryState.basePosition
-		uiRefs.inventoryFrame.Rotation = inventoryState.baseRotation
-	end
-	sprintUI.container.Position = sprintUI.basePosition
-	sprintUI.container.Rotation = sprintUI.baseRotation
-	sprintUI.background.BackgroundColor3 = sprintUI.defaults.backgroundColor
-	sprintUI.background.BackgroundTransparency = sprintUI.defaults.backgroundTransparency
-	sprintUI.backgroundStroke.Color = sprintUI.defaults.strokeColor
-	sprintUI.backgroundStroke.Transparency = sprintUI.defaults.strokeTransparency
-	uiRefs.energyBarFill.BackgroundColor3 = sprintUI.defaults.energyBarFillColor
-	uiRefs.energyTextLabel.TextColor3 = sprintUI.defaults.energyTextColor
-	sprintUI.energyFillGradient.Color = sprintUI.defaults.energyGradientColor
-
-	for _, slot in inventorySlots do
-		local frame = slot.frame
-		if frame then
-			frame.Rotation = 0
-		end
-	end
-
-	updateInventorySlots()
-end
-
-local function startDeathMatchEffect()
-	stopFlash()
-	stopShake()
-
-	statusUI.frame.BackgroundColor3 = deathMatchBackground
-	statusUI.stroke.Color = deathMatchStroke
-	statusUI.stroke.Transparency = 0
-	statusUI.frame.BackgroundTransparency = 1
-	statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
-	statusUI.labelStroke.Transparency = 0
-
-	collectNeutralButtonShakeTargets()
-
-	shakeConnection = RunService.RenderStepped:Connect(function()
-		local now = os.clock()
-		local frameMagnitude = 1 + math.abs(math.sin(now * 5)) * 1.4
-		local offsetX = math.noise(now * 8, 0, 0) * frameMagnitude * 4
-		local offsetY = math.noise(now * 9, 1, 0) * frameMagnitude * 3
-		statusUI.frame.Position = baseFramePosition + UDim2.fromOffset(offsetX, offsetY)
-
-		local textMagnitude = 0.5 + math.abs(math.sin(now * 12)) * 1.5
-		local textOffsetX = math.noise(now * 20, 2, 0) * textMagnitude * 4
-		local textOffsetY = math.noise(now * 18, 3, 0) * textMagnitude * 3
-		local buttonOffset = UDim2.fromOffset(textOffsetX, textOffsetY)
-		statusUI.label.Position = baseLabelPosition + buttonOffset
-		statusUI.label.Rotation = math.noise(now * 14, 4, 0) * 8
-
-		local pulse = (math.sin(now * 6) + 1) / 2
-		local colorOffset = math.floor(40 * pulse)
-		statusUI.label.TextColor3 = Color3.fromRGB(255, 90 + colorOffset, 90 + colorOffset)
-
-		if uiRefs.inventoryFrame then
-			local inventoryMagnitude = 0.6 + math.abs(math.sin(now * 6)) * 1.3
-			local inventoryOffsetX = math.noise(now * 11, 5, 0) * inventoryMagnitude * 3
-			local inventoryOffsetY = math.noise(now * 10, 6, 0) * inventoryMagnitude * 2
-			uiRefs.inventoryFrame.Position = inventoryState.basePosition + UDim2.fromOffset(inventoryOffsetX, inventoryOffsetY)
-			uiRefs.inventoryFrame.Rotation = math.noise(now * 9, 7, 0) * 2.4
+	if rolledRandomEvent then
+		local eventOptions = {}
+		for _, definition in ipairs(specialEventList) do
+			eventOptions[#eventOptions + 1] = {
+				id = definition.id,
+				name = definition.displayName,
+			}
 		end
 
-		local sprintOffsetX = math.noise(now * 7, 8, 0) * 2.6
-		local sprintOffsetY = math.noise(now * 8, 9, 0) * 2.1
-		sprintUI.container.Position = sprintUI.basePosition + UDim2.fromOffset(sprintOffsetX, sprintOffsetY)
-		sprintUI.container.Rotation = math.noise(now * 13, 10, 0) * 1.8
-
-		local flashPulse = (math.sin(now * 12) + 1) * 0.5
-		local flashNoise = math.clamp(math.noise(now * 15, 11, 0) * 0.5 + 0.5, 0, 1)
-		local flashAmount = math.clamp(flashPulse * 0.6 + flashNoise * 0.4, 0, 1)
-		local baseRed = 150 + math.floor(105 * flashAmount)
-		local dimComponent = 25 + math.floor(90 * (1 - flashAmount))
-		sprintUI.background.BackgroundColor3 = Color3.fromRGB(baseRed, dimComponent, dimComponent)
-		sprintUI.background.BackgroundTransparency = 0.05 + (1 - flashAmount) * 0.2
-
-		local strokeGreen = 60 + math.floor(120 * (1 - flashAmount))
-		sprintUI.backgroundStroke.Color = Color3.fromRGB(255, strokeGreen, strokeGreen)
-		sprintUI.backgroundStroke.Transparency = 0.05 + flashAmount * 0.25
-
-		local energyPulse = math.abs(math.sin(now * 18))
-		local energyGreen = 40 + math.floor(150 * (1 - energyPulse))
-		uiRefs.energyBarFill.BackgroundColor3 = Color3.fromRGB(255, energyGreen, energyGreen)
-		sprintUI.energyFillGradient.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, math.max(0, energyGreen - 60), math.max(0, energyGreen - 60))),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, energyGreen, energyGreen)),
+		sendStatusUpdate({
+			action = "SpecialEventRandomizing",
+			header = "- Special Round -",
+			options = eventOptions,
+			chosenId = if eventContext then eventContext.definition.id else nil,
+			chosenName = if eventContext then eventContext.definition.displayName else nil,
+			duration = randomRevealDuration,
 		})
-		uiRefs.energyTextLabel.TextColor3 = Color3.fromRGB(255, 180 - math.floor(80 * flashAmount), 180 - math.floor(80 * flashAmount))
 
-		for slotIndex = 1, 10 do
-			local slot = inventorySlots[slotIndex]
-			if slot then
-				local slotPulse = math.abs(math.sin(now * 14 + slotIndex))
-				local slotNoise = math.noise(now * 16, slotIndex, 0)
-				local frame = slot.frame
-				local stroke = slot.stroke
-				if frame then
-					frame.Rotation = slotNoise * 3
-				end
-				if stroke then
-					local slotGreen = 50 + math.floor(150 * (1 - slotPulse))
-					stroke.Color = Color3.fromRGB(255, slotGreen, slotGreen)
-					stroke.Transparency = 0.05 + slotPulse * 0.25
-				end
+		task.delay(randomRevealDuration, function()
+			if not roundInProgress or currentRoundId ~= roundId then
+				return
+			end
+
+			dispatchSpecialEventStatus(eventContext, true)
+		end)
+	else
+		dispatchSpecialEventStatus(eventContext, false)
+	end
+
+	task.delay(MAP_ANCHOR_DURATION, function()
+		for part, wasAnchored in originalAnchoredStates do
+			if part.Parent then
+				part.Anchored = wasAnchored
 			end
 		end
+	end)
 
-		if not localPlayer.Neutral then
-			if #neutralButtonShakeTargets > 0 then
-				resetNeutralButtonShakeTargets()
+	applySkybox(config)
+
+	local spawnContainer = mapClone:FindFirstChild(config.spawnContainer)
+	if not spawnContainer or not spawnContainer:IsA("Model") then
+		sendRoundState("Error", {
+			message = string.format("Spawn container '%s' is missing.", config.spawnContainer),
+		})
+		endRound(roundId)
+		return
+	end
+
+	local spawnParts: {BasePart} = {}
+	for _, descendant in spawnContainer:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			table.insert(spawnParts, descendant)
+		end
+	end
+
+	if #spawnParts == 0 then
+		sendRoundState("Error", {
+			message = string.format("No spawn points were found for %s.", config.displayName),
+		})
+		endRound(roundId)
+		return
+	end
+
+	local shuffledSpawnParts = table.clone(spawnParts)
+	local rng = Random.new()
+	for shuffleIndex = #shuffledSpawnParts, 2, -1 do
+		local swapIndex = rng:NextInteger(1, shuffleIndex)
+		shuffledSpawnParts[shuffleIndex], shuffledSpawnParts[swapIndex] = shuffledSpawnParts[swapIndex], shuffledSpawnParts[shuffleIndex]
+	end
+
+	local function nextSpawn(index: number): BasePart
+		local spawnPart = shuffledSpawnParts[index]
+		if spawnPart then
+			return spawnPart
+		end
+
+		if #shuffledSpawnParts == 0 then
+			return spawnParts[((index - 1) % #spawnParts) + 1]
+		end
+
+		return shuffledSpawnParts[((index - 1) % #shuffledSpawnParts) + 1]
+	end
+
+	for index, targetPlayer in ipairs(readyPlayers) do
+		local record: ParticipantRecord = {
+			player = targetPlayer,
+			roundId = roundId,
+			spawnPart = nil,
+			characterConn = nil,
+			deathConn = nil,
+			healConn = nil,
+			humanoid = nil,
+			originalJumpPower = nil,
+			originalWalkSpeed = nil,
+			countdownComplete = false,
+			freezeToken = 0,
+			eventData = {},
+		}
+
+		participantRecords[targetPlayer] = record
+
+		local spawnPart = nextSpawn(index)
+		record.spawnPart = spawnPart
+		prepareParticipant(record, spawnPart, roundId)
+	end
+
+	local countdownStart = math.max(0, PREP_COUNTDOWN_DURATION)
+
+	sendStatusUpdate({
+		action = "PrepCountdown",
+		remaining = countdownStart,
+		map = mapId,
+	})
+
+	for remaining = countdownStart - 1, 0, -1 do
+		if not roundInProgress or currentRoundId ~= roundId then
+			return
+		end
+
+		task.wait(1)
+		if not roundInProgress or currentRoundId ~= roundId then
+			return
+		end
+
+		sendStatusUpdate({
+			action = "PrepCountdown",
+			remaining = remaining,
+			map = mapId,
+		})
+	end
+
+	if not roundInProgress or currentRoundId ~= roundId then
+		return
+	end
+
+	for playerKey, record in participantRecords do
+		if record.roundId == roundId then
+			record.countdownComplete = true
+			setParticipantFrozen(record, false)
+			giveParticipantGear(record)
+
+			if deathMatchActive and isPlayerInNeutralState(record.player) then
+				disableParticipantHealing(record)
 			end
-		else
-			for index = #neutralButtonShakeTargets, 1, -1 do
-				local target = neutralButtonShakeTargets[index]
-				local instance = target.instance
-				if not instance or not instance.Parent then
-					table.remove(neutralButtonShakeTargets, index)
-				else
-					instance.Position = target.basePosition + buttonOffset
-				end
+		end
+	end
+
+	if activeSpecialEvent then
+		callSpecialEventCallback(activeSpecialEvent, "onRoundPrepared", config, mapClone)
+	end
+
+	callSpecialEventCallback(activeSpecialEvent, "onCountdownComplete")
+
+	sendRoundState("Active", {
+		map = mapId,
+	})
+
+	checkRoundCompletion(roundId)
+	if not roundInProgress or currentRoundId ~= roundId then
+		return
+	end
+
+	local skipRoundTimer = false
+	if activeSpecialEvent and activeSpecialEvent.state then
+		local stateTable = activeSpecialEvent.state
+		local hotTouchState = (stateTable :: any).HotTouch
+		if hotTouchState and hotTouchState.disableRoundTimer then
+			skipRoundTimer = true
+		end
+	end
+
+	if skipRoundTimer then
+		while roundInProgress and currentRoundId == roundId do
+			task.wait(1)
+			if not roundInProgress or currentRoundId ~= roundId then
+				break
 			end
+			checkRoundCompletion(roundId)
+		end
+		return
+	end
+
+	for remaining = 120, 0, -1 do
+		if not roundInProgress or currentRoundId ~= roundId then
+			return
+		end
+
+		sendStatusUpdate({
+			action = "MatchTimer",
+			remaining = remaining,
+		})
+
+		if remaining == 0 then
+			break
+		end
+
+		task.wait(1)
+
+		if not roundInProgress or currentRoundId ~= roundId then
+			return
+		end
+
+		checkRoundCompletion(roundId)
+		if not roundInProgress or currentRoundId ~= roundId then
+			return
+		end
+	end
+
+	if not roundInProgress or currentRoundId ~= roundId then
+		return
+	end
+
+	performDeathMatchTransition(roundId)
+end
+
+local lobbyParts: {BasePart} = {}
+local lobbyConnections: {RBXScriptConnection} = {}
+local currentLobbyModel: Model? = nil
+
+local function clearLobbyConnections()
+	for _, connection in lobbyConnections do
+		connection:Disconnect()
+	end
+	table.clear(lobbyConnections)
+end
+
+local function refreshLobbyParts()
+	table.clear(lobbyParts)
+	if not currentLobbyModel then
+		return
+	end
+
+	for _, child in currentLobbyModel:GetChildren() do
+		if child:IsA("BasePart") and child.Name == "Part" then
+			table.insert(lobbyParts, child)
+		end
+	end
+end
+
+local function setLobbyModel(model: Model?)
+	currentLobbyModel = model
+	clearLobbyConnections()
+	refreshLobbyParts()
+
+	if not model then
+		return
+	end
+
+	lobbyConnections[#lobbyConnections + 1] = model.ChildAdded:Connect(function(child)
+		if child:IsA("BasePart") and child.Name == "Part" then
+			table.insert(lobbyParts, child)
+		end
+	end)
+
+	lobbyConnections[#lobbyConnections + 1] = model.ChildRemoved:Connect(function(child)
+		if child:IsA("BasePart") and child.Name == "Part" then
+			refreshLobbyParts()
 		end
 	end)
 end
 
-local function hideStatus()
-	stopFlash()
-	stopShake()
-	stopDeathMatchTransition()
-	statusUI.frame.Visible = false
-	statusUI.label.Text = ""
-end
+setLobbyModel(Workspace:FindFirstChild("LobbySpawn") :: Model?)
 
-local function getMapDisplayName(mapId: string): string
-	return mapDisplayNames[mapId] or mapId
-end
+Workspace.ChildAdded:Connect(function(child)
+	if child.Name == "LobbySpawn" and child:IsA("Model") then
+		setLobbyModel(child)
+	end
+end)
 
-local function updateEventLabelText()
-	local label = uiRefs.eventLabel
-	local container = uiRefs.mapLabelContainer
-	if not label or not container then
+Workspace.ChildRemoved:Connect(function(child)
+	if child == currentLobbyModel then
+		setLobbyModel(nil)
+	end
+end)
+
+local function moveCharacterToLobby(character: Model)
+	if #lobbyParts == 0 then
+		refreshLobbyParts()
+	end
+
+	if #lobbyParts == 0 then
 		return
 	end
 
-	if container:GetAttribute("HasMap") ~= true then
-		label.Text = ""
+	local humanoidRootPart = character:WaitForChild("HumanoidRootPart", 5) :: BasePart?
+	if not humanoidRootPart then
 		return
 	end
 
-	local displayName = currentEventDisplayName
-	if displayName and displayName ~= "" then
-		label.Text = string.format("Event: %s", displayName)
+	local targetPart = lobbyParts[math.random(1, #lobbyParts)]
+	local offset = targetPart.CFrame.UpVector * (targetPart.Size.Y / 2 + 3)
+	character:PivotTo(targetPart.CFrame + offset)
+end
+
+local function onCharacterAdded(player: Player, character: Model)
+	task.defer(function()
+		ensureRigIsR6(player, character)
+	end)
+
+	if player.Team == spectateTeam then
+		moveCharacterToLobby(character)
+	end
+end
+
+local function onPlayerAdded(player: Player)
+	player.Team = spectateTeam
+	player.Neutral = false
+
+	player.CharacterAdded:Connect(function(character)
+		onCharacterAdded(player, character)
+	end)
+
+	player.CharacterAppearanceLoaded:Connect(function(character)
+		ensureRigIsR6(player, character)
+	end)
+
+	if player.Character then
+		onCharacterAdded(player, player.Character)
+	end
+
+	if roundInProgress then
+		roundStateRemote:FireClient(player, {
+			state = "Active",
+		})
 	else
-		label.Text = "Event: None"
+		roundStateRemote:FireClient(player, {
+			state = "Idle",
+		})
 	end
 end
 
-local function setCurrentEventDisplayName(name: string?)
-	if name and name ~= "" then
-		currentEventDisplayName = name
-	else
-		currentEventDisplayName = nil
+Players.PlayerAdded:Connect(onPlayerAdded)
+
+Players.PlayerRemoving:Connect(function(player)
+	local record = participantRecords[player]
+	if record then
+		cleanupParticipant(player)
+		participantRecords[player] = nil
+		if roundInProgress then
+			task.defer(function()
+				checkRoundCompletion(record.roundId)
+			end)
+		end
 	end
-	updateEventLabelText()
+
+	clearPVPTools(player)
+end)
+
+for _, player in Players:GetPlayers() do
+	onPlayerAdded(player)
 end
 
-local function updateMapLabel(mapId: string?)
-	currentMapId = mapId
-
-	local targetLabel = uiRefs.mapLabel
-	local container = uiRefs.mapLabelContainer
-	if not targetLabel or not container then
+startRoundRemote.OnServerEvent:Connect(function(player, payload)
+	if not isGameOwner(player) then
 		return
 	end
 
-	if mapId then
-		targetLabel.Text = string.format("Map: %s", getMapDisplayName(mapId))
-		container:SetAttribute("HasMap", true)
-		container.Visible = statusUI.frame.Visible
-		updateEventLabelText()
-	else
-		targetLabel.Text = ""
-		container:SetAttribute("HasMap", false)
-		container.Visible = false
-		updateEventLabelText()
-	end
-end
+	local mapId: string? = nil
+	local eventId: string? = nil
 
-statusRemote.OnClientEvent:Connect(function(payload)
-	if typeof(payload) ~= "table" then
+	if typeof(payload) == "table" then
+		mapId = payload.mapId or payload.modelName or payload.id
+		local eventValue = payload.eventId or payload.event
+		if typeof(eventValue) == "string" then
+			eventId = eventValue
+		end
+	elseif typeof(payload) == "string" then
+		mapId = payload
+	end
+
+	if typeof(mapId) ~= "string" then
+		sendRoundState("Error", {
+			message = "Select a map before starting the round.",
+		})
 		return
 	end
 
-	local action = payload.action
-	if action == "PrepCountdown" then
-		currentRemaining = tonumber(payload.remaining) or 0
-		if typeof(payload.map) == "string" then
-			updateMapLabel(payload.map)
-		end
-		stopShake()
-		stopFlash()
-		resetFrameVisual()
-		statusUI.frame.BackgroundTransparency = UI_CONFIG.DEFAULT_BACKGROUND_TRANSPARENCY
-		statusUI.frame.Visible = true
-		statusUI.label.TextColor3 = countdownColor
-		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
-		statusUI.label.Text = formatCountdown(currentRemaining)
-		statusUI.labelStroke.Transparency = 0.1
-	elseif action == "MatchTimer" then
-		currentRemaining = math.max(0, math.floor(tonumber(payload.remaining) or 0))
-		statusUI.frame.Visible = true
-		resetFrameVisual()
-		statusUI.label.TextColor3 = matchColor
-		statusUI.label.Text = formatTimer(currentRemaining)
-
-		if currentRemaining <= 30 then
-			startFlash()
-		else
-			stopFlash()
-		end
-	elseif action == "MatchMessage" then
-		stopFlash()
-		stopShake()
-		statusUI.frame.Visible = true
-		resetFrameVisual()
-		statusUI.label.TextColor3 = matchColor
-		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
-		statusUI.label.Text = if typeof(payload.text) == "string" then payload.text else ""
-		statusUI.labelStroke.Transparency = 0.2
-	elseif action == "DeathMatchTransition" then
-		stopFlash()
-		stopShake()
-		statusUI.frame.Visible = true
-		statusUI.frame.BackgroundColor3 = deathMatchBackground
-		statusUI.stroke.Color = deathMatchStroke
-		statusUI.stroke.Transparency = 0
-		statusUI.label.TextColor3 = matchColor
-		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
-		statusUI.label.Text = "Death Match"
-		statusUI.frame.BackgroundTransparency = 1
-		statusUI.labelStroke.Transparency = 0
-
-		local duration = tonumber(payload.duration) or 3
-		deathMatchHighlightActive = true
-		updateHighlightActivation()
-		startDeathMatchTransition(duration)
-	elseif action == "DeathMatch" then
-		local isActive = payload.active == nil or payload.active
-		if isActive then
-			deathMatchHighlightActive = true
-			stopDeathMatchTransition()
-			statusUI.frame.Visible = true
-			statusUI.label.Text = "Death Match"
-			startDeathMatchEffect()
-		else
-			deathMatchHighlightActive = false
-			stopShake()
-			stopFlash()
-			stopDeathMatchTransition()
-			resetFrameVisual()
-			statusUI.frame.Visible = false
-		end
-	elseif action == "RoundEnded" then
-		deathMatchHighlightActive = false
-		updateHighlightActivation()
-		stopDeathMatchTransition()
-		stopFlash()
-		stopShake()
-		resetFrameVisual()
-		setHotTouchActive(false)
-		statusUI.frame.Visible = true
-		statusUI.label.TextColor3 = countdownColor
-		statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
-		statusUI.label.Text = "Intermission"
-		statusUI.labelStroke.Transparency = 0.3
-		updateMapLabel(nil)
-		specialEventState.active = false
-		specialEventState.id = nil
-		specialEventState.displayName = nil
-		specialEventState.randomized = false
-		specialEventState.options = {}
-		specialEventState.finalName = nil
-		specialEventState.effects.sprintDisabled = false
-		specialEventState.effects.invisible = false
-		specialEventState.effects.inverted = false
-		setSprintEventDisabled(false)
-		setInvisibilityEnabled(false)
-		setInvertedControlsEnabled(false)
-		hideSpecialEvent(true)
-		setCurrentEventDisplayName(nil)
-	elseif action == "SpecialEventRandomizing" then
-		local headerText = if typeof(payload.header) == "string" then payload.header else "- Special Round -"
-		specialEventUI.header.Text = headerText
-
-		local options: {{id: string?, name: string?}} = {}
-		if typeof(payload.options) == "table" then
-			for _, item in ipairs(payload.options) do
-				if typeof(item) == "table" then
-					table.insert(options, {
-						id = if typeof(item.id) == "string" then item.id else nil,
-						name = if typeof(item.name) == "string" then item.name else nil,
-					})
-				elseif typeof(item) == "string" then
-					table.insert(options, {id = item, name = item})
-				end
-			end
-		end
-
-		local duration = tonumber(payload.duration)
-		local chosenName = if typeof(payload.chosenName) == "string" then payload.chosenName elseif typeof(payload.chosenId) == "string" then payload.chosenId else nil
-		specialEventState.displayName = "Randomizing..."
-		setCurrentEventDisplayName("Randomizing...")
-		beginSpecialEventRandomization(options, chosenName, duration)
-	elseif action == "SpecialEvent" then
-		local headerText = if typeof(payload.header) == "string" then payload.header else "- Special Round -"
-		specialEventUI.header.Text = headerText
-
-		local isActive = payload.active
-		if isActive == false then
-			specialEventState.active = false
-			specialEventState.id = nil
-			specialEventState.displayName = nil
-			specialEventState.randomized = false
-			specialEventState.options = {}
-			specialEventState.finalName = nil
-			setSprintEventDisabled(false)
-			setInvisibilityEnabled(false)
-			setInvertedControlsEnabled(false)
-			hideSpecialEvent(true)
-			setHotTouchActive(false)
-			setCurrentEventDisplayName(nil)
-		else
-			local eventId = if typeof(payload.id) == "string" then payload.id else nil
-			local eventName = if typeof(payload.name) == "string" then payload.name elseif eventId then eventId else "Special Event"
-			specialEventState.active = true
-			specialEventState.id = eventId
-			specialEventState.displayName = eventName
-			setCurrentEventDisplayName(eventName)
-
-			if eventId == "HotTouch" then
-				setHotTouchActive(true)
-			else
-				setHotTouchActive(false)
-			end
-
-			if payload.randomized then
-				completeSpecialEventRandomization(eventName)
-			else
-				specialEventState.randomized = false
-				showSpecialEvent(eventName, 3)
-			end
-		end
-	elseif action == "SpecialEventEffect" then
-		if payload.sprintDisabled ~= nil then
-			local disabled = payload.sprintDisabled == true
-			specialEventState.effects.sprintDisabled = disabled
-			setSprintEventDisabled(disabled)
-		end
-
-		if payload.invisible ~= nil then
-			local invisibleEnabled = payload.invisible == true
-			specialEventState.effects.invisible = invisibleEnabled
-			setInvisibilityEnabled(invisibleEnabled)
-		end
-
-		if payload.inverted ~= nil then
-			local invertedEnabled = payload.inverted == true
-			specialEventState.effects.inverted = invertedEnabled
-			setInvertedControlsEnabled(invertedEnabled)
-		end
-	elseif action == "HotTouchStatus" then
-		local state = if typeof(payload.state) == "string" then payload.state else ""
-		if state == "Holder" then
-			local userId = if typeof(payload.userId) == "number" then payload.userId elseif typeof(payload.userId) == "string" then tonumber(payload.userId) else nil
-			currentHotTouchHolderId = userId
-			local name = if typeof(payload.displayName) == "string" then payload.displayName elseif typeof(payload.name) == "string" then payload.name else "Someone"
-			setHotTouchActive(true)
-			setHotTouchStatusText(string.format("%s has the BOMB!", name))
-		elseif state == "Selecting" then
-			currentHotTouchHolderId = nil
-			setHotTouchActive(true)
-			setHotTouchStatusText("Selecting random...")
-		elseif state == "Complete" then
-			currentHotTouchHolderId = nil
-			setHotTouchActive(true)
-			setHotTouchStatusText("GG")
-		elseif state == "Clear" then
-			currentHotTouchHolderId = nil
-			setHotTouchActive(false)
-		else
-			currentHotTouchHolderId = nil
-			setHotTouchStatusText(nil)
-		end
-	elseif action == "HotTouchTagged" then
-		local taggedUserId = if typeof(payload.userId) == "number" then payload.userId elseif typeof(payload.userId) == "string" then tonumber(payload.userId) else nil
-		if taggedUserId and localPlayer.UserId == taggedUserId then
-			showHotTouchAlert()
-		end
-	end
+	startRound(player, mapId, eventId)
 end)
