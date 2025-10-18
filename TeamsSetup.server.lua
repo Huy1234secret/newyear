@@ -549,10 +549,6 @@ do
         id = "Bunny",
         displayName = "Bunny🐰",
         onParticipantCharacter = function(context, record, _character, humanoid)
-            if not isPlayerInNeutralState(record.player) then
-                return
-            end
-
             local data = record.eventData
             local bundle = data.Bunny
             if bundle and bundle.conn then
@@ -731,9 +727,9 @@ do
                         end
 
                         countdownStarted = true
-                        bomb.Anchored = true
-                        bomb.AssemblyLinearVelocity = Vector3.zero
-                        bomb.AssemblyAngularVelocity = Vector3.zero
+                        bomb.Anchored = false
+                        bomb.AssemblyLinearVelocity *= 0.5
+                        bomb.AssemblyAngularVelocity *= 0.5
 
                         local totalDuration = 3
                         local startTime = os.clock()
@@ -953,22 +949,46 @@ do
 
                 local velocity = ball.AssemblyLinearVelocity
                 local position = ball.Position
-                local hoverPosition = position + Vector3.new(0, HOVER_HEIGHT, 0)
-                if targetHRP then
-                    hoverPosition = targetHRP.Position + Vector3.new(0, HOVER_HEIGHT, 0)
+                local desiredHoverPosition: Vector3? = nil
+
+                if targetHRP and targetHRP.Parent then
+                    desiredHoverPosition = targetHRP.Position + Vector3.new(0, HOVER_HEIGHT, 0)
+                else
+                    desiredHoverPosition = botState.homePosition or position
                 end
 
-                local offset = hoverPosition - position
-                if offset.Magnitude > 1 then
-                    local direction = offset.Unit
-                    local desiredVelocity = direction * MAX_SPEED
-                    local steer = (desiredVelocity - velocity) * SEEK_STRENGTH
-                    local adjustedDt = math.max(dt, 1 / 240)
-                    local force = steer * mass / adjustedDt
-                    desiredForce = gravityForce + force
+                if desiredHoverPosition then
+                    if botState.homePosition then
+                        desiredHoverPosition = Vector3.new(
+                            desiredHoverPosition.X,
+                            math.max(desiredHoverPosition.Y, botState.homePosition.Y),
+                            desiredHoverPosition.Z
+                        )
+                    end
 
-                    if desiredForce.Magnitude > MOVE_FORCE then
-                        desiredForce = desiredForce.Unit * MOVE_FORCE
+                    local offset = desiredHoverPosition - position
+                    if offset.Magnitude > 0.5 then
+                        local direction = offset.Unit
+                        local desiredVelocity = direction * MAX_SPEED
+                        local steer = (desiredVelocity - velocity) * SEEK_STRENGTH
+                        local adjustedDt = math.max(dt, 1 / 240)
+                        local steeringForce = steer * mass / adjustedDt
+
+                        if steeringForce.Magnitude > MOVE_FORCE then
+                            steeringForce = steeringForce.Unit * MOVE_FORCE
+                        end
+
+                        desiredForce += steeringForce
+                    else
+                        if velocity.Magnitude > 1 then
+                            local damping = -velocity * SEEK_STRENGTH
+                            local adjustedDt = math.max(dt, 1 / 240)
+                            local dampingForce = damping * mass / adjustedDt
+                            if dampingForce.Magnitude > MOVE_FORCE then
+                                dampingForce = dampingForce.Unit * MOVE_FORCE
+                            end
+                            desiredForce += dampingForce
+                        end
                     end
                 end
 
@@ -1133,7 +1153,8 @@ do
                 ball.CanTouch = false
                 ball.CanQuery = false
                 ball.Anchored = false
-                ball.CFrame = CFrame.new(origin + Vector3.new(0, 50 + index * 10, 0))
+                local spawnPosition = origin + Vector3.new(0, 50 + index * 10, 0)
+                ball.CFrame = CFrame.new(spawnPosition)
                 ball.Parent = model
                 model.PrimaryPart = ball
                 model.Parent = Workspace
@@ -1147,6 +1168,7 @@ do
                 vectorForce.Attachment0 = attachment
                 vectorForce.RelativeTo = Enum.ActuatorRelativeTo.World
                 vectorForce.Force = Vector3.zero
+                vectorForce.ApplyAtCenterOfMass = true
                 vectorForce.Parent = ball
 
                 local align = Instance.new("AlignOrientation")
@@ -1166,6 +1188,7 @@ do
                     vectorForce = vectorForce,
                     align = align,
                     lastFire = 0,
+                    homePosition = spawnPosition,
                 }
 
                 model.Destroying:Connect(function()
