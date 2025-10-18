@@ -135,7 +135,7 @@ if not statusRemote or not statusRemote:IsA("RemoteEvent") then
 	return
 end
 
-toggleInventorySlotRemote: RemoteEvent? = nil
+local toggleInventorySlotRemote: RemoteEvent? = nil
 
 local function setToggleInventoryRemote(candidate: Instance?)
 	if candidate and candidate:IsA("RemoteEvent") and candidate.Name == "ToggleInventorySlot" then

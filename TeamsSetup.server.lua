@@ -41,11 +41,11 @@ local function resetMovementState(humanoid: Humanoid?)
 	local CAS = game:GetService("ContextActionService")
 
 	-- Unbind any custom actions that may block default controls
-	pcall(function()
-		local CAS:UnbindAction("DisableMovement")
-		local CAS:UnbindAction("Inverted_Move")
-		local CAS:UnbindAction("Inverted_Look")
-	end)
+        pcall(function()
+                CAS:UnbindAction("DisableMovement")
+                CAS:UnbindAction("Inverted_Move")
+                CAS:UnbindAction("Inverted_Look")
+        end)
 
 	-- Soft reset PlayerModule controls
 	local okPM, controls = pcall(function()
@@ -62,15 +62,15 @@ local function resetMovementState(humanoid: Humanoid?)
 
 	-- Nudge humanoid state & clear movement intents
 	if humanoid and humanoid.Parent then
-		pcall(function()
-			-- Zero the movement vector and suppress jump for a tick
-			local humanoid:Move(Vector3.new(0,0,0), true)
-			humanoid.Jump = false
-			-- Sometimes RunningNoPhysics -> Running helps clear residual velocity intents
-			local humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
-			task.wait(0.02)
-			local humanoid:ChangeState(Enum.HumanoidStateType.Running)
-		end)
+                pcall(function()
+                        -- Zero the movement vector and suppress jump for a tick
+                        humanoid:Move(Vector3.new(0,0,0), true)
+                        humanoid.Jump = false
+                        -- Sometimes RunningNoPhysics -> Running helps clear residual velocity intents
+                        humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+                        task.wait(0.02)
+                        humanoid:ChangeState(Enum.HumanoidStateType.Running)
+                end)
 	end
 
 	-- Re-enable controls after a tiny delay so PlayerModule rebinds default actions
@@ -97,11 +97,11 @@ local function hardEnableDefaultControls()
 		pcall(function() controls:Enable() end)
 	end
 	-- Also release any ContextAction "Disable" binds commonly used by inverted code
-	pcall(function()
-		local game:GetService("ContextActionService"):UnbindAction("DisableMovement")
-		local game:GetService("ContextActionService"):UnbindAction("Inverted_Move")
-		local game:GetService("ContextActionService"):UnbindAction("Inverted_Look")
-	end)
+        pcall(function()
+                game:GetService("ContextActionService"):UnbindAction("DisableMovement")
+                game:GetService("ContextActionService"):UnbindAction("Inverted_Move")
+                game:GetService("ContextActionService"):UnbindAction("Inverted_Look")
+        end)
 end
 Players = game:GetService("Players")
 StarterGui = game:GetService("StarterGui")
@@ -197,7 +197,7 @@ local playerControls: any = nil
 
 local function setBackpackCoreGuiEnabled(enabled: boolean)
 	local success, result = pcall(function()
-		local StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, enabled)
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, enabled)
 	end)
 
 	if not success then
@@ -475,7 +475,7 @@ local slotToolMapping: {Tool?} = {}
 
 existingGui = playerGui:FindFirstChild("PVPStatusGui")
 if existingGui then
-	local existingGui:Destroy()
+	existingGui:Destroy()
 end
 
 screenGui = Instance.new("ScreenGui")
@@ -670,7 +670,7 @@ local function createStatusUI(parent: ScreenGui, isTouch: boolean, refs: UiRefs)
 	})
 
 	refs.mapLabelContainer = mapLabelContainer
-	local mapLabelContainer:SetAttribute("HasMap", false)
+	mapLabelContainer:SetAttribute("HasMap", false)
 
 	refs.hotTouchStatusLabel = createInstance("TextLabel", {
 		Name = "HotTouchStatusLabel",
@@ -691,7 +691,7 @@ local function createStatusUI(parent: ScreenGui, isTouch: boolean, refs: UiRefs)
 		Parent = parent,
 	})
 
-	local frame:GetPropertyChangedSignal("Visible"):Connect(function()
+	frame:GetPropertyChangedSignal("Visible"):Connect(function()
 		local container = refs.mapLabelContainer
 		if container then
 			local hasMap = container:GetAttribute("HasMap")
@@ -1482,11 +1482,11 @@ local function startInvisibleCharacterFade(character: Model, owner: Player?, dur
 		end
 
 		invisibleCharacterFades[character] = nil
-		local controller:Destroy()
+		controller:Destroy()
 		applyTransparencyToCharacter(character, bundle.target)
 	end)
 
-	local tween:Play()
+	tween:Play()
 end
 
 local invertedControlState = {
@@ -1636,19 +1636,19 @@ local function locallyToggleTool(tool: Tool)
 		if backpack then
 			tool.Parent = backpack
 		else
-			local humanoid:UnequipTools()
+			humanoid:UnequipTools()
 		end
 		return
 	end
 
-	local humanoid:EquipTool(tool)
+	humanoid:EquipTool(tool)
 end
 local updateInventorySlots: () -> ()
 
 local function removeHighlightForPlayer(targetPlayer: Player)
 	local highlight = highlightState.highlights[targetPlayer]
 	if highlight then
-		local highlight:Destroy()
+		highlight:Destroy()
 		highlightState.highlights[targetPlayer] = nil
 	end
 end
@@ -1657,7 +1657,7 @@ local function clearConnectionsForPlayer(targetPlayer: Player)
 	local connections = highlightState.playerConnections[targetPlayer]
 	if connections then
 		for _, connection in connections do
-			local connection:Disconnect()
+			connection:Disconnect()
 		end
 		highlightState.playerConnections[targetPlayer] = nil
 	end
@@ -1695,7 +1695,7 @@ local function updateHighlightForPlayer(targetPlayer: Player)
 
 	if not shouldShow then
 		if highlight then
-			local highlight:Destroy()
+			highlight:Destroy()
 			highlightState.highlights[targetPlayer] = nil
 		end
 		return
@@ -1764,13 +1764,13 @@ local function disableHighlights()
 
 	for player, connections in highlightState.playerConnections do
 		for _, connection in connections do
-			local connection:Disconnect()
+			connection:Disconnect()
 		end
 	end
 	table.clear(highlightState.playerConnections)
 
 	for player, highlight in highlightState.highlights do
-		local highlight:Destroy()
+		highlight:Destroy()
 	end
 	table.clear(highlightState.highlights)
 
@@ -1899,8 +1899,8 @@ local function hideSpecialEvent(immediate: boolean?)
 		end
 	end)
 
-	local fadeTween:Play()
-	local scaleTween:Play()
+	fadeTween:Play()
+	scaleTween:Play()
 end
 
 local function showSpecialEvent(titleText: string, keepSeconds: number?)
@@ -1912,11 +1912,11 @@ local function showSpecialEvent(titleText: string, keepSeconds: number?)
 	specialEventUI.frame.BackgroundTransparency = 1
 	specialEventUI.scale.Scale = 0.2
 
-	local TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		BackgroundTransparency = 0.05,
 	}):Play()
 
-	local TweenService:Create(specialEventUI.scale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+	TweenService:Create(specialEventUI.scale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 		Scale = 1,
 	}):Play()
 
@@ -2007,7 +2007,7 @@ local function startInvisibleHighlightFade(highlight: Highlight)
 	end)
 
 	invisibleHighlightTweens[highlight] = {tween = tween, conn = conn}
-	local tween:Play()
+	tween:Play()
 end
 
 local function ensureInvisibleHighlight(character: Model): Highlight
@@ -2034,7 +2034,7 @@ local function clearInvisibleHighlight(character: Model)
 	local highlight = character:FindFirstChild("InvisibleRevealHighlight")
 	if highlight then
 		cancelInvisibleHighlightFade(highlight :: Highlight)
-		local highlight:Destroy()
+		highlight:Destroy()
 	end
 	cancelInvisibleCharacterFade(character)
 
@@ -2083,7 +2083,7 @@ end
 local function clearInvisibilityTracking()
 	for _, connections in invisibilityState.playerConnections do
 		for _, connection in connections do
-			local connection:Disconnect()
+			connection:Disconnect()
 		end
 	end
 
@@ -2103,7 +2103,7 @@ local function trackPlayerForInvisibility(player: Player)
 	local existing = invisibilityState.playerConnections[player]
 	if existing then
 		for _, connection in existing do
-			local connection:Disconnect()
+			connection:Disconnect()
 		end
 	end
 
@@ -2229,7 +2229,7 @@ local function setInvisibilityEnabled(enabled: boolean)
 				local connections = invisibilityState.playerConnections[player]
 				if connections then
 					for _, connection in connections do
-						local connection:Disconnect()
+						connection:Disconnect()
 					end
 					invisibilityState.playerConnections[player] = nil
 				end
@@ -2268,7 +2268,7 @@ local function resetInvertedMovement()
 
 	local humanoid = currentHumanoid
 	if humanoid then
-		local humanoid:Move(Vector3.zero, true)
+		humanoid:Move(Vector3.zero, true)
 	end
 end
 
@@ -2280,7 +2280,7 @@ local function enableDefaultControlsIfDisabled()
 	local controls = getPlayerControls()
 	if controls and controls.Enable then
 		local ok, err = pcall(function()
-			local controls:Enable()
+			controls:Enable()
 		end)
 		if not ok then
 			warn("Failed to re-enable default controls after inverted event:", err)
@@ -2299,7 +2299,7 @@ local function disableDefaultControls()
 	end
 
 	local ok, err = pcall(function()
-		local controls:Disable()
+		controls:Disable()
 	end)
 	if not ok then
 		warn("Failed to disable default controls for inverted event:", err)
@@ -2345,7 +2345,7 @@ local function updateInvertedMovement()
 		moveVector = moveVector.Unit
 	end
 
-	local humanoid:Move(moveVector, true)
+	humanoid:Move(moveVector, true)
 end
 
 local function ensureInvertedHeartbeat()
@@ -2358,7 +2358,7 @@ end
 
 local function disableInvertedControls()
 	for _, connection in invertedControlState.connections do
-		local connection:Disconnect()
+		connection:Disconnect()
 	end
 	table.clear(invertedControlState.connections)
 
@@ -2533,11 +2533,11 @@ local function updateSprintButtonState()
 
 	if not canSprint and not buttonActive then
 		local title = if sprintState.zoneBlocked then "No Sprint" elseif sprintState.eventDisabled then "Event" else "Rest"
-		local ContextActionService:SetTitle("SprintAction", title)
+		ContextActionService:SetTitle("SprintAction", title)
 	elseif buttonActive then
-		local ContextActionService:SetTitle("SprintAction", "Unsprint")
+		ContextActionService:SetTitle("SprintAction", "Unsprint")
 	else
-		local ContextActionService:SetTitle("SprintAction", "Sprint")
+		ContextActionService:SetTitle("SprintAction", "Sprint")
 	end
 
 	local shouldEnable = canSprint or sprintState.touchIntent
@@ -2670,7 +2670,7 @@ local function tweenHumanoidSpeed(targetSpeed: number, instant: boolean)
 			sprintState.speedTween = nil
 		end
 	end)
-	local tween:Play()
+	tween:Play()
 end
 
 local function tweenCameraFov(targetFov: number, instant: boolean, onComplete: (() -> ())?)
@@ -2704,7 +2704,7 @@ local function tweenCameraFov(targetFov: number, instant: boolean, onComplete: (
 			onComplete()
 		end
 	end)
-	local tween:Play()
+	tween:Play()
 end
 
 local function stopSprinting(instant: boolean)
@@ -2933,7 +2933,7 @@ equipInventorySlot = function(slotIndex: number)
 	local isPVPGear = tool:GetAttribute("PVPGenerated") == true
 
 	if toggleInventorySlotRemote and isPVPGear then
-		local toggleInventorySlotRemote:FireServer(tool)
+		toggleInventorySlotRemote:FireServer(tool)
 		return
 	end
 
@@ -2968,7 +2968,7 @@ end
 
 local function clearBackpackConnections()
 	for _, connection in backpackConnections do
-		local connection:Disconnect()
+		connection:Disconnect()
 	end
 	table.clear(backpackConnections)
 end
@@ -2986,7 +2986,7 @@ local function untrackGearTool(tool: Tool)
 
 	for _, connection in tracked.connections do
 		if connection then
-			local connection:Disconnect()
+			connection:Disconnect()
 		end
 	end
 end
@@ -3078,7 +3078,7 @@ end
 
 local function watchCharacterTools(character: Model)
 	if characterGearConn then
-		local characterGearConn:Disconnect()
+		characterGearConn:Disconnect()
 		characterGearConn = nil
 	end
 
@@ -3120,7 +3120,7 @@ local function playDeathMatchCameraSequence()
 	local zoomOutTween = TweenService:Create(camera, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 		FieldOfView = zoomOutFov,
 	})
-	local zoomOutTween:Play()
+	zoomOutTween:Play()
 
 	task.delay(0.3, function()
 		local activeCamera = Workspace.CurrentCamera
@@ -3131,7 +3131,7 @@ local function playDeathMatchCameraSequence()
 		local zoomInTween = TweenService:Create(camera, TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
 			FieldOfView = originalFov,
 		})
-		local zoomInTween:Play()
+		zoomInTween:Play()
 	end)
 end
 
@@ -3161,7 +3161,7 @@ local function startDeathMatchTransition(duration: number?)
 	end)
 end
 
-local localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
 	updateHighlightActivation()
 	setSprintEventDisabled(specialEventState.effects.sprintDisabled)
 	applyInvertedControlState()
@@ -3176,7 +3176,7 @@ local localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
 	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end)
 
-local localPlayer:GetPropertyChangedSignal("Neutral"):Connect(function()
+localPlayer:GetPropertyChangedSignal("Neutral"):Connect(function()
 	updateHighlightActivation()
 	setSprintEventDisabled(specialEventState.effects.sprintDisabled)
 	applyInvertedControlState()
@@ -3198,14 +3198,14 @@ if mouse then
 	UserInputService.MouseIconEnabled = true
 	applyDesktopCursorIcon()
 
-	local mouse:GetPropertyChangedSignal("Icon"):Connect(function()
+	mouse:GetPropertyChangedSignal("Icon"):Connect(function()
 		if not applyingMouseIcon then
 			applyDesktopCursorIcon()
 		end
 	end)
 end
 
-local UserInputService:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
+UserInputService:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
 	if mouse then
 		applyDesktopCursorIcon()
 	end
@@ -3225,7 +3225,7 @@ updateHighlightActivation()
 
 local function onHumanoidAdded(humanoid: Humanoid)
 	if humanoidSpeedChangedConn then
-		local humanoidSpeedChangedConn:Disconnect()
+		humanoidSpeedChangedConn:Disconnect()
 		humanoidSpeedChangedConn = nil
 	end
 
@@ -3234,7 +3234,7 @@ local function onHumanoidAdded(humanoid: Humanoid)
 		enableDefaultControlsIfDisabled()
 	end
 	if humanoidSprintBonusConn then
-		local humanoidSprintBonusConn:Disconnect()
+		humanoidSprintBonusConn:Disconnect()
 		humanoidSprintBonusConn = nil
 	end
 	if humanoid.WalkSpeed <= 0 then
@@ -3309,7 +3309,7 @@ local function onCharacterAdded(character: Model)
 		pendingConn = character.ChildAdded:Connect(function(child)
 			if child:IsA("Humanoid") then
 				if pendingConn then
-					local pendingConn:Disconnect()
+					pendingConn:Disconnect()
 					pendingConn = nil
 				end
 				onHumanoidAdded(child)
@@ -3339,18 +3339,18 @@ localPlayer.CharacterRemoving:Connect(function()
 	recomputeSprintIntent()
 	stopSprinting(true)
 	if humanoidSpeedChangedConn then
-		local humanoidSpeedChangedConn:Disconnect()
+		humanoidSpeedChangedConn:Disconnect()
 		humanoidSpeedChangedConn = nil
 	end
 	if humanoidSprintBonusConn then
-		local humanoidSprintBonusConn:Disconnect()
+		humanoidSprintBonusConn:Disconnect()
 		humanoidSprintBonusConn = nil
 	end
 	currentHumanoid = nil
 	if invertedControlState.active then disableInvertedControls() end
 	enableDefaultControlsIfDisabled()
 	if characterGearConn then
-		local characterGearConn:Disconnect()
+		characterGearConn:Disconnect()
 		characterGearConn = nil
 	end
 	updateCursorForGearState()
@@ -3422,7 +3422,7 @@ local function sprintAction(_: string, inputState: Enum.UserInputState, inputObj
 	return Enum.ContextActionResult.Pass
 end
 
-local ContextActionService:BindAction(
+ContextActionService:BindAction(
 	"SprintAction",
 	sprintAction,
 	true,
@@ -3433,8 +3433,8 @@ local ContextActionService:BindAction(
 	Enum.KeyCode.ButtonX
 )
 sprintInteraction.actionBound = true
-local ContextActionService:SetTitle("SprintAction", "Sprint")
-local ContextActionService:SetImage("SprintAction", GEAR_CURSOR_IMAGE_ASSET)
+ContextActionService:SetTitle("SprintAction", "Sprint")
+ContextActionService:SetImage("SprintAction", GEAR_CURSOR_IMAGE_ASSET)
 updateSprintButtonState()
 
 local keyToSlotIndex: {[Enum.KeyCode]: number} = {
@@ -3562,7 +3562,7 @@ end
 
 local function stopFlash()
 	if flashConnection then
-		local flashConnection:Disconnect()
+		flashConnection:Disconnect()
 		flashConnection = nil
 	end
 
@@ -3619,7 +3619,7 @@ end
 
 local function stopShake()
 	if shakeConnection then
-		local shakeConnection:Disconnect()
+		shakeConnection:Disconnect()
 		shakeConnection = nil
 	end
 
@@ -3808,12 +3808,12 @@ local function updateMapLabel(mapId: string?)
 
 	if mapId then
 		targetLabel.Text = string.format("Map: %s", getMapDisplayName(mapId))
-		local container:SetAttribute("HasMap", true)
+		container:SetAttribute("HasMap", true)
 		container.Visible = statusUI.frame.Visible
 		updateEventLabelText()
 	else
 		targetLabel.Text = ""
-		local container:SetAttribute("HasMap", false)
+		container:SetAttribute("HasMap", false)
 		container.Visible = false
 		updateEventLabelText()
 	end
