@@ -76,6 +76,9 @@ local mapDisplayNames = {
     Doomspire = "Doomspire",
 }
 
+local playerModule: any = nil
+local playerControls: any = nil
+
 local function setBackpackCoreGuiEnabled(enabled: boolean)
     local success, result = pcall(function()
         StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, enabled)
@@ -102,6 +105,44 @@ if USE_CUSTOM_INVENTORY_UI then
     RunService.Heartbeat:Connect(ensureBackpackDisabled)
 else
     setBackpackCoreGuiEnabled(true)
+end
+
+local function getPlayerControls()
+    if playerControls then
+        return playerControls
+    end
+
+    local success, moduleOrErr = pcall(function()
+        local playerScripts = localPlayer:WaitForChild("PlayerScripts", 5)
+        if not playerScripts then
+            return nil
+        end
+        local moduleScript = playerScripts:FindFirstChild("PlayerModule")
+        if not moduleScript then
+            moduleScript = playerScripts:WaitForChild("PlayerModule", 5)
+        end
+        if not moduleScript then
+            return nil
+        end
+        return require(moduleScript)
+    end)
+
+    if not success or not moduleOrErr then
+        warn("Unable to load PlayerModule for inverted controls.")
+        return nil
+    end
+
+    playerModule = moduleOrErr
+    local controls = nil
+    local ok, result = pcall(function()
+        return playerModule:GetControls()
+    end)
+    if ok then
+        controls = result
+    end
+
+    playerControls = controls
+    return controls
 end
 
 local GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
@@ -283,6 +324,69 @@ createdMapLabel.ZIndex = statusLabel.ZIndex
 createdMapLabel.Visible = false
 createdMapLabel.Parent = statusFrame
 mapLabel = createdMapLabel
+
+local specialEventFrame = Instance.new("Frame")
+specialEventFrame.Name = "SpecialEventFrame"
+specialEventFrame.Size = UDim2.fromOffset(360, 160)
+specialEventFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+specialEventFrame.Position = UDim2.new(0.5, 0, 0.35, 0)
+specialEventFrame.BackgroundColor3 = Color3.fromRGB(28, 32, 45)
+specialEventFrame.BackgroundTransparency = 1
+specialEventFrame.Visible = false
+specialEventFrame.ZIndex = 40
+specialEventFrame.Parent = screenGui
+
+local specialEventCorner = Instance.new("UICorner")
+specialEventCorner.CornerRadius = UDim.new(0, 14)
+specialEventCorner.Parent = specialEventFrame
+
+local specialEventStroke = Instance.new("UIStroke")
+specialEventStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+specialEventStroke.Thickness = 2
+specialEventStroke.Color = Color3.fromRGB(120, 135, 200)
+specialEventStroke.Transparency = 0.35
+specialEventStroke.Parent = specialEventFrame
+
+local specialEventGradient = Instance.new("UIGradient")
+specialEventGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 55, 80)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 32, 45)),
+})
+specialEventGradient.Rotation = 90
+specialEventGradient.Parent = specialEventFrame
+
+local specialEventHeader = Instance.new("TextLabel")
+specialEventHeader.Name = "Header"
+specialEventHeader.Size = UDim2.new(1, -40, 0, 42)
+specialEventHeader.Position = UDim2.new(0, 20, 0, 18)
+specialEventHeader.BackgroundTransparency = 1
+specialEventHeader.Font = Enum.Font.GothamBold
+specialEventHeader.Text = "- Special Round -"
+specialEventHeader.TextScaled = false
+specialEventHeader.TextSize = if isTouchDevice then 22 else 24
+specialEventHeader.TextColor3 = Color3.fromRGB(245, 245, 255)
+specialEventHeader.TextXAlignment = Enum.TextXAlignment.Center
+specialEventHeader.TextYAlignment = Enum.TextYAlignment.Center
+specialEventHeader.ZIndex = specialEventFrame.ZIndex + 1
+specialEventHeader.Parent = specialEventFrame
+
+local specialEventTitle = Instance.new("TextLabel")
+specialEventTitle.Name = "Title"
+specialEventTitle.Size = UDim2.new(1, -60, 0, 60)
+specialEventTitle.Position = UDim2.new(0, 30, 0, 70)
+specialEventTitle.BackgroundTransparency = 1
+specialEventTitle.Font = Enum.Font.GothamBlack
+specialEventTitle.Text = ""
+specialEventTitle.TextScaled = true
+specialEventTitle.TextWrapped = true
+specialEventTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+specialEventTitle.ZIndex = specialEventFrame.ZIndex + 1
+specialEventTitle.Parent = specialEventFrame
+
+local specialEventScale = Instance.new("UIScale")
+specialEventScale.Name = "Scale"
+specialEventScale.Scale = 1
+specialEventScale.Parent = specialEventFrame
 
 local viewportWidth = 1024
 do
@@ -673,6 +777,42 @@ local transitionState = {
     token = 0,
 }
 
+local specialEventState = {
+    active = false,
+    id = nil :: string?,
+    randomized = false,
+    randomToken = 0,
+    hideToken = 0,
+    options = {} :: {{id: string?, name: string?}},
+    finalName = nil :: string?,
+    effects = {
+        sprintDisabled = false,
+        invisible = false,
+        inverted = false,
+    },
+}
+
+local invisibilityState = {
+    enabled = false,
+    pulseToken = 0,
+    playerConnections = {} :: {[Player]: {RBXScriptConnection}},
+    playerAddedConn = nil :: RBXScriptConnection?,
+    playerRemovingConn = nil :: RBXScriptConnection?,
+}
+
+local invertedControlState = {
+    active = false,
+    keyboard = {
+        forward = false,
+        back = false,
+        left = false,
+        right = false,
+    },
+    thumbstick = Vector2.new(),
+    connections = {} :: {RBXScriptConnection},
+    heartbeatConn = nil :: RBXScriptConnection?,
+}
+
 type HighlightConnections = {RBXScriptConnection}
 
 type HighlightStyle = {
@@ -700,6 +840,7 @@ type SprintState = {
     keyboardIntent: boolean,
     touchIntent: boolean,
     zoneBlocked: boolean,
+    eventDisabled: boolean,
     rechargeBlockedUntil: number,
     originalWalkSpeed: number,
     speedTween: Tween?,
@@ -722,6 +863,7 @@ local sprintState: SprintState = {
     keyboardIntent = false,
     touchIntent = false,
     zoneBlocked = false,
+    eventDisabled = false,
     rechargeBlockedUntil = 0,
     originalWalkSpeed = DEFAULT_WALK_SPEED,
     speedTween = nil,
@@ -1010,6 +1152,459 @@ local function updateHighlightActivation()
     else
         disableHighlights()
     end
+
+    updateInvisiblePulseState()
+end
+
+local function hideSpecialEvent(immediate: boolean?)
+    specialEventState.hideToken += 1
+    local token = specialEventState.hideToken
+
+    if not specialEventFrame then
+        return
+    end
+
+    if immediate then
+        specialEventFrame.Visible = false
+        return
+    end
+
+    local fadeTween = TweenService:Create(specialEventFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 1,
+    })
+    local scaleTween = TweenService:Create(specialEventScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        Scale = 0.85,
+    })
+
+    fadeTween.Completed:Connect(function()
+        if specialEventState.hideToken == token then
+            specialEventFrame.Visible = false
+            specialEventScale.Scale = 1
+        end
+    end)
+
+    fadeTween:Play()
+    scaleTween:Play()
+end
+
+local function showSpecialEvent(titleText: string, keepSeconds: number?)
+    specialEventState.hideToken += 1
+    local token = specialEventState.hideToken
+
+    specialEventTitle.Text = titleText
+    specialEventFrame.Visible = true
+    specialEventFrame.BackgroundTransparency = 1
+    specialEventScale.Scale = 0.2
+
+    TweenService:Create(specialEventFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0.05,
+    }):Play()
+
+    TweenService:Create(specialEventScale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Scale = 1,
+    }):Play()
+
+    if keepSeconds and keepSeconds > 0 then
+        task.delay(keepSeconds, function()
+            if specialEventState.hideToken == token then
+                hideSpecialEvent(false)
+            end
+        end)
+    end
+end
+
+local function beginSpecialEventRandomization(options: {{id: string?, name: string?}}, finalName: string?, duration: number?)
+    specialEventState.options = options
+    specialEventState.finalName = finalName
+    specialEventState.randomized = true
+    specialEventState.randomToken += 1
+    local token = specialEventState.randomToken
+
+    if #options == 0 then
+        options = {{id = "", name = "???"}}
+        specialEventState.options = options
+    end
+
+    showSpecialEvent("Randomizing...", duration or 3)
+
+    task.spawn(function()
+        local index = 1
+        local count = math.max(1, #options)
+        local elapsed = 0
+        local totalDuration = duration or 3
+        local step = 0.12
+
+        while specialEventState.randomized and specialEventState.randomToken == token do
+            local option = options[((index - 1) % count) + 1]
+            if option then
+                specialEventTitle.Text = option.name or option.id or "???"
+            end
+            index += 1
+
+            task.wait(step)
+            elapsed += step
+
+            if totalDuration > 0 and elapsed > totalDuration then
+                step = math.min(0.25, step + 0.03)
+            end
+        end
+    end)
+end
+
+local function completeSpecialEventRandomization(finalName: string)
+    if not specialEventState.randomized then
+        showSpecialEvent(finalName, 3)
+        return
+    end
+
+    specialEventState.randomized = false
+    specialEventTitle.Text = finalName
+    showSpecialEvent(finalName, 3)
+end
+
+local function ensureInvisibleHighlight(character: Model): Highlight
+    local highlight = character:FindFirstChild("InvisibleRevealHighlight") :: Highlight?
+    if not highlight then
+        highlight = Instance.new("Highlight")
+        highlight.Name = "InvisibleRevealHighlight"
+        highlight.FillColor = Color3.fromRGB(255, 255, 255)
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlight.FillTransparency = 1
+        highlight.OutlineTransparency = 1
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = character
+    end
+
+    return highlight
+end
+
+local function clearInvisibleHighlight(character: Model)
+    local highlight = character:FindFirstChild("InvisibleRevealHighlight")
+    if highlight then
+        highlight:Destroy()
+    end
+end
+
+local function applyCharacterInvisibility(character: Model, enabled: boolean)
+    for _, descendant in character:GetDescendants() do
+        if descendant:IsA("BasePart") then
+            local belongsToTool = false
+            local ancestor = descendant.Parent
+            while ancestor and ancestor ~= character do
+                if ancestor:IsA("Tool") then
+                    belongsToTool = true
+                    break
+                end
+                ancestor = ancestor.Parent
+            end
+
+            if not belongsToTool then
+                descendant.LocalTransparencyModifier = enabled and 0.5 or 0
+            end
+        end
+    end
+end
+
+local function updateInvisibilityForPlayer(player: Player)
+    local character = player.Character
+    if not character then
+        return
+    end
+
+    local shouldBeInvisible = invisibilityState.enabled and player.Neutral
+    applyCharacterInvisibility(character, shouldBeInvisible)
+
+    if not shouldBeInvisible then
+        clearInvisibleHighlight(character)
+    end
+end
+
+local function clearInvisibilityTracking()
+    for _, connections in invisibilityState.playerConnections do
+        for _, connection in connections do
+            connection:Disconnect()
+        end
+    end
+
+    table.clear(invisibilityState.playerConnections)
+
+    for _, player in Players:GetPlayers() do
+        if player.Character then
+            applyCharacterInvisibility(player.Character, false)
+            clearInvisibleHighlight(player.Character)
+        end
+    end
+end
+
+local function trackPlayerForInvisibility(player: Player)
+    local existing = invisibilityState.playerConnections[player]
+    if existing then
+        for _, connection in existing do
+            connection:Disconnect()
+        end
+    end
+
+    local connections: {RBXScriptConnection} = {}
+    connections[#connections + 1] = player:GetPropertyChangedSignal("Neutral"):Connect(function()
+        updateInvisibilityForPlayer(player)
+    end)
+    connections[#connections + 1] = player.CharacterAdded:Connect(function()
+        task.defer(function()
+            updateInvisibilityForPlayer(player)
+        end)
+    end)
+    connections[#connections + 1] = player.CharacterRemoving:Connect(function(character)
+        clearInvisibleHighlight(character)
+    end)
+
+    invisibilityState.playerConnections[player] = connections
+    updateInvisibilityForPlayer(player)
+end
+
+local function updateInvisiblePulseState()
+    invisibilityState.pulseToken += 1
+    local token = invisibilityState.pulseToken
+
+    if not invisibilityState.enabled or deathMatchHighlightActive then
+        for _, player in Players:GetPlayers() do
+            local character = player.Character
+            if character then
+                local highlight = character:FindFirstChild("InvisibleRevealHighlight") :: Highlight?
+                if highlight then
+                    highlight.FillTransparency = 1
+                    highlight.OutlineTransparency = 1
+                end
+            end
+        end
+        return
+    end
+
+    task.spawn(function()
+        while invisibilityState.enabled and not deathMatchHighlightActive and invisibilityState.pulseToken == token do
+            for _, player in Players:GetPlayers() do
+                if player.Neutral then
+                    local character = player.Character
+                    if character then
+                        local highlight = ensureInvisibleHighlight(character)
+                        highlight.FillTransparency = 0.1
+                        highlight.OutlineTransparency = 0
+                    end
+                end
+            end
+
+            local pulseToken = token
+            task.delay(1, function()
+                if invisibilityState.pulseToken == pulseToken then
+                    for _, player in Players:GetPlayers() do
+                        local character = player.Character
+                        if character then
+                            local highlight = character:FindFirstChild("InvisibleRevealHighlight") :: Highlight?
+                            if highlight then
+                                highlight.FillTransparency = 1
+                                highlight.OutlineTransparency = 1
+                            end
+                        end
+                    end
+                end
+            end)
+
+            local elapsed = 0
+            while elapsed < 5 and invisibilityState.enabled and not deathMatchHighlightActive and invisibilityState.pulseToken == token do
+                task.wait(0.2)
+                elapsed += 0.2
+            end
+        end
+    end)
+end
+
+local function setInvisibilityEnabled(enabled: boolean)
+    if invisibilityState.enabled == enabled then
+        updateInvisiblePulseState()
+        for _, player in Players:GetPlayers() do
+            updateInvisibilityForPlayer(player)
+        end
+        return
+    end
+
+    invisibilityState.enabled = enabled
+
+    if enabled then
+        for _, player in Players:GetPlayers() do
+            trackPlayerForInvisibility(player)
+        end
+
+        if not invisibilityState.playerAddedConn then
+            invisibilityState.playerAddedConn = Players.PlayerAdded:Connect(function(player)
+                trackPlayerForInvisibility(player)
+            end)
+        end
+
+        if not invisibilityState.playerRemovingConn then
+            invisibilityState.playerRemovingConn = Players.PlayerRemoving:Connect(function(player)
+                local connections = invisibilityState.playerConnections[player]
+                if connections then
+                    for _, connection in connections do
+                        connection:Disconnect()
+                    end
+                    invisibilityState.playerConnections[player] = nil
+                end
+            end)
+        end
+    else
+        if invisibilityState.playerAddedConn then
+            invisibilityState.playerAddedConn:Disconnect()
+            invisibilityState.playerAddedConn = nil
+        end
+        if invisibilityState.playerRemovingConn then
+            invisibilityState.playerRemovingConn:Disconnect()
+            invisibilityState.playerRemovingConn = nil
+        end
+
+        clearInvisibilityTracking()
+    end
+
+    updateInvisiblePulseState()
+end
+
+local function resetInvertedMovement()
+    invertedControlState.keyboard.forward = false
+    invertedControlState.keyboard.back = false
+    invertedControlState.keyboard.left = false
+    invertedControlState.keyboard.right = false
+    invertedControlState.thumbstick = Vector2.new(0, 0)
+end
+
+local function updateInvertedMovement()
+    if not invertedControlState.active then
+        return
+    end
+
+    local humanoid = currentHumanoid
+    if not humanoid then
+        return
+    end
+
+    local moveX = 0
+    if invertedControlState.keyboard.left then
+        moveX += 1
+    end
+    if invertedControlState.keyboard.right then
+        moveX -= 1
+    end
+
+    local moveZ = 0
+    if invertedControlState.keyboard.forward then
+        moveZ += 1
+    end
+    if invertedControlState.keyboard.back then
+        moveZ -= 1
+    end
+
+    local thumb = invertedControlState.thumbstick
+    if thumb.Magnitude > 0 then
+        moveX += -thumb.X
+        moveZ += -thumb.Y
+    end
+
+    local moveVector = Vector3.new(moveX, 0, moveZ)
+    if moveVector.Magnitude > 1 then
+        moveVector = moveVector.Unit
+    end
+
+    humanoid:Move(moveVector, true)
+end
+
+local function setInvertedControlsEnabled(enabled: boolean)
+    if invertedControlState.active == enabled then
+        return
+    end
+
+    invertedControlState.active = enabled
+
+    if enabled then
+        local controls = getPlayerControls()
+        if controls and controls.Enable then
+            local ok, err = pcall(function()
+                controls:Disable()
+            end)
+            if not ok then
+                warn("Failed to disable default controls for inverted event:", err)
+            end
+        end
+
+        resetInvertedMovement()
+
+        local function onInputBegan(input: InputObject, processed: boolean)
+            if processed then
+                return
+            end
+
+            local key = input.KeyCode
+            if key == Enum.KeyCode.W or key == Enum.KeyCode.Up then
+                invertedControlState.keyboard.forward = true
+            elseif key == Enum.KeyCode.S or key == Enum.KeyCode.Down then
+                invertedControlState.keyboard.back = true
+            elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left then
+                invertedControlState.keyboard.left = true
+            elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
+                invertedControlState.keyboard.right = true
+            end
+        end
+
+        local function onInputEnded(input: InputObject)
+            local key = input.KeyCode
+            if key == Enum.KeyCode.W or key == Enum.KeyCode.Up then
+                invertedControlState.keyboard.forward = false
+            elseif key == Enum.KeyCode.S or key == Enum.KeyCode.Down then
+                invertedControlState.keyboard.back = false
+            elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left then
+                invertedControlState.keyboard.left = false
+            elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
+                invertedControlState.keyboard.right = false
+            elseif key == Enum.KeyCode.Thumbstick1 then
+                invertedControlState.thumbstick = Vector2.new(0, 0)
+            end
+        end
+
+        local function onInputChanged(input: InputObject)
+            if input.KeyCode == Enum.KeyCode.Thumbstick1 then
+                invertedControlState.thumbstick = Vector2.new(input.Position.X, input.Position.Y)
+            end
+        end
+
+        invertedControlState.connections = {
+            UserInputService.InputBegan:Connect(onInputBegan),
+            UserInputService.InputEnded:Connect(onInputEnded),
+            UserInputService.InputChanged:Connect(onInputChanged),
+        }
+
+        if invertedControlState.heartbeatConn then
+            invertedControlState.heartbeatConn:Disconnect()
+        end
+        invertedControlState.heartbeatConn = RunService.Heartbeat:Connect(updateInvertedMovement)
+    else
+        for _, connection in invertedControlState.connections do
+            connection:Disconnect()
+        end
+        table.clear(invertedControlState.connections)
+
+        if invertedControlState.heartbeatConn then
+            invertedControlState.heartbeatConn:Disconnect()
+            invertedControlState.heartbeatConn = nil
+        end
+
+        resetInvertedMovement()
+
+        local controls = getPlayerControls()
+        if controls and controls.Enable then
+            local ok, err = pcall(function()
+                controls:Enable()
+            end)
+            if not ok then
+                warn("Failed to re-enable default controls after inverted event:", err)
+            end
+        end
+    end
 end
 
 local function getSprintActionButton(): ImageButton?
@@ -1034,11 +1629,12 @@ local function updateSprintButtonState()
     end
 
     local hasEnergy = sprintState.energy > 0
-    local canSprint = hasEnergy and not sprintState.zoneBlocked
+    local sprintBlocked = sprintState.zoneBlocked or sprintState.eventDisabled
+    local canSprint = hasEnergy and not sprintBlocked
     local buttonActive = sprintState.touchIntent and canSprint
 
     if not canSprint and not buttonActive then
-        local title = if sprintState.zoneBlocked then "No Sprint" else "Rest"
+        local title = if sprintState.zoneBlocked then "No Sprint" elseif sprintState.eventDisabled then "Event" else "Rest"
         ContextActionService:SetTitle("SprintAction", title)
     elseif buttonActive then
         ContextActionService:SetTitle("SprintAction", "Unsprint")
@@ -1059,12 +1655,31 @@ end
 
 local function recomputeSprintIntent()
     local desiredIntent = sprintState.keyboardIntent or sprintState.touchIntent
-    if sprintState.zoneBlocked then
+    if sprintState.zoneBlocked or sprintState.eventDisabled then
         desiredIntent = false
     end
 
     sprintState.sprintIntent = desiredIntent
     updateSprintButtonState()
+end
+
+local function setSprintEventDisabled(disabled: boolean)
+    if sprintState.eventDisabled == disabled then
+        return
+    end
+
+    sprintState.eventDisabled = disabled
+
+    if disabled then
+        if sprintState.isSprinting then
+            stopSprinting(true)
+        end
+        sprintState.touchIntent = false
+        sprintState.keyboardIntent = false
+    end
+
+    recomputeSprintIntent()
+    updateEnergyUI()
 end
 
 local function updateEnergyUI()
@@ -1097,7 +1712,7 @@ local function updateEnergyUI()
             sprintStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 220)
         else
             sprintStatusLabel.Text = "Sprint OFF"
-            if sprintState.energy <= 0 or sprintState.zoneBlocked then
+            if sprintState.energy <= 0 or sprintState.zoneBlocked or sprintState.eventDisabled then
                 sprintStatusLabel.TextColor3 = Color3.fromRGB(255, 140, 140)
             else
                 sprintStatusLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
@@ -1118,7 +1733,7 @@ local function toggleTouchSprintIntent()
         return
     end
 
-    if sprintState.energy <= 0 or sprintState.zoneBlocked then
+    if sprintState.energy <= 0 or sprintState.zoneBlocked or sprintState.eventDisabled then
         sprintState.touchIntent = false
         recomputeSprintIntent()
         return
@@ -1225,7 +1840,7 @@ local function startSprinting()
         return
     end
 
-    if sprintState.zoneBlocked then
+    if sprintState.zoneBlocked or sprintState.eventDisabled then
         return
     end
 
@@ -2620,5 +3235,84 @@ statusRemote.OnClientEvent:Connect(function(payload)
         statusLabel.Text = "Intermission"
         labelStroke.Transparency = 0.3
         updateMapLabel(nil)
+        specialEventState.active = false
+        specialEventState.id = nil
+        specialEventState.randomized = false
+        specialEventState.options = {}
+        specialEventState.finalName = nil
+        specialEventState.effects.sprintDisabled = false
+        specialEventState.effects.invisible = false
+        specialEventState.effects.inverted = false
+        setSprintEventDisabled(false)
+        setInvisibilityEnabled(false)
+        setInvertedControlsEnabled(false)
+        hideSpecialEvent(true)
+    elseif action == "SpecialEventRandomizing" then
+        local headerText = if typeof(payload.header) == "string" then payload.header else "- Special Round -"
+        specialEventHeader.Text = headerText
+
+        local options: {{id: string?, name: string?}} = {}
+        if typeof(payload.options) == "table" then
+            for _, item in ipairs(payload.options) do
+                if typeof(item) == "table" then
+                    table.insert(options, {
+                        id = if typeof(item.id) == "string" then item.id else nil,
+                        name = if typeof(item.name) == "string" then item.name else nil,
+                    })
+                elseif typeof(item) == "string" then
+                    table.insert(options, {id = item, name = item})
+                end
+            end
+        end
+
+        local duration = tonumber(payload.duration)
+        local chosenName = if typeof(payload.chosenName) == "string" then payload.chosenName elseif typeof(payload.chosenId) == "string" then payload.chosenId else nil
+        beginSpecialEventRandomization(options, chosenName, duration)
+    elseif action == "SpecialEvent" then
+        local headerText = if typeof(payload.header) == "string" then payload.header else "- Special Round -"
+        specialEventHeader.Text = headerText
+
+        local isActive = payload.active
+        if isActive == false then
+            specialEventState.active = false
+            specialEventState.id = nil
+            specialEventState.randomized = false
+            specialEventState.options = {}
+            specialEventState.finalName = nil
+            setSprintEventDisabled(false)
+            setInvisibilityEnabled(false)
+            setInvertedControlsEnabled(false)
+            hideSpecialEvent(true)
+        else
+            local eventId = if typeof(payload.id) == "string" then payload.id else nil
+            local eventName = if typeof(payload.name) == "string" then payload.name elseif eventId then eventId else "Special Event"
+            specialEventState.active = true
+            specialEventState.id = eventId
+
+            if payload.randomized then
+                completeSpecialEventRandomization(eventName)
+            else
+                specialEventState.randomized = false
+                showSpecialEvent(eventName, 3)
+            end
+        end
+    elseif action == "SpecialEventEffect" then
+        if payload.sprintDisabled ~= nil then
+            local disabled = payload.sprintDisabled == true
+            specialEventState.effects.sprintDisabled = disabled
+            setSprintEventDisabled(disabled)
+        end
+
+        if payload.invisible ~= nil then
+            local invisibleEnabled = payload.invisible == true
+            specialEventState.effects.invisible = invisibleEnabled
+            setInvisibilityEnabled(invisibleEnabled)
+        end
+
+        if payload.inverted ~= nil then
+            local invertedEnabled = payload.inverted == true
+            specialEventState.effects.inverted = invertedEnabled
+            setInvertedControlsEnabled(invertedEnabled)
+        end
     end
 end)

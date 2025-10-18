@@ -18,6 +18,12 @@ type MapDefinition = {
     modelName: string,
 }
 
+type EventDefinition = {
+    id: string,
+    displayName: string,
+    description: string?,
+}
+
 local mapDefinitions: {MapDefinition} = {
     {
         id = "Crossroad",
@@ -38,6 +44,64 @@ local mapDefinitions: {MapDefinition} = {
         id = "Doomspire",
         displayName = "Doomspire",
         modelName = "Doomspire",
+    },
+}
+
+local specialEventOptions: {EventDefinition} = {
+    {
+        id = "RANDOM",
+        displayName = "RANDOM",
+        description = "Pick a surprise event when the round begins.",
+    },
+    {
+        id = "ShatteredHeart",
+        displayName = "Shattered Heart💔",
+        description = "Neutral players cling to a single hit point.",
+    },
+    {
+        id = "SprintProhibit",
+        displayName = "Sprint Prohibit🦵🚫",
+        description = "Neutral players cannot sprint.",
+    },
+    {
+        id = "Retro",
+        displayName = "RETRO🧱",
+        description = "Neutral players receive retro gear only.",
+    },
+    {
+        id = "Invisible",
+        displayName = "Invisible👻",
+        description = "Neutral players turn translucent ninjas.",
+    },
+    {
+        id = "Bunny",
+        displayName = "Bunny🐰",
+        description = "Neutral players are powered by pogo legs.",
+    },
+    {
+        id = "Slippery",
+        displayName = "Slippery🧊",
+        description = "The arena loses all traction.",
+    },
+    {
+        id = "KillBot",
+        displayName = "KillBot🤖",
+        description = "Three rogue bots patrol the arena.",
+    },
+    {
+        id = "RainingBomb",
+        displayName = "Raining Bomb💣",
+        description = "Explosive hail falls from the sky.",
+    },
+    {
+        id = "InvertedControl",
+        displayName = "Inverted Control😕",
+        description = "Movement input is flipped for Neutral players.",
+    },
+    {
+        id = "HotTouch",
+        displayName = "Hot Touch🔥",
+        description = "Pass the explosive countdown or perish.",
     },
 }
 
@@ -259,41 +323,63 @@ pvpTitle.TextXAlignment = Enum.TextXAlignment.Left
 pvpTitle.ZIndex = 6
 pvpTitle.Parent = pvpFrame
 
-local mapSection = Instance.new("Frame")
-mapSection.Name = "MapSection"
-mapSection.Size = UDim2.new(1, -40, 0, 110)
-mapSection.Position = UDim2.new(0, 20, 0, 70)
-mapSection.BackgroundTransparency = 1
-mapSection.ZIndex = 6
-mapSection.Parent = pvpFrame
+local function createRowSection(name: string, headerText: string, positionOffset: number)
+    local section = Instance.new("Frame")
+    section.Name = name
+    section.Size = UDim2.new(1, -40, 0, 120)
+    section.Position = UDim2.new(0, 20, 0, positionOffset)
+    section.BackgroundTransparency = 1
+    section.ZIndex = 6
+    section.Parent = pvpFrame
 
-local mapHeader = Instance.new("TextLabel")
-mapHeader.Name = "Header"
-mapHeader.Size = UDim2.new(1, 0, 0, 24)
-mapHeader.BackgroundTransparency = 1
-mapHeader.Font = Enum.Font.GothamBold
-mapHeader.Text = "Map"
-mapHeader.TextColor3 = Color3.fromRGB(245, 245, 255)
-mapHeader.TextSize = 20
-mapHeader.TextXAlignment = Enum.TextXAlignment.Left
-mapHeader.ZIndex = 6
-mapHeader.Parent = mapSection
+    local header = Instance.new("TextLabel")
+    header.Name = "Header"
+    header.Size = UDim2.new(1, 0, 0, 24)
+    header.BackgroundTransparency = 1
+    header.Font = Enum.Font.GothamBold
+    header.Text = headerText
+    header.TextColor3 = Color3.fromRGB(245, 245, 255)
+    header.TextSize = 20
+    header.TextXAlignment = Enum.TextXAlignment.Left
+    header.ZIndex = 6
+    header.Parent = section
 
-local mapList = Instance.new("Frame")
-mapList.Name = "MapList"
-mapList.Size = UDim2.new(1, 0, 0, 64)
-mapList.Position = UDim2.new(0, 0, 0, 32)
-mapList.BackgroundTransparency = 1
-mapList.ZIndex = 6
-mapList.Parent = mapSection
+    local list = Instance.new("ScrollingFrame")
+    list.Name = "List"
+    list.Size = UDim2.new(1, 0, 0, 72)
+    list.Position = UDim2.new(0, 0, 0, 32)
+    list.BackgroundTransparency = 1
+    list.ScrollingDirection = Enum.ScrollingDirection.X
+    list.ScrollBarThickness = 4
+    list.CanvasSize = UDim2.new(0, 0, 0, 0)
+    list.ZIndex = 6
+    list.BottomImage = "rbxassetid://9416839567"
+    list.MidImage = "rbxassetid://9416839567"
+    list.TopImage = "rbxassetid://9416839567"
+    list.Parent = section
 
-local mapListLayout = Instance.new("UIListLayout")
-mapListLayout.FillDirection = Enum.FillDirection.Horizontal
-mapListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-mapListLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-mapListLayout.Padding = UDim.new(0, 12)
-mapListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-mapListLayout.Parent = mapList
+    local padding = Instance.new("UIPadding")
+    padding.PaddingBottom = UDim.new(0, 4)
+    padding.PaddingTop = UDim.new(0, 4)
+    padding.Parent = list
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    layout.VerticalAlignment = Enum.VerticalAlignment.Center
+    layout.Padding = UDim.new(0, 12)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = list
+
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        list.CanvasSize = UDim2.new(0, layout.AbsoluteContentSize.X + 12, 0, 0)
+    end)
+
+    return section, list
+end
+
+local mapSection, mapList = createRowSection("MapSection", "Map", 70)
+local eventSection, eventList = createRowSection("EventSection", "Event", 200)
 
 local actionContainer = Instance.new("Frame")
 actionContainer.Name = "ActionContainer"
@@ -358,7 +444,9 @@ local startButtonDefaultColor = startButton.BackgroundColor3
 local startButtonDisabledColor = Color3.fromRGB(70, 80, 110)
 
 local mapButtons: {[string]: TextButton} = {}
+local eventButtons: {[string]: TextButton} = {}
 local selectedMapId: string? = nil
+local selectedEventId: string? = nil
 local startButtonLocked = false
 local startButtonLabel = startButton.Text
 local messageFadeToken = 0
@@ -434,19 +522,19 @@ local function selectMap(mapId: string)
     end
 end
 
-for order, definition in ipairs(mapDefinitions) do
+local function createSelectionButton(parent: Instance, order: number, id: string, displayName: string, buttonsTable: {[string]: TextButton}, onActivated: (string) -> ())
     local button = Instance.new("TextButton")
-    button.Name = string.format("%sButton", definition.id)
+    button.Name = string.format("%sButton", id)
     button.LayoutOrder = order
     button.Size = UDim2.new(0, 120, 0, 44)
     button.BackgroundColor3 = mapButtonDefaultColor
     button.AutoButtonColor = false
     button.Font = Enum.Font.GothamBold
-    button.Text = definition.displayName
+    button.Text = displayName
     button.TextColor3 = mapButtonTextColor
     button.TextSize = 18
     button.ZIndex = 6
-    button.Parent = mapList
+    button.Parent = parent
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 8)
@@ -458,17 +546,46 @@ for order, definition in ipairs(mapDefinitions) do
     stroke.Color = Color3.fromRGB(120, 40, 40)
     stroke.Parent = button
 
-    mapButtons[definition.id] = button
+    buttonsTable[id] = button
     updateMapButtonVisual(button, false)
 
     button.Activated:Connect(function()
-        if selectedMapId == definition.id then
-            return
-        end
+        onActivated(id)
+    end)
 
-        selectMap(definition.id)
+    return button
+end
+
+for order, definition in ipairs(mapDefinitions) do
+    createSelectionButton(mapList, order, definition.id, definition.displayName, mapButtons, function(mapId)
+        if selectedMapId ~= mapId then
+            selectMap(mapId)
+        end
     end)
 end
+
+local function updateEventButtonVisual(button: TextButton, isSelected: boolean)
+    updateMapButtonVisual(button, isSelected)
+end
+
+local function selectEvent(eventId: string?)
+    selectedEventId = eventId
+    for id, button in eventButtons do
+        updateEventButtonVisual(button, id == selectedEventId)
+    end
+end
+
+for order, definition in ipairs(specialEventOptions) do
+    createSelectionButton(eventList, order, definition.id, definition.displayName, eventButtons, function(eventId)
+        if selectedEventId == eventId then
+            selectEvent(eventId)
+        else
+            selectEvent(eventId)
+        end
+    end)
+end
+
+selectEvent(nil)
 
 updateStartButtonVisual()
 
@@ -559,9 +676,15 @@ startButton.Activated:Connect(function()
     end
 
     setStartButtonState(true, "Starting...")
-    startRoundRemote:FireServer({
+    local payload = {
         mapId = selectedMapId,
-    })
+    }
+
+    if selectedEventId and selectedEventId ~= "" then
+        payload.eventId = selectedEventId
+    end
+
+    startRoundRemote:FireServer(payload)
     closeAllUI()
 end)
 

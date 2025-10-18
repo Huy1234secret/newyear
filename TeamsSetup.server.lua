@@ -3,10 +3,12 @@
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 local TeamsService = game:GetService("Teams")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
+local Debris = game:GetService("Debris")
 
 local function getOrCreateTeam(name: string, color: Color3, autoAssignable: boolean): Team
     local team = TeamsService:FindFirstChild(name) :: Team?
@@ -172,6 +174,905 @@ local mapConfigurations: {[string]: MapConfig} = {
     },
 }
 
+local specialEventDefinitions: {[string]: SpecialEventDefinition} = {}
+local specialEventList: {SpecialEventDefinition} = {}
+
+local function registerSpecialEvent(definition: SpecialEventDefinition)
+    specialEventDefinitions[definition.id] = definition
+    table.insert(specialEventList, definition)
+end
+
+local function callSpecialEventCallback(context: SpecialEventContext?, methodName: string, ...)
+    if not context then
+        return
+    end
+
+    local definition = context.definition
+    local callback = (definition :: any)[methodName]
+    if typeof(callback) == "function" then
+        local ok, err = pcall(callback, context, ...)
+        if not ok then
+            warn(string.format("Special event '%s' %s error: %s", definition.id, methodName, err))
+        end
+    end
+end
+
+local function setActiveSpecialEvent(eventId: string?, roundId: number): SpecialEventContext?
+    selectedSpecialEventId = eventId
+
+    if not eventId then
+        activeSpecialEvent = nil
+        return nil
+    end
+
+    local definition = specialEventDefinitions[eventId]
+    if not definition then
+        warn(string.format("Unknown special event id '%s'", eventId))
+        selectedSpecialEventId = nil
+        activeSpecialEvent = nil
+        return nil
+    end
+
+    local context: SpecialEventContext = {
+        definition = definition,
+        roundId = roundId,
+        state = {},
+    }
+
+    activeSpecialEvent = context
+    return context
+end
+
+local function clearActiveSpecialEvent()
+    selectedSpecialEventId = nil
+    activeSpecialEvent = nil
+end
+
+local function getRandomSpecialEventId(): string?
+    if #specialEventList == 0 then
+        return nil
+    end
+
+    local rng = Random.new()
+    local index = rng:NextInteger(1, #specialEventList)
+    local definition = specialEventList[index]
+    return if definition then definition.id else nil
+end
+
+local function forEachActiveParticipant(callback: (Player, ParticipantRecord) -> ())
+    for player, record in participantRecords do
+        if record.roundId == currentRoundId then
+            callback(player, record)
+        end
+    end
+end
+
+local function getNeutralParticipantRecords(): {ParticipantRecord}
+    local records: {ParticipantRecord} = {}
+    forEachActiveParticipant(function(player, record)
+        if isPlayerInNeutralState(player) then
+            table.insert(records, record)
+        end
+    end)
+    return records
+end
+
+local function getParticipantFromPlayer(targetPlayer: Player): ParticipantRecord?
+    local record = participantRecords[targetPlayer]
+    if record and record.roundId == currentRoundId then
+        return record
+    end
+    return nil
+end
+
+local function getActiveMapBounds(): (CFrame, Vector3)
+    local mapModel = activeMapModel
+    if mapModel then
+        local cf, size = mapModel:GetBoundingBox()
+        return cf, size
+    end
+
+    return CFrame.new(), Vector3.new(400, 0, 400)
+end
+
+local function getStormHorizontalSize(): Vector2
+    if activeMapConfig and activeMapConfig.deathMatchStormSize then
+        return activeMapConfig.deathMatchStormSize
+    end
+
+    local _, size = getActiveMapBounds()
+    return Vector2.new(math.max(400, size.X), math.max(400, size.Z))
+end
+
+do
+    registerSpecialEvent({
+        id = "ShatteredHeart",
+        displayName = "Shattered Heart💔",
+        onParticipantCharacter = function(context, record, _character, humanoid)
+            if not isPlayerInNeutralState(record.player) then
+                return
+            end
+
+            local data = record.eventData
+            local bundle = data.ShatteredHeart
+            if bundle and bundle.conn then
+                bundle.conn:Disconnect()
+            end
+
+            local originalMaxHealth = humanoid.MaxHealth
+            humanoid.MaxHealth = 1
+            if humanoid.Health > 1 then
+                humanoid.Health = 1
+            end
+
+            local conn = humanoid.HealthChanged:Connect(function(newHealth)
+                if newHealth > 1 then
+                    humanoid.Health = 1
+                end
+            end)
+
+            data.ShatteredHeart = {
+                conn = conn,
+                originalMax = originalMaxHealth,
+            }
+        end,
+        onParticipantCleanup = function(context, record)
+            local data = record.eventData
+            local bundle = data.ShatteredHeart
+            if not bundle then
+                return
+            end
+
+            if bundle.conn then
+                bundle.conn:Disconnect()
+            end
+
+            local humanoid = record.humanoid
+            if not humanoid then
+                local character = record.player.Character
+                if character then
+                    humanoid = character:FindFirstChildOfClass("Humanoid")
+                end
+            end
+
+            if humanoid and bundle.originalMax then
+                humanoid.MaxHealth = bundle.originalMax
+            end
+
+            data.ShatteredHeart = nil
+        end,
+        onParticipantEliminated = function(context, record)
+            callSpecialEventCallback(context, "onParticipantCleanup", record)
+        end,
+    })
+
+    registerSpecialEvent({
+        id = "SprintProhibit",
+        displayName = "Sprint Prohibit🦵🚫",
+        onRoundPrepared = function()
+            sendStatusUpdate({
+                action = "SpecialEventEffect",
+                id = "SprintProhibit",
+                sprintDisabled = true,
+            })
+        end,
+        onRoundEnded = function()
+            sendStatusUpdate({
+                action = "SpecialEventEffect",
+                id = "SprintProhibit",
+                sprintDisabled = false,
+            })
+        end,
+    })
+
+    registerSpecialEvent({
+        id = "Retro",
+        displayName = "RETRO🧱",
+        ignoreDefaultGear = true,
+        provideGear = function(context, record)
+            if not gearsFolder then
+                return
+            end
+
+            local retroFolder = gearsFolder:FindFirstChild("Retro")
+            local sourceFolder: Instance = gearsFolder
+            if retroFolder and retroFolder:IsA("Folder") then
+                sourceFolder = retroFolder
+            end
+
+            local available: {Tool} = {}
+            for _, item in sourceFolder:GetDescendants() do
+                if item:IsA("Tool") then
+                    table.insert(available, item)
+                end
+            end
+
+            if #available == 0 then
+                for _, item in gearsFolder:GetDescendants() do
+                    if item:IsA("Tool") then
+                        table.insert(available, item)
+                    end
+                end
+            end
+
+            if #available == 0 then
+                return
+            end
+
+            local player = record.player
+            local backpack = player:FindFirstChildOfClass("Backpack")
+            if not backpack then
+                return
+            end
+
+            local starterGear = player:FindFirstChild("StarterGear")
+            local rng = Random.new()
+            local taken: {[number]: boolean} = {}
+            local count = math.min(3, #available)
+
+            while count > 0 do
+                local index = rng:NextInteger(1, #available)
+                if taken[index] then
+                    continue
+                end
+
+                taken[index] = true
+                count -= 1
+
+                local template = available[index]
+                if template then
+                    local backpackTool = template:Clone()
+                    backpackTool:SetAttribute("PVPGenerated", true)
+                    backpackTool.Parent = backpack
+
+                    if starterGear then
+                        local starterTool = template:Clone()
+                        starterTool:SetAttribute("PVPGenerated", true)
+                        starterTool.Parent = starterGear
+                    end
+                end
+            end
+        end,
+    })
+
+    registerSpecialEvent({
+        id = "Invisible",
+        displayName = "Invisible👻",
+        onRoundPrepared = function()
+            sendStatusUpdate({
+                action = "SpecialEventEffect",
+                id = "Invisible",
+                invisible = true,
+                pulseInterval = 5,
+                pulseDuration = 1,
+            })
+        end,
+        onRoundEnded = function()
+            sendStatusUpdate({
+                action = "SpecialEventEffect",
+                id = "Invisible",
+                invisible = false,
+            })
+        end,
+    })
+
+    registerSpecialEvent({
+        id = "Bunny",
+        displayName = "Bunny🐰",
+        onParticipantCharacter = function(context, record, _character, humanoid)
+            if not isPlayerInNeutralState(record.player) then
+                return
+            end
+
+            local data = record.eventData
+            local bundle = data.Bunny
+            if bundle and bundle.conn then
+                bundle.conn:Disconnect()
+            end
+
+            local conn: RBXScriptConnection? = nil
+            conn = RunService.Heartbeat:Connect(function()
+                if context.roundId ~= currentRoundId or not roundInProgress then
+                    if conn then
+                        conn:Disconnect()
+                    end
+                    return
+                end
+
+                if humanoid.Parent and humanoid.Health > 0 then
+                    humanoid.Jump = true
+                end
+            end)
+
+            data.Bunny = {
+                conn = conn,
+            }
+        end,
+        onParticipantCleanup = function(context, record)
+            local data = record.eventData
+            local bundle = data.Bunny
+            if bundle and bundle.conn then
+                bundle.conn:Disconnect()
+            end
+            data.Bunny = nil
+        end,
+        onParticipantEliminated = function(context, record)
+            callSpecialEventCallback(context, "onParticipantCleanup", record)
+        end,
+    })
+
+    registerSpecialEvent({
+        id = "Slippery",
+        displayName = "Slippery🧊",
+        onRoundPrepared = function(context, _config, mapModel)
+            local originals: {[BasePart]: PhysicalProperties?} = {}
+            for _, descendant in mapModel:GetDescendants() do
+                if descendant:IsA("BasePart") then
+                    originals[descendant] = descendant.CustomPhysicalProperties
+
+                    local props = descendant.CustomPhysicalProperties
+                    local density = if props then props.Density else 1
+                    local elasticity = if props then props.Elasticity else 0
+                    local elasticityWeight = if props then props.ElasticityWeight else 0
+                    descendant.CustomPhysicalProperties = PhysicalProperties.new(density, 0, elasticity, 100, elasticityWeight)
+                end
+            end
+
+            context.state.Slippery = {
+                originals = originals,
+            }
+        end,
+        onRoundEnded = function(context)
+            local stored = context.state.Slippery
+            if not stored then
+                return
+            end
+
+            for part, props in stored.originals do
+                if part and part.Parent then
+                    part.CustomPhysicalProperties = props
+                end
+            end
+
+            context.state.Slippery = nil
+        end,
+    })
+
+    registerSpecialEvent({
+        id = "RainingBomb",
+        displayName = "Raining Bomb💣",
+        onCountdownComplete = function(context)
+            local state = context.state
+            if state.RainingBomb and state.RainingBomb.active then
+                return
+            end
+
+            local running = true
+            state.RainingBomb = {
+                active = true,
+            }
+
+            local stormSize = getStormHorizontalSize()
+            local cf, _ = getActiveMapBounds()
+            local origin = cf.Position
+
+            task.spawn(function()
+                local rng = Random.new()
+                while running and roundInProgress and context.roundId == currentRoundId do
+                    local offsetX = rng:NextNumber(-stormSize.X / 2, stormSize.X / 2)
+                    local offsetZ = rng:NextNumber(-stormSize.Y / 2, stormSize.Y / 2)
+                    local spawnPosition = Vector3.new(origin.X + offsetX, origin.Y + 100, origin.Z + offsetZ)
+
+                    local bomb = Instance.new("Part")
+                    bomb.Shape = Enum.PartType.Ball
+                    bomb.Name = "EventBomb"
+                    bomb.Size = Vector3.new(2, 2, 2)
+                    bomb.Material = Enum.Material.Neon
+                    bomb.Color = Color3.fromRGB(255, 0, 0)
+                    bomb.Transparency = 0
+                    bomb.CanCollide = true
+                    bomb.CanQuery = true
+                    bomb.CanTouch = true
+                    bomb.Position = spawnPosition
+                    bomb.Parent = Workspace
+
+                    bomb.Touched:Connect(function() end)
+
+                    task.delay(2.5, function()
+                        if not bomb.Parent then
+                            return
+                        end
+
+                        local flashTween = TweenService:Create(bomb, TweenInfo.new(0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, 2, true), {
+                            Transparency = 0.5,
+                        })
+                        flashTween:Play()
+                    end)
+
+                    task.delay(3, function()
+                        if not bomb.Parent then
+                            return
+                        end
+
+                        local explosion = Instance.new("Explosion")
+                        explosion.BlastRadius = 12
+                        explosion.BlastPressure = 500000
+                        explosion.Position = bomb.Position
+                        explosion.Parent = Workspace
+                        bomb:Destroy()
+                    end)
+
+                    Debris:AddItem(bomb, 6)
+                    task.wait(1)
+                end
+            end)
+
+            state.RainingBomb.stop = function()
+                running = false
+            end
+        end,
+        onRoundEnded = function(context)
+            local state = context.state.RainingBomb
+            if state and state.stop then
+                state.stop()
+            end
+            context.state.RainingBomb = nil
+        end,
+    })
+
+    registerSpecialEvent({
+        id = "InvertedControl",
+        displayName = "Inverted Control😕",
+        onRoundPrepared = function()
+            sendStatusUpdate({
+                action = "SpecialEventEffect",
+                id = "InvertedControl",
+                inverted = true,
+            })
+        end,
+        onRoundEnded = function()
+            sendStatusUpdate({
+                action = "SpecialEventEffect",
+                id = "InvertedControl",
+                inverted = false,
+            })
+        end,
+    })
+
+    registerSpecialEvent({
+        id = "KillBot",
+        displayName = "KillBot🤖",
+        onRoundPrepared = function(context)
+            local state = {
+                bots = {},
+            }
+            context.state.KillBot = state
+
+            local stormSize = getStormHorizontalSize()
+            local cf, _ = getActiveMapBounds()
+            local origin = cf.Position
+
+            local function createKillBot(index: number)
+                local bot = Instance.new("Part")
+                bot.Name = string.format("KillBot_%d", index)
+                bot.Shape = Enum.PartType.Ball
+                bot.Size = Vector3.new(6, 6, 6)
+                bot.Anchored = true
+                bot.CanCollide = false
+                bot.CanTouch = false
+                bot.CanQuery = false
+                bot.Material = Enum.Material.Neon
+                bot.Color = Color3.fromRGB(200, 200, 255)
+                bot.CFrame = CFrame.new(origin + Vector3.new(0, 50 + index * 10, 0))
+                bot.Parent = Workspace
+
+                local botState = {
+                    part = bot,
+                    alive = true,
+                }
+                table.insert(state.bots, botState)
+
+                local rng = Random.new()
+
+                botState.moveTask = task.spawn(function()
+                    while botState.alive and roundInProgress and context.roundId == currentRoundId do
+                        local target = Vector3.new(
+                            origin.X + rng:NextNumber(-stormSize.X / 2, stormSize.X / 2),
+                            origin.Y + rng:NextNumber(-100, 100),
+                            origin.Z + rng:NextNumber(-stormSize.Y / 2, stormSize.Y / 2)
+                        )
+
+                        local travelTime = rng:NextNumber(3, 6)
+                        TweenService:Create(bot, TweenInfo.new(travelTime, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+                            Position = target,
+                        }):Play()
+
+                        local elapsed = 0
+                        while elapsed < travelTime and botState.alive and roundInProgress and context.roundId == currentRoundId do
+                            task.wait(0.2)
+                            elapsed += 0.2
+                        end
+                    end
+                end)
+
+                botState.attackTask = task.spawn(function()
+                    while botState.alive and roundInProgress and context.roundId == currentRoundId do
+                        task.wait(rng:NextNumber(2, 4))
+                        if not botState.alive or not roundInProgress or context.roundId ~= currentRoundId then
+                            break
+                        end
+
+                        local targets = getNeutralParticipantRecords()
+                        if #targets == 0 then
+                            continue
+                        end
+
+                        local record = targets[rng:NextInteger(1, #targets)]
+                        local targetCharacter = record.player.Character
+                        local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+                        if not targetRoot then
+                            continue
+                        end
+
+                        local rocket = Instance.new("Part")
+                        rocket.Shape = Enum.PartType.Ball
+                        rocket.Size = Vector3.new(2, 2, 2)
+                        rocket.Material = Enum.Material.Neon
+                        rocket.Color = Color3.fromRGB(255, 120, 120)
+                        rocket.CanCollide = false
+                        rocket.CanTouch = false
+                        rocket.Anchored = false
+                        rocket.CFrame = CFrame.new(bot.Position)
+                        rocket.Name = "KillBotRocket"
+                        rocket.Parent = Workspace
+
+                        local direction = (targetRoot.Position - bot.Position).Unit
+                        local bodyVelocity = Instance.new("BodyVelocity")
+                        bodyVelocity.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+                        bodyVelocity.Velocity = direction * 150
+                        bodyVelocity.Parent = rocket
+
+                        local exploded = false
+                        local function explode()
+                            if exploded then
+                                return
+                            end
+                            exploded = true
+                            local explosion = Instance.new("Explosion")
+                            explosion.BlastRadius = 10
+                            explosion.BlastPressure = 500000
+                            explosion.Position = rocket.Position
+                            explosion.Parent = Workspace
+                            rocket:Destroy()
+                        end
+
+                        rocket.Touched:Connect(function(hit)
+                            if not exploded then
+                                explode()
+                            end
+                        end)
+
+                        task.delay(5, explode)
+                        Debris:AddItem(rocket, 6)
+                    end
+                end)
+            end
+
+            for index = 1, 3 do
+                createKillBot(index)
+            end
+        end,
+        onRoundEnded = function(context)
+            local state = context.state.KillBot
+            if not state then
+                return
+            end
+
+            for _, botState in state.bots do
+                botState.alive = false
+                if botState.part then
+                    botState.part:Destroy()
+                end
+            end
+
+            context.state.KillBot = nil
+        end,
+    })
+
+    registerSpecialEvent({
+        id = "HotTouch",
+        displayName = "Hot Touch🔥",
+        ignoreDefaultGear = true,
+        onCountdownComplete = function(context)
+            local state = context.state
+            if state.HotTouch then
+                return
+            end
+
+            local hotState = {
+                holder = nil :: ParticipantRecord?,
+                timer = 30,
+                running = true,
+                connections = {},
+            }
+            state.HotTouch = hotState
+
+            local function clearConnections()
+                for _, conn in hotState.connections do
+                    conn:Disconnect()
+                end
+                table.clear(hotState.connections)
+            end
+
+            local function updateHolderVisual(record: ParticipantRecord?, active: boolean)
+                if not record then
+                    return
+                end
+
+                local character = record.player.Character
+                if not character then
+                    return
+                end
+
+                local humanoid = record.humanoid or character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    if active then
+                        record.eventData.HotTouchOriginalWalk = record.eventData.HotTouchOriginalWalk or humanoid.WalkSpeed
+                        humanoid.WalkSpeed = (record.eventData.HotTouchOriginalWalk or humanoid.WalkSpeed) + 3
+                    else
+                        local original = record.eventData.HotTouchOriginalWalk
+                        if original then
+                            humanoid.WalkSpeed = original
+                        end
+                        record.eventData.HotTouchOriginalWalk = nil
+                    end
+                end
+
+                if active then
+                    local highlight = character:FindFirstChild("HotTouchHighlight") :: Highlight?
+                    if not highlight then
+                        highlight = Instance.new("Highlight")
+                        highlight.Name = "HotTouchHighlight"
+                        highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                        highlight.OutlineColor = Color3.fromRGB(255, 100, 100)
+                        highlight.FillTransparency = 0.3
+                        highlight.Parent = character
+                    end
+                else
+                    local highlight = character:FindFirstChild("HotTouchHighlight")
+                    if highlight then
+                        highlight:Destroy()
+                    end
+                end
+
+                local head = character:FindFirstChild("Head")
+                local existingBillboard = character:FindFirstChild("HotTouchBillboard")
+                if active then
+                    local billboard = if existingBillboard and existingBillboard:IsA("BillboardGui") then existingBillboard else Instance.new("BillboardGui")
+                    billboard.Name = "HotTouchBillboard"
+                    billboard.Size = UDim2.new(0, 80, 0, 40)
+                    billboard.StudsOffset = Vector3.new(0, 3, 0)
+                    billboard.AlwaysOnTop = true
+                    billboard.MaxDistance = 500
+                    billboard.Parent = head or character
+
+                    local label = billboard:FindFirstChild("Label") :: TextLabel?
+                    if not label then
+                        label = Instance.new("TextLabel")
+                        label.Name = "Label"
+                        label.Size = UDim2.new(1, 0, 1, 0)
+                        label.BackgroundTransparency = 1
+                        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+                        label.TextStrokeTransparency = 0
+                        label.Font = Enum.Font.GothamBold
+                        label.TextScaled = true
+                        label.Parent = billboard
+                    end
+
+                    label.Text = tostring(hotState.timer)
+                elseif existingBillboard then
+                    existingBillboard:Destroy()
+                end
+            end
+
+            local function updateTimerVisual()
+                local holder = hotState.holder
+                if not holder then
+                    return
+                end
+
+                local character = holder.player.Character
+                if not character then
+                    return
+                end
+
+                local billboard = character:FindFirstChild("HotTouchBillboard")
+                if billboard and billboard:IsA("BillboardGui") then
+                    local label = billboard:FindFirstChild("Label")
+                    if label and label:IsA("TextLabel") then
+                        label.Text = tostring(math.max(0, math.floor(hotState.timer)))
+                        local ratio = math.clamp(hotState.timer / 60, 0, 1)
+                        local color = Color3.fromRGB(255, 255 * ratio, 255 * ratio)
+                        label.TextColor3 = color
+                    end
+                end
+            end
+
+            local function detachHolder(record: ParticipantRecord?)
+                if record then
+                    updateHolderVisual(record, false)
+                end
+                clearConnections()
+            end
+
+            local function attachHolderConnections(record: ParticipantRecord)
+                clearConnections()
+                local character = record.player.Character
+                if not character then
+                    return
+                end
+
+                for _, descendant in character:GetDescendants() do
+                    if descendant:IsA("BasePart") then
+                        local basePart = descendant
+                        hotState.connections[#hotState.connections + 1] = basePart.Touched:Connect(function(hit)
+                            if not hotState.running or context.roundId ~= currentRoundId then
+                                return
+                            end
+
+                            if hotState.holder ~= record then
+                                return
+                            end
+
+                            local otherCharacter = hit.Parent
+                            if not otherCharacter then
+                                return
+                            end
+
+                            local otherPlayer = Players:GetPlayerFromCharacter(otherCharacter)
+                            if not otherPlayer or otherPlayer == record.player then
+                                return
+                            end
+
+                            local targetRecord = getParticipantFromPlayer(otherPlayer)
+                            if not targetRecord or not isPlayerInNeutralState(targetRecord.player) then
+                                return
+                            end
+
+                            hotState.timer = math.min(hotState.timer + 5, 60)
+                            setParticipantFrozen(targetRecord, true)
+                            task.delay(3, function()
+                                if context.roundId == currentRoundId and roundInProgress then
+                                    setParticipantFrozen(targetRecord, false)
+                                end
+                            end)
+
+                            setHolder(targetRecord, false)
+                        end)
+                    end
+                end
+            end
+
+            local function setHolder(newRecord: ParticipantRecord?, resetTimer: boolean)
+                if newRecord == hotState.holder then
+                    if newRecord then
+                        if resetTimer then
+                            hotState.timer = 30
+                        end
+                        updateHolderVisual(newRecord, true)
+                        updateTimerVisual()
+                        attachHolderConnections(newRecord)
+                    end
+                    return
+                end
+
+                detachHolder(hotState.holder)
+                hotState.holder = newRecord
+                if newRecord then
+                    if resetTimer then
+                        hotState.timer = 30
+                    end
+                    updateHolderVisual(newRecord, true)
+                    updateTimerVisual()
+                    attachHolderConnections(newRecord)
+                end
+            end
+
+            local function selectNextHolder()
+                local candidates = {}
+                for _, record in ipairs(getNeutralParticipantRecords()) do
+                    local humanoid = record.humanoid
+                    if not humanoid or humanoid.Health <= 0 then
+                        continue
+                    end
+                    table.insert(candidates, record)
+                end
+
+                if #candidates <= 1 then
+                    setHolder(nil, false)
+                    hotState.running = false
+                    return
+                end
+
+                local rng = Random.new()
+                local chosen = candidates[rng:NextInteger(1, #candidates)]
+                setHolder(chosen, true)
+            end
+
+            selectNextHolder()
+
+            task.spawn(function()
+                while hotState.running and roundInProgress and context.roundId == currentRoundId do
+                    if not hotState.holder then
+                        task.wait(1)
+                        selectNextHolder()
+                        continue
+                    end
+
+                    hotState.timer -= 1
+                    updateTimerVisual()
+
+                    if hotState.timer <= 0 then
+                        local holder = hotState.holder
+                        if holder and holder.humanoid then
+                            local rootPart = holder.humanoid.RootPart or (holder.player.Character and holder.player.Character:FindFirstChild("HumanoidRootPart"))
+                            if rootPart then
+                                local explosion = Instance.new("Explosion")
+                                explosion.BlastRadius = 15
+                                explosion.BlastPressure = 600000
+                                explosion.Position = rootPart.Position
+                                explosion.Parent = Workspace
+                            end
+                            holder.humanoid.Health = 0
+                        end
+
+                        selectNextHolder()
+                    end
+
+                    task.wait(1)
+                end
+            end)
+
+            hotState.cleanup = function()
+                hotState.running = false
+                detachHolder(hotState.holder)
+                hotState.holder = nil
+            end
+        end,
+        onParticipantEliminated = function(context, record)
+            local state = context.state.HotTouch
+            if not state then
+                return
+            end
+
+            if state.holder == record then
+                state.holder = nil
+            end
+        end,
+        onParticipantCleanup = function(context, record)
+            local state = context.state.HotTouch
+            if not state then
+                return
+            end
+
+            if state.holder == record then
+                state.holder = nil
+            end
+        end,
+        onRoundEnded = function(context)
+            local state = context.state.HotTouch
+            if not state then
+                return
+            end
+
+            if state.cleanup then
+                state.cleanup()
+            end
+            context.state.HotTouch = nil
+        end,
+    })
+end
+
 local remotesFolder = ReplicatedStorage:FindFirstChild("PVPRemotes")
 if not remotesFolder then
     remotesFolder = Instance.new("Folder")
@@ -257,6 +1158,27 @@ type ParticipantRecord = {
     originalJumpPower: number?,
     countdownComplete: boolean?,
     freezeToken: number?,
+    eventData: {},
+}
+
+type SpecialEventContext = {
+    definition: SpecialEventDefinition,
+    roundId: number,
+    state: {},
+}
+
+type SpecialEventDefinition = {
+    id: string,
+    displayName: string,
+    description: string?,
+    ignoreDefaultGear: boolean?,
+    onRoundPrepared: ((context: SpecialEventContext, config: MapConfig, mapModel: Model) -> ())?,
+    onParticipantCharacter: ((context: SpecialEventContext, record: ParticipantRecord, character: Model, humanoid: Humanoid) -> ())?,
+    onCountdownComplete: ((context: SpecialEventContext) -> ())?,
+    onParticipantCleanup: ((context: SpecialEventContext, record: ParticipantRecord) -> ())?,
+    onParticipantEliminated: ((context: SpecialEventContext, record: ParticipantRecord) -> ())?,
+    onRoundEnded: ((context: SpecialEventContext) -> ())?,
+    provideGear: ((context: SpecialEventContext, record: ParticipantRecord) -> ())?,
 }
 
 local participantRecords: {[Player]: ParticipantRecord} = {}
@@ -273,6 +1195,8 @@ local managedAtmosphere: Atmosphere? = nil
 local createdManagedAtmosphere = false
 local storedAtmosphereProps: {Density: number, Offset: number, Color: Color3, Decay: Color3, Glare: number, Haze: number}? = nil
 local activeAtmosphereTween: Tween? = nil
+local selectedSpecialEventId: string? = nil
+local activeSpecialEvent: SpecialEventContext? = nil
 
 local function performDeathMatchTransition(roundId: number)
     -- Forward declaration; defined later.
@@ -647,6 +1571,8 @@ local function cleanupParticipant(player: Player)
 
     clearParticipantConnections(record)
 
+    callSpecialEventCallback(activeSpecialEvent, "onParticipantCleanup", record)
+
     local character = player.Character
     if character then
         local rootPart = character:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -690,10 +1616,6 @@ local function clearPVPTools(player: Player)
 end
 
 local function giveParticipantGear(record: ParticipantRecord)
-    if not gearsFolder then
-        return
-    end
-
     local player = record.player
     clearPVPTools(player)
 
@@ -703,6 +1625,18 @@ local function giveParticipantGear(record: ParticipantRecord)
     end
 
     if not backpack then
+        return
+    end
+
+    local specialContext = activeSpecialEvent
+    if specialContext then
+        callSpecialEventCallback(specialContext, "provideGear", record)
+        if specialContext.definition.ignoreDefaultGear then
+            return
+        end
+    end
+
+    if not gearsFolder then
         return
     end
 
@@ -821,6 +1755,8 @@ local function prepareParticipant(record: ParticipantRecord, spawnPart: BasePart
         end
 
         record.humanoid = humanoid
+        record.eventData = record.eventData or {}
+        callSpecialEventCallback(activeSpecialEvent, "onParticipantCharacter", record, character, humanoid)
         setParticipantFrozen(record, true)
         teleportParticipant(record)
 
@@ -890,6 +1826,7 @@ handleElimination = function(player: Player, roundId: number)
         return
     end
 
+    callSpecialEventCallback(activeSpecialEvent, "onParticipantEliminated", record)
     cleanupParticipant(player)
     clearPVPTools(player)
     player.Team = spectateTeam
@@ -929,6 +1866,9 @@ endRound = function(roundId: number)
     if roundId ~= currentRoundId or not roundInProgress then
         return
     end
+
+    callSpecialEventCallback(activeSpecialEvent, "onRoundEnded")
+    clearActiveSpecialEvent()
 
     roundInProgress = false
     activeMapConfig = nil
@@ -1179,7 +2119,7 @@ performDeathMatchTransition = function(roundId: number)
     beginDeathMatch(roundId)
 end
 
-local function startRound(player: Player, mapId: string)
+local function startRound(player: Player, mapId: string, requestedEventId: string?)
     if roundInProgress then
         sendRoundState("Error", {
             message = "A round is already running.",
@@ -1228,6 +2168,35 @@ local function startRound(player: Player, mapId: string)
         return
     end
 
+    clearActiveSpecialEvent()
+
+    local resolvedEventId: string? = nil
+    local requestedEventRaw = if typeof(requestedEventId) == "string" then requestedEventId else nil
+    local rolledRandomEvent = false
+
+    if requestedEventRaw and requestedEventRaw ~= "" then
+        if string.upper(requestedEventRaw) == "RANDOM" then
+            rolledRandomEvent = true
+            resolvedEventId = getRandomSpecialEventId()
+        else
+            if specialEventDefinitions[requestedEventRaw] then
+                resolvedEventId = requestedEventRaw
+            else
+                local searchKey = string.upper(requestedEventRaw)
+                for candidateId in pairs(specialEventDefinitions) do
+                    if string.upper(candidateId) == searchKey then
+                        resolvedEventId = candidateId
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    if rolledRandomEvent and not resolvedEventId then
+        resolvedEventId = getRandomSpecialEventId()
+    end
+
     roundInProgress = true
     currentRoundId += 1
     local roundId = currentRoundId
@@ -1258,6 +2227,43 @@ local function startRound(player: Player, mapId: string)
 
     mapClone.Parent = Workspace
     activeMapModel = mapClone
+
+    local eventContext = setActiveSpecialEvent(resolvedEventId, roundId)
+
+    if rolledRandomEvent then
+        local eventOptions = {}
+        for _, definition in ipairs(specialEventList) do
+            eventOptions[#eventOptions + 1] = {
+                id = definition.id,
+                name = definition.displayName,
+            }
+        end
+
+        sendStatusUpdate({
+            action = "SpecialEventRandomizing",
+            header = "- Special Round -",
+            options = eventOptions,
+            chosenId = if eventContext then eventContext.definition.id else nil,
+            chosenName = if eventContext then eventContext.definition.displayName else nil,
+            duration = 3,
+        })
+    end
+
+    if eventContext then
+        sendStatusUpdate({
+            action = "SpecialEvent",
+            header = "- Special Round -",
+            id = eventContext.definition.id,
+            name = eventContext.definition.displayName,
+            randomized = rolledRandomEvent,
+        })
+        callSpecialEventCallback(eventContext, "onRoundPrepared", config, mapClone)
+    else
+        sendStatusUpdate({
+            action = "SpecialEvent",
+            active = false,
+        })
+    end
 
     task.defer(function()
         for part, wasAnchored in originalAnchoredStates do
@@ -1326,6 +2332,7 @@ local function startRound(player: Player, mapId: string)
             originalWalkSpeed = nil,
             countdownComplete = false,
             freezeToken = 0,
+            eventData = {},
         }
 
         participantRecords[targetPlayer] = record
@@ -1375,6 +2382,8 @@ local function startRound(player: Player, mapId: string)
             end
         end
     end
+
+    callSpecialEventCallback(activeSpecialEvent, "onCountdownComplete")
 
     sendRoundState("Active", {
         map = mapId,
@@ -1561,9 +2570,14 @@ startRoundRemote.OnServerEvent:Connect(function(player, payload)
     end
 
     local mapId: string? = nil
+    local eventId: string? = nil
 
     if typeof(payload) == "table" then
         mapId = payload.mapId or payload.modelName or payload.id
+        local eventValue = payload.eventId or payload.event
+        if typeof(eventValue) == "string" then
+            eventId = eventValue
+        end
     elseif typeof(payload) == "string" then
         mapId = payload
     end
@@ -1575,5 +2589,5 @@ startRoundRemote.OnServerEvent:Connect(function(player, payload)
         return
     end
 
-    startRound(player, mapId)
+    startRound(player, mapId, eventId)
 end)
