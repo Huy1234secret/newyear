@@ -57,6 +57,7 @@ local DEFAULT_MUSIC_VOLUME = 0.5
 local DEATHMATCH_TRANSITION_DURATION = 3
 local DEATHMATCH_MUSIC_ID = "117047384857700"
 local STORM_MIN_HORIZONTAL_SIZE = 200
+local MAP_ANCHOR_DURATION = 5
 
 local function isGameOwner(player: Player): boolean
     if allowedUserIds[player.UserId] then
@@ -2265,7 +2266,7 @@ local function startRound(player: Player, mapId: string, requestedEventId: strin
         })
     end
 
-    task.defer(function()
+    task.delay(MAP_ANCHOR_DURATION, function()
         for part, wasAnchored in originalAnchoredStates do
             if part.Parent then
                 part.Anchored = wasAnchored
