@@ -181,6 +181,8 @@ type UiRefs = {
     mapLabelContainer: Frame?,
     mapLabelStroke: UIStroke?,
     mapLabel: TextLabel?,
+    statusFrame: Frame?,
+    hotTouchStatusLabel: TextLabel?,
     inventoryFrame: Frame?,
     inventoryToggleButton: ImageButton?,
     sprintActionButton: ImageButton?,
@@ -488,7 +490,7 @@ local function createStatusUI(parent: ScreenGui, isTouch: boolean, refs: UiRefs)
         BackgroundTransparency = 1,
         Font = Enum.Font.GothamSemibold,
         Text = "",
-        TextSize = math.max(16, UI_CONFIG.DEFAULT_TEXT_SIZE - 4),
+        TextSize = math.max(12, UI_CONFIG.DEFAULT_TEXT_SIZE - 8),
         TextColor3 = Color3.fromRGB(210, 230, 255),
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
@@ -499,6 +501,25 @@ local function createStatusUI(parent: ScreenGui, isTouch: boolean, refs: UiRefs)
     refs.mapLabelContainer = mapLabelContainer
     mapLabelContainer:SetAttribute("HasMap", false)
 
+    refs.hotTouchStatusLabel = createInstance("TextLabel", {
+        Name = "HotTouchStatusLabel",
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 1, 8),
+        Size = UDim2.fromOffset(frame.Size.X.Offset, if isTouch then 24 else 20),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.GothamBold,
+        Text = "",
+        TextSize = if isTouch then 20 else 18,
+        TextColor3 = Color3.fromRGB(255, 130, 130),
+        TextStrokeTransparency = 0.4,
+        TextWrapped = true,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        Visible = false,
+        ZIndex = frame.ZIndex,
+        Parent = parent,
+    })
+
     frame:GetPropertyChangedSignal("Visible"):Connect(function()
         local container = refs.mapLabelContainer
         if container then
@@ -506,6 +527,8 @@ local function createStatusUI(parent: ScreenGui, isTouch: boolean, refs: UiRefs)
             container.Visible = (hasMap == true) and frame.Visible
         end
     end)
+
+    refs.statusFrame = frame
 
     return {
         frame = frame,
@@ -976,6 +999,116 @@ if inventoryState.setVisibility then
     setInventoryVisibility = inventoryState.setVisibility
 end
 
+statusUI.frame:GetPropertyChangedSignal("Visible"):Connect(function()
+    refreshHotTouchStatusVisibility()
+end)
+
+local hotTouchAlertLabel = createInstance("TextLabel", {
+    Name = "HotTouchAlert",
+    Size = UDim2.fromOffset(if isTouchDevice then 480 else 520, if isTouchDevice then 120 else 140),
+    Position = UDim2.new(0.5, 0, 0.45, 0),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    BackgroundTransparency = 1,
+    Font = Enum.Font.GothamBlack,
+    Text = "You have been tagged",
+    TextColor3 = Color3.fromRGB(255, 80, 80),
+    TextScaled = true,
+    TextWrapped = true,
+    TextStrokeTransparency = 0.05,
+    TextStrokeColor3 = Color3.fromRGB(255, 0, 120),
+    Visible = false,
+    ZIndex = 130,
+    Parent = screenGui,
+})
+
+local hotTouchAlertStroke = hotTouchAlertLabel:FindFirstChildWhichIsA("UIStroke")
+if not hotTouchAlertStroke then
+    hotTouchAlertStroke = createInstance("UIStroke", {
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+        Color = Color3.fromRGB(255, 30, 120),
+        Thickness = 2.5,
+        Transparency = 0.1,
+        Parent = hotTouchAlertLabel,
+    })
+end
+
+local hotTouchAlertScale = Instance.new("UIScale")
+hotTouchAlertScale.Name = "HotTouchAlertScale"
+hotTouchAlertScale.Parent = hotTouchAlertLabel
+
+local hotTouchAlertState = {
+    label = hotTouchAlertLabel,
+    stroke = hotTouchAlertStroke,
+    scale = hotTouchAlertScale,
+    connection = nil :: RBXScriptConnection?,
+    token = 0,
+    basePosition = hotTouchAlertLabel.Position,
+}
+
+local function stopHotTouchAlert()
+    if hotTouchAlertState.connection then
+        hotTouchAlertState.connection:Disconnect()
+        hotTouchAlertState.connection = nil
+    end
+
+    local label = hotTouchAlertState.label
+    label.Visible = false
+    label.Position = hotTouchAlertState.basePosition
+    hotTouchAlertState.scale.Scale = 1
+end
+
+local function showHotTouchAlert()
+    hotTouchAlertState.token += 1
+    local token = hotTouchAlertState.token
+
+    local label = hotTouchAlertState.label
+    label.Text = "You have been tagged"
+    label.Visible = true
+
+    if hotTouchAlertState.connection then
+        hotTouchAlertState.connection:Disconnect()
+    end
+
+    local basePosition = hotTouchAlertState.basePosition
+    hotTouchAlertState.connection = RunService.RenderStepped:Connect(function()
+        local now = os.clock()
+        local pulse = (math.sin(now * 10) + 1) * 0.5
+        local wobbleX = math.sin(now * 18) * 6
+        local wobbleY = math.cos(now * 14) * 4
+
+        label.Position = basePosition + UDim2.fromOffset(wobbleX, wobbleY)
+        hotTouchAlertState.scale.Scale = 1.08 + math.sin(now * 12) * 0.08
+
+        local intensity = math.floor(120 + 130 * pulse)
+        label.TextColor3 = Color3.fromRGB(255, intensity, intensity)
+        hotTouchAlertState.stroke.Color = Color3.fromRGB(255, math.max(40, 200 - intensity // 2), 160 + math.floor(80 * pulse))
+        hotTouchAlertState.stroke.Thickness = 2 + pulse * 2
+    end)
+
+    task.delay(2.6, function()
+        if token ~= hotTouchAlertState.token then
+            return
+        end
+        stopHotTouchAlert()
+    end)
+end
+
+local function setHotTouchActive(active: boolean)
+    if hotTouchActive == active then
+        refreshHotTouchStatusVisibility()
+        return
+    end
+
+    hotTouchActive = active
+    if not hotTouchActive then
+        currentHotTouchHolderId = nil
+        setHotTouchStatusText(nil)
+        stopHotTouchAlert()
+    else
+        refreshHotTouchStatusVisibility()
+    end
+end
+
 local defaultColor = statusUI.label.TextColor3
 local countdownColor = Color3.fromRGB(245, 245, 255)
 local matchColor = Color3.fromRGB(210, 235, 255)
@@ -1039,6 +1172,9 @@ local invisibilityState = {
 
 local pendingInvisiblePulseUpdate = false
 
+local hotTouchActive = false
+local currentHotTouchHolderId: number? = nil
+
 local invertedControlState = {
     active = false,
     requested = false,
@@ -1051,6 +1187,7 @@ local invertedControlState = {
     thumbstick = Vector2.new(),
     connections = {} :: {RBXScriptConnection},
     heartbeatConn = nil :: RBXScriptConnection?,
+    jumpConn = nil :: RBXScriptConnection?,
 }
 
 type HighlightConnections = {RBXScriptConnection}
@@ -1796,6 +1933,11 @@ local function disableInvertedControls()
     end
     table.clear(invertedControlState.connections)
 
+    if invertedControlState.jumpConn then
+        invertedControlState.jumpConn:Disconnect()
+        invertedControlState.jumpConn = nil
+    end
+
     if invertedControlState.heartbeatConn then
         invertedControlState.heartbeatConn:Disconnect()
         invertedControlState.heartbeatConn = nil
@@ -1847,6 +1989,11 @@ local function enableInvertedControls()
             invertedControlState.keyboard.left = true
         elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
             invertedControlState.keyboard.right = true
+        elseif key == Enum.KeyCode.Space or key == Enum.KeyCode.ButtonA or key == Enum.KeyCode.ButtonJump then
+            local humanoid = currentHumanoid
+            if humanoid then
+                humanoid.Jump = true
+            end
         end
     end
 
@@ -1876,6 +2023,16 @@ local function enableInvertedControls()
         UserInputService.InputEnded:Connect(onInputEnded),
         UserInputService.InputChanged:Connect(onInputChanged),
     }
+
+    if invertedControlState.jumpConn then
+        invertedControlState.jumpConn:Disconnect()
+    end
+    invertedControlState.jumpConn = UserInputService.JumpRequest:Connect(function()
+        local humanoid = currentHumanoid
+        if humanoid then
+            humanoid.Jump = true
+        end
+    end)
 
     if invertedControlState.heartbeatConn then
         invertedControlState.heartbeatConn:Disconnect()
@@ -2654,6 +2811,9 @@ local function onHumanoidAdded(humanoid: Humanoid)
         sprintState.touchIntent = false
         recomputeSprintIntent()
         stopSprinting(true)
+        if invertedControlState.active then
+            resetInvertedMovement()
+        end
     end)
 end
 
@@ -2695,6 +2855,9 @@ localPlayer.CharacterRemoving:Connect(function()
         humanoidSprintBonusConn = nil
     end
     currentHumanoid = nil
+    if invertedControlState.active then
+        resetInvertedMovement()
+    end
     if characterGearConn then
         characterGearConn:Disconnect()
         characterGearConn = nil
@@ -3117,6 +3280,40 @@ local function updateMapLabel(mapId: string?)
         container:SetAttribute("HasMap", false)
         container.Visible = false
     end
+end
+
+local function refreshHotTouchStatusVisibility()
+    local label = uiRefs.hotTouchStatusLabel
+    if not label then
+        return
+    end
+
+    local statusFrame = uiRefs.statusFrame
+    if statusFrame and not statusFrame.Visible then
+        label.Visible = false
+        return
+    end
+
+    if not hotTouchActive or label.Text == "" then
+        label.Visible = false
+    else
+        label.Visible = true
+    end
+end
+
+local function setHotTouchStatusText(text: string?)
+    local label = uiRefs.hotTouchStatusLabel
+    if not label then
+        return
+    end
+
+    if text and text ~= "" then
+        label.Text = text
+    else
+        label.Text = ""
+    end
+
+    refreshHotTouchStatusVisibility()
 end
 
 local function formatCountdown(seconds: number): string
@@ -3601,6 +3798,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
         stopFlash()
         stopShake()
         resetFrameVisual()
+        setHotTouchActive(false)
         statusUI.frame.Visible = true
         statusUI.label.TextColor3 = countdownColor
         statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
@@ -3655,11 +3853,18 @@ statusRemote.OnClientEvent:Connect(function(payload)
             setInvisibilityEnabled(false)
             setInvertedControlsEnabled(false)
             hideSpecialEvent(true)
+            setHotTouchActive(false)
         else
             local eventId = if typeof(payload.id) == "string" then payload.id else nil
             local eventName = if typeof(payload.name) == "string" then payload.name elseif eventId then eventId else "Special Event"
             specialEventState.active = true
             specialEventState.id = eventId
+
+            if eventId == "HotTouch" then
+                setHotTouchActive(true)
+            else
+                setHotTouchActive(false)
+            end
 
             if payload.randomized then
                 completeSpecialEventRandomization(eventName)
@@ -3685,6 +3890,34 @@ statusRemote.OnClientEvent:Connect(function(payload)
             local invertedEnabled = payload.inverted == true
             specialEventState.effects.inverted = invertedEnabled
             setInvertedControlsEnabled(invertedEnabled)
+        end
+    elseif action == "HotTouchStatus" then
+        local state = if typeof(payload.state) == "string" then payload.state else ""
+        if state == "Holder" then
+            local userId = if typeof(payload.userId) == "number" then payload.userId elseif typeof(payload.userId) == "string" then tonumber(payload.userId) else nil
+            currentHotTouchHolderId = userId
+            local name = if typeof(payload.displayName) == "string" then payload.displayName elseif typeof(payload.name) == "string" then payload.name else "Someone"
+            setHotTouchActive(true)
+            setHotTouchStatusText(string.format("%s has the BOMB!", name))
+        elseif state == "Selecting" then
+            currentHotTouchHolderId = nil
+            setHotTouchActive(true)
+            setHotTouchStatusText("Selecting random...")
+        elseif state == "Complete" then
+            currentHotTouchHolderId = nil
+            setHotTouchActive(true)
+            setHotTouchStatusText("GG")
+        elseif state == "Clear" then
+            currentHotTouchHolderId = nil
+            setHotTouchActive(false)
+        else
+            currentHotTouchHolderId = nil
+            setHotTouchStatusText(nil)
+        end
+    elseif action == "HotTouchTagged" then
+        local taggedUserId = if typeof(payload.userId) == "number" then payload.userId elseif typeof(payload.userId) == "string" then tonumber(payload.userId) else nil
+        if taggedUserId and localPlayer.UserId == taggedUserId then
+            showHotTouchAlert()
         end
     end
 end)

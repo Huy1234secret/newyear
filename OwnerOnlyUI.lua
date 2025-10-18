@@ -308,7 +308,7 @@ glow.Parent = toggleButton
 
 local pvpFrame = Instance.new("Frame")
 pvpFrame.Name = "PVPPanel"
-pvpFrame.Size = UDim2.fromOffset(420, 260)
+pvpFrame.Size = UDim2.fromOffset(520, 520)
 pvpFrame.Position = UDim2.fromScale(0.5, 0.5)
 pvpFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 pvpFrame.BackgroundColor3 = Color3.fromRGB(32, 35, 50)
@@ -372,42 +372,47 @@ local function createRowSection(
     list.Size = UDim2.new(1, 0, 0, listHeight or 72)
     list.Position = UDim2.new(0, 0, 0, 32)
     list.BackgroundTransparency = 1
-    list.ScrollingDirection = Enum.ScrollingDirection.X
+    list.ScrollingDirection = Enum.ScrollingDirection.Y
     list.ScrollBarThickness = 4
     list.CanvasSize = UDim2.new(0, 0, 0, 0)
     list.ZIndex = 6
+    list.AutomaticCanvasSize = Enum.AutomaticSize.None
     list.BottomImage = "rbxassetid://9416839567"
     list.MidImage = "rbxassetid://9416839567"
     list.TopImage = "rbxassetid://9416839567"
     list.Parent = section
 
     local padding = Instance.new("UIPadding")
-    padding.PaddingBottom = UDim.new(0, 4)
-    padding.PaddingTop = UDim.new(0, 4)
+    padding.PaddingBottom = UDim.new(0, 6)
+    padding.PaddingTop = UDim.new(0, 6)
+    padding.PaddingLeft = UDim.new(0, 4)
+    padding.PaddingRight = UDim.new(0, 4)
     padding.Parent = list
 
-    local layout = Instance.new("UIListLayout")
+    local layout = Instance.new("UIGridLayout")
     layout.FillDirection = Enum.FillDirection.Horizontal
     layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-    layout.VerticalAlignment = Enum.VerticalAlignment.Center
-    layout.Padding = UDim.new(0, 12)
+    layout.VerticalAlignment = Enum.VerticalAlignment.Top
+    layout.CellPadding = UDim2.fromOffset(12, 10)
+    layout.CellSize = UDim2.new(0.5, -10, 0, 52)
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Parent = list
 
     layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        list.CanvasSize = UDim2.new(0, layout.AbsoluteContentSize.X + 12, 0, 0)
+        local contentSize = layout.AbsoluteContentSize
+        list.CanvasSize = UDim2.new(0, 0, 0, contentSize.Y + 12)
     end)
 
     return section, list
 end
 
-local mapSection, mapList = createRowSection("MapSection", "Map", 70, 120, 72)
-local eventSection, eventList = createRowSection("EventSection", "Event", 200, 176, 72)
+local mapSection, mapList = createRowSection("MapSection", "Map", 72, 180, 140)
+local eventSection, eventList = createRowSection("EventSection", "Event", 280, 220, 176)
 
 local eventDescriptionLabel = Instance.new("TextLabel")
 eventDescriptionLabel.Name = "EventDescription"
 eventDescriptionLabel.Size = UDim2.new(1, 0, 0, 44)
-eventDescriptionLabel.Position = UDim2.new(0, 0, 0, 108)
+eventDescriptionLabel.Position = UDim2.new(0, 0, 0, 156)
 eventDescriptionLabel.BackgroundTransparency = 1
 eventDescriptionLabel.Font = Enum.Font.Gotham
 eventDescriptionLabel.Text = DEFAULT_EVENT_DESCRIPTION
@@ -586,7 +591,7 @@ local function createSelectionButton(parent: Instance, order: number, id: string
     local button = Instance.new("TextButton")
     button.Name = string.format("%sButton", id)
     button.LayoutOrder = order
-    button.Size = UDim2.new(0, 120, 0, 44)
+    button.Size = UDim2.new(1, 0, 1, 0)
     button.BackgroundColor3 = mapButtonDefaultColor
     button.AutoButtonColor = false
     button.Font = Enum.Font.GothamBold
