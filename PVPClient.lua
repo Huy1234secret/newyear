@@ -2099,7 +2099,7 @@ local function enableInvertedControls()
             invertedControlState.keyboard.left = true
         elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
             invertedControlState.keyboard.right = true
-        elseif key == Enum.KeyCode.Space or key == Enum.KeyCode.ButtonA or key == Enum.KeyCode.ButtonJump then
+        elseif key == Enum.KeyCode.Space or key == Enum.KeyCode.ButtonA then
             local humanoid = currentHumanoid
             if humanoid then
                 humanoid.Jump = true
