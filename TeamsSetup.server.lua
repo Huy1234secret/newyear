@@ -401,28 +401,15 @@ do
         displayName = "RETRO🧱",
         ignoreDefaultGear = true,
         provideGear = function(context, record)
-            if not gearsFolder then
+            local gearRoot = ReplicatedStorage:FindFirstChild("PVPGears")
+            if not gearRoot or not gearRoot:IsA("Folder") then
                 return
             end
 
-            local retroFolder = gearsFolder:FindFirstChild("Retro")
-            local sourceFolder: Instance = gearsFolder
-            if retroFolder and retroFolder:IsA("Folder") then
-                sourceFolder = retroFolder
-            end
-
             local available: {Tool} = {}
-            for _, item in sourceFolder:GetDescendants() do
-                if item:IsA("Tool") then
-                    table.insert(available, item)
-                end
-            end
-
-            if #available == 0 then
-                for _, item in gearsFolder:GetDescendants() do
-                    if item:IsA("Tool") then
-                        table.insert(available, item)
-                    end
+            for _, child in gearRoot:GetDescendants() do
+                if child:IsA("Tool") then
+                    table.insert(available, child)
                 end
             end
 
@@ -439,16 +426,16 @@ do
             local starterGear = player:FindFirstChild("StarterGear")
             local rng = Random.new()
             local taken: {[number]: boolean} = {}
-            local count = math.min(3, #available)
+            local selections = math.min(3, #available)
 
-            while count > 0 do
+            while selections > 0 do
                 local index = rng:NextInteger(1, #available)
                 if taken[index] then
                     continue
                 end
 
                 taken[index] = true
-                count -= 1
+                selections -= 1
 
                 local template = available[index]
                 if template then
@@ -512,6 +499,9 @@ do
 
                 if humanoid.Parent and humanoid.Health > 0 then
                     humanoid.Jump = true
+                    if humanoid.FloorMaterial ~= Enum.Material.Air then
+                        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                    end
                 end
             end)
 
@@ -524,6 +514,13 @@ do
             local bundle = data.Bunny
             if bundle and bundle.conn then
                 bundle.conn:Disconnect()
+            end
+            local humanoid = record.humanoid
+            if not humanoid and record.player.Character then
+                humanoid = record.player.Character:FindFirstChildOfClass("Humanoid")
+            end
+            if humanoid then
+                humanoid.Jump = false
             end
             data.Bunny = nil
         end,
@@ -639,6 +636,7 @@ do
                     bomb.Anchored = false
                     bomb.Position = spawnPosition
                     bomb.Parent = Workspace
+                    bomb:SetNetworkOwner(nil)
 
                     activeBombs[bomb] = true
 
@@ -648,7 +646,6 @@ do
 
                     local countdownStarted = false
                     local exploded = false
-
                     local function explode()
                         if exploded or not bomb.Parent then
                             return
@@ -664,26 +661,32 @@ do
 
                         countdownStarted = true
                         bomb.Anchored = true
+                        bomb.AssemblyLinearVelocity = Vector3.zero
+                        bomb.AssemblyAngularVelocity = Vector3.zero
 
                         local totalDuration = 3
                         local startTime = os.clock()
-                        local flashColors = {Color3.fromRGB(0, 0, 0), Color3.fromRGB(255, 0, 0)}
+                        local flashStyles = {
+                            {color = Color3.fromRGB(0, 0, 0), material = Enum.Material.SmoothPlastic},
+                            {color = Color3.fromRGB(255, 0, 0), material = Enum.Material.Neon},
+                        }
 
                         task.spawn(function()
                             local flashIndex = 1
-                            local intervals = {0.5, 0.3, 0.15, 0.08}
                             while countdownStarted and not exploded and bomb.Parent do
                                 flashIndex = flashIndex == 1 and 2 or 1
-                                bomb.Color = flashColors[flashIndex]
-                                bomb.Material = Enum.Material.Neon
+                                local style = flashStyles[flashIndex]
+                                bomb.Color = style.color
+                                bomb.Material = style.material
 
                                 local elapsed = os.clock() - startTime
                                 if elapsed >= totalDuration then
                                     break
                                 end
 
-                                local phase = math.clamp(math.floor((elapsed / totalDuration) * #intervals) + 1, 1, #intervals)
-                                task.wait(intervals[phase])
+                                local progress = math.clamp(elapsed / totalDuration, 0, 1)
+                                local interval = math.clamp(0.55 - progress * 0.4, 0.08, 0.55)
+                                task.wait(interval)
                             end
                         end)
 
@@ -749,132 +752,380 @@ do
         onRoundPrepared = function(context)
             local state = {
                 bots = {},
+                rockets = {},
+                heartbeatConn = nil :: RBXScriptConnection?,
             }
             context.state.KillBot = state
 
-            local stormSize = getStormHorizontalSize()
             local cf, _ = getActiveMapBounds()
             local origin = cf.Position
 
-            local function createKillBot(index: number)
-                local bot = Instance.new("Part")
-                bot.Name = string.format("KillBot_%d", index)
-                bot.Shape = Enum.PartType.Ball
-                bot.Size = Vector3.new(6, 6, 6)
-                bot.Anchored = true
-                bot.CanCollide = false
-                bot.CanTouch = false
-                bot.CanQuery = false
-                bot.Material = Enum.Material.Neon
-                bot.Color = Color3.fromRGB(200, 200, 255)
-                bot.CFrame = CFrame.new(origin + Vector3.new(0, 50 + index * 10, 0))
-                bot.Parent = Workspace
+            local SCAN_RADIUS = 180
+            local FIRE_RANGE = 140
+            local FIRE_COOLDOWN = 2.25
+            local HOVER_HEIGHT = 8
+            local MOVE_FORCE = 6000
+            local MAX_SPEED = 70
+            local SEEK_STRENGTH = 0.55
+            local LOS_CHECK = true
+
+            local ROCKET_SPEED = 140
+            local ROCKET_LIFETIME = 6
+            local ROCKET_BLAST_RADIUS = 12
+            local ROCKET_BASE_DAMAGE = 55
+            local ROCKET_KNOCKBACK = 60
+
+            local function damageInRadius(center: Vector3, radius: number)
+                local params = OverlapParams.new()
+                for _, part in ipairs(Workspace:GetPartBoundsInRadius(center, radius, params)) do
+                    local parent = part.Parent
+                    if not parent then
+                        continue
+                    end
+
+                    local humanoid = parent:FindFirstChildWhichIsA("Humanoid")
+                    if not humanoid and parent.Parent then
+                        humanoid = parent.Parent:FindFirstChildWhichIsA("Humanoid")
+                    end
+
+                    if humanoid and humanoid.Health > 0 then
+                        local character = humanoid.Parent
+                        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            local distance = (hrp.Position - center).Magnitude
+                            if distance <= radius then
+                                local damage = math.clamp(ROCKET_BASE_DAMAGE * (1 - (distance / radius)), 10, ROCKET_BASE_DAMAGE)
+                                humanoid:TakeDamage(damage)
+
+                                local knockDir = (hrp.Position - center).Unit
+                                hrp.AssemblyLinearVelocity = hrp.AssemblyLinearVelocity + knockDir * ROCKET_KNOCKBACK
+                            end
+                        end
+                    end
+                end
+            end
+
+            local function hasLineOfSight(model: Model?, fromPos: Vector3, toPos: Vector3)
+                if not LOS_CHECK then
+                    return true
+                end
+
+                local params = RaycastParams.new()
+                params.FilterType = Enum.RaycastFilterType.Exclude
+                if model then
+                    params.FilterDescendantsInstances = {model}
+                end
+
+                local direction = toPos - fromPos
+                local result = Workspace:Raycast(fromPos, direction, params)
+                if not result then
+                    return true
+                end
+
+                return (result.Position - toPos).Magnitude < 2
+            end
+
+            local function findTarget(botState)
+                local ball = botState.ball
+                if not ball or not ball.Parent then
+                    return nil, nil
+                end
+
+                local position = ball.Position
+                local nearestHRP: BasePart? = nil
+                local nearestDistance: number? = nil
+
+                for _, record in ipairs(getNeutralParticipantRecords()) do
+                    local character = record.player.Character
+                    if not character then
+                        continue
+                    end
+
+                    local humanoid = record.humanoid or character:FindFirstChildOfClass("Humanoid")
+                    if not humanoid or humanoid.Health <= 0 then
+                        continue
+                    end
+
+                    local hrp = character:FindFirstChild("HumanoidRootPart")
+                    if not hrp or not hrp:IsA("BasePart") then
+                        continue
+                    end
+
+                    local distance = (hrp.Position - position).Magnitude
+                    if distance > SCAN_RADIUS then
+                        continue
+                    end
+
+                    if not hasLineOfSight(botState.model, position, hrp.Position) then
+                        continue
+                    end
+
+                    if not nearestDistance or distance < nearestDistance then
+                        nearestHRP = hrp
+                        nearestDistance = distance
+                    end
+                end
+
+                return nearestHRP, nearestDistance
+            end
+
+            local function stepBot(botState, dt: number, targetHRP: BasePart?)
+                local ball = botState.ball
+                local vectorForce = botState.vectorForce
+                if not ball or not ball.Parent or not vectorForce then
+                    return
+                end
+
+                local mass = ball.AssemblyMass
+                local gravityForce = Vector3.new(0, mass * Workspace.Gravity, 0)
+                local desiredForce = gravityForce
+
+                local velocity = ball.AssemblyLinearVelocity
+                local position = ball.Position
+                local hoverPosition = position + Vector3.new(0, HOVER_HEIGHT, 0)
+                if targetHRP then
+                    hoverPosition = targetHRP.Position + Vector3.new(0, HOVER_HEIGHT, 0)
+                end
+
+                local offset = hoverPosition - position
+                if offset.Magnitude > 1 then
+                    local direction = offset.Unit
+                    local desiredVelocity = direction * MAX_SPEED
+                    local steer = (desiredVelocity - velocity) * SEEK_STRENGTH
+                    local adjustedDt = math.max(dt, 1 / 240)
+                    local force = steer * mass / adjustedDt
+                    desiredForce = gravityForce + force
+
+                    if desiredForce.Magnitude > MOVE_FORCE then
+                        desiredForce = desiredForce.Unit * MOVE_FORCE
+                    end
+                end
+
+                vectorForce.Force = desiredForce
+
+                local align = botState.align
+                if align then
+                    local lookDirection: Vector3? = nil
+                    if velocity.Magnitude > 2 then
+                        lookDirection = velocity
+                    elseif targetHRP then
+                        lookDirection = targetHRP.Position - position
+                    end
+
+                    if lookDirection and lookDirection.Magnitude > 0 then
+                        align.CFrame = CFrame.lookAt(position, position + lookDirection.Unit)
+                    end
+                end
+            end
+
+            local function createRocket(botState, targetHRP: BasePart, distance: number?)
+                if not targetHRP or not targetHRP.Parent then
+                    return
+                end
+
+                local ball = botState.ball
+                if not ball or not ball.Parent then
+                    return
+                end
+
+                if distance and distance > FIRE_RANGE then
+                    return
+                end
+
+                local now = os.clock()
+                if now - (botState.lastFire or 0) < FIRE_COOLDOWN then
+                    return
+                end
+                botState.lastFire = now
+
+                local rocket = Instance.new("Part")
+                rocket.Name = "KillBotRocket"
+                rocket.Shape = Enum.PartType.Ball
+                rocket.Size = Vector3.new(2, 2, 2)
+                rocket.Material = Enum.Material.Neon
+                rocket.Color = Color3.fromRGB(255, 120, 120)
+                rocket.CanCollide = false
+                rocket.CanQuery = false
+                rocket.CanTouch = true
+                rocket.Anchored = false
+                rocket.CFrame = CFrame.lookAt(ball.Position + (ball.CFrame.LookVector * 2), targetHRP.Position)
+                rocket.Parent = Workspace
+                rocket:SetNetworkOwner(nil)
+
+                local targetValue = Instance.new("ObjectValue")
+                targetValue.Name = "Target"
+                targetValue.Value = targetHRP
+                targetValue.Parent = rocket
+
+                local detonated = false
+                local stepConn: RBXScriptConnection? = nil
+                local touchedConn: RBXScriptConnection? = nil
+                local destroyingConn: RBXScriptConnection? = nil
+
+                local function disconnectAll()
+                    if stepConn then
+                        stepConn:Disconnect()
+                        stepConn = nil
+                    end
+                    if touchedConn then
+                        touchedConn:Disconnect()
+                        touchedConn = nil
+                    end
+                    if destroyingConn then
+                        destroyingConn:Disconnect()
+                        destroyingConn = nil
+                    end
+                end
+
+                local function explode()
+                    if detonated then
+                        return
+                    end
+
+                    detonated = true
+                    disconnectAll()
+
+                    local explosion = Instance.new("Explosion")
+                    explosion.BlastRadius = ROCKET_BLAST_RADIUS
+                    explosion.BlastPressure = 0
+                    explosion.DestroyJointRadiusPercent = 0
+                    explosion.Position = rocket.Position
+                    explosion.Parent = Workspace
+
+                    damageInRadius(rocket.Position, ROCKET_BLAST_RADIUS)
+
+                    if rocket.Parent then
+                        rocket:Destroy()
+                    end
+                end
+
+                touchedConn = rocket.Touched:Connect(function(hit)
+                    if detonated then
+                        return
+                    end
+
+                    if hit and hit:IsDescendantOf(rocket) then
+                        return
+                    end
+
+                    explode()
+                end)
+
+                stepConn = RunService.Heartbeat:Connect(function()
+                    if detonated then
+                        return
+                    end
+
+                    local target = targetValue.Value
+                    if target and target.Parent then
+                        local toTarget = target.Position - rocket.Position
+                        if toTarget.Magnitude < 1 then
+                            explode()
+                            return
+                        end
+
+                        local direction = toTarget.Unit
+                        rocket.CFrame = CFrame.lookAt(rocket.Position, rocket.Position + direction)
+                        rocket.AssemblyLinearVelocity = direction * ROCKET_SPEED
+                    else
+                        local forward = rocket.CFrame.LookVector
+                        rocket.AssemblyLinearVelocity = forward * ROCKET_SPEED
+                    end
+                end)
+
+                destroyingConn = rocket.Destroying:Connect(function()
+                    disconnectAll()
+                end)
+
+                task.delay(ROCKET_LIFETIME, explode)
+                Debris:AddItem(rocket, ROCKET_LIFETIME + 1)
+
+                table.insert(state.rockets, function()
+                    disconnectAll()
+                    if not detonated and rocket.Parent then
+                        rocket:Destroy()
+                    end
+                end)
+            end
+
+            local function spawnBot(index: number)
+                local model = Instance.new("Model")
+                model.Name = string.format("KillBot_%d", index)
+
+                local ball = Instance.new("Part")
+                ball.Name = "Ball"
+                ball.Shape = Enum.PartType.Ball
+                ball.Size = Vector3.new(6, 6, 6)
+                ball.Material = Enum.Material.Neon
+                ball.Color = Color3.fromRGB(200, 200, 255)
+                ball.CanCollide = false
+                ball.CanTouch = false
+                ball.CanQuery = false
+                ball.Anchored = false
+                ball.CFrame = CFrame.new(origin + Vector3.new(0, 50 + index * 10, 0))
+                ball.Parent = model
+                model.PrimaryPart = ball
+                model.Parent = Workspace
+
+                local attachment = Instance.new("Attachment")
+                attachment.Name = "RootAttachment"
+                attachment.Parent = ball
+
+                local vectorForce = Instance.new("VectorForce")
+                vectorForce.Name = "MoveForce"
+                vectorForce.Attachment0 = attachment
+                vectorForce.RelativeTo = Enum.ActuatorRelativeTo.World
+                vectorForce.Force = Vector3.zero
+                vectorForce.Parent = ball
+
+                local align = Instance.new("AlignOrientation")
+                align.Name = "Align"
+                align.Attachment0 = attachment
+                align.Responsiveness = 50
+                align.MaxTorque = math.huge
+                align.PrimaryAxisOnly = false
+                align.Parent = ball
+
+                ball:SetNetworkOwner(nil)
 
                 local botState = {
-                    part = bot,
-                    alive = true,
-                    activeTween = nil :: Tween?,
+                    model = model,
+                    ball = ball,
+                    attachment = attachment,
+                    vectorForce = vectorForce,
+                    align = align,
+                    lastFire = 0,
                 }
+
+                model.Destroying:Connect(function()
+                    botState.ball = nil
+                end)
+
                 table.insert(state.bots, botState)
-
-                local rng = Random.new()
-
-                botState.moveTask = task.spawn(function()
-                    while botState.alive and roundInProgress and context.roundId == currentRoundId do
-                        local target = Vector3.new(
-                            origin.X + rng:NextNumber(-stormSize.X / 2, stormSize.X / 2),
-                            origin.Y + rng:NextNumber(-100, 100),
-                            origin.Z + rng:NextNumber(-stormSize.Y / 2, stormSize.Y / 2)
-                        )
-
-                        local travelTime = rng:NextNumber(3, 6)
-                        local part = botState.part
-                        if part and part.Parent then
-                            local tween = TweenService:Create(part, TweenInfo.new(travelTime, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-                                CFrame = CFrame.new(target),
-                            })
-                            botState.activeTween = tween
-                            tween:Play()
-                        end
-
-                        local elapsed = 0
-                        while elapsed < travelTime and botState.alive and roundInProgress and context.roundId == currentRoundId do
-                            task.wait(0.2)
-                            elapsed += 0.2
-                        end
-
-                        if botState.activeTween and botState.activeTween.PlaybackState ~= Enum.PlaybackState.Playing then
-                            botState.activeTween = nil
-                        end
-                    end
-                end)
-
-                botState.attackTask = task.spawn(function()
-                    while botState.alive and roundInProgress and context.roundId == currentRoundId do
-                        task.wait(rng:NextNumber(2, 4))
-                        if not botState.alive or not roundInProgress or context.roundId ~= currentRoundId then
-                            break
-                        end
-
-                        local targets = getNeutralParticipantRecords()
-                        if #targets == 0 then
-                            continue
-                        end
-
-                        local record = targets[rng:NextInteger(1, #targets)]
-                        local targetCharacter = record.player.Character
-                        local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-                        if not targetRoot then
-                            continue
-                        end
-
-                        local rocket = Instance.new("Part")
-                        rocket.Shape = Enum.PartType.Ball
-                        rocket.Size = Vector3.new(2, 2, 2)
-                        rocket.Material = Enum.Material.Neon
-                        rocket.Color = Color3.fromRGB(255, 120, 120)
-                        rocket.CanCollide = false
-                        rocket.CanTouch = false
-                        rocket.Anchored = false
-                        rocket.CFrame = CFrame.new(bot.Position)
-                        rocket.Name = "KillBotRocket"
-                        rocket.Parent = Workspace
-
-                        local direction = (targetRoot.Position - bot.Position).Unit
-                        local bodyVelocity = Instance.new("BodyVelocity")
-                        bodyVelocity.MaxForce = Vector3.new(1e6, 1e6, 1e6)
-                        bodyVelocity.Velocity = direction * 150
-                        bodyVelocity.Parent = rocket
-
-                        local exploded = false
-                        local function explode()
-                            if exploded then
-                                return
-                            end
-                            exploded = true
-                            local explosion = Instance.new("Explosion")
-                            explosion.BlastRadius = 10
-                            explosion.BlastPressure = 500000
-                            explosion.Position = rocket.Position
-                            explosion.Parent = Workspace
-                            rocket:Destroy()
-                        end
-
-                        rocket.Touched:Connect(function(hit)
-                            if not exploded then
-                                explode()
-                            end
-                        end)
-
-                        task.delay(5, explode)
-                        Debris:AddItem(rocket, 6)
-                    end
-                end)
             end
 
             for index = 1, 3 do
-                createKillBot(index)
+                spawnBot(index)
             end
+
+            state.heartbeatConn = RunService.Heartbeat:Connect(function(dt)
+                if not roundInProgress or context.roundId ~= currentRoundId then
+                    return
+                end
+
+                for _, botState in ipairs(state.bots) do
+                    local ball = botState.ball
+                    if not ball or not ball.Parent then
+                        continue
+                    end
+
+                    local targetHRP, distance = findTarget(botState)
+                    stepBot(botState, dt, targetHRP)
+                    if targetHRP then
+                        createRocket(botState, targetHRP, distance)
+                    end
+                end
+            end)
         end,
         onRoundEnded = function(context)
             local state = context.state.KillBot
@@ -882,17 +1133,28 @@ do
                 return
             end
 
-            for _, botState in state.bots do
-                botState.alive = false
-                if botState.activeTween then
-                    botState.activeTween:Cancel()
-                    botState.activeTween = nil
-                end
-                if botState.part then
-                    botState.part:Destroy()
+            if state.heartbeatConn then
+                state.heartbeatConn:Disconnect()
+                state.heartbeatConn = nil
+            end
+
+            for _, botState in ipairs(state.bots) do
+                if botState.model and botState.model.Parent then
+                    botState.model:Destroy()
+                elseif botState.ball and botState.ball.Parent then
+                    botState.ball:Destroy()
                 end
             end
 
+            for _, cleanup in ipairs(state.rockets) do
+                local ok, err = pcall(cleanup)
+                if not ok then
+                    warn("KillBot rocket cleanup error", err)
+                end
+            end
+
+            state.bots = {}
+            state.rockets = {}
             context.state.KillBot = nil
         end,
     })
@@ -915,6 +1177,10 @@ do
                 disableRoundTimer = true,
             }
             state.HotTouch = hotState
+
+            forEachActiveParticipant(function(_, participant)
+                clearPVPTools(participant.player)
+            end)
 
             local function broadcastSelecting()
                 sendStatusUpdate({

@@ -181,6 +181,7 @@ type UiRefs = {
     mapLabelContainer: Frame?,
     mapLabelStroke: UIStroke?,
     mapLabel: TextLabel?,
+    eventLabel: TextLabel?,
     statusFrame: Frame?,
     hotTouchStatusLabel: TextLabel?,
     inventoryFrame: Frame?,
@@ -254,6 +255,7 @@ local uiRefs: UiRefs = {
     mapLabelContainer = nil,
     mapLabelStroke = nil,
     mapLabel = nil,
+    eventLabel = nil,
     inventoryFrame = nil,
     inventoryToggleButton = nil,
     sprintActionButton = nil,
@@ -454,7 +456,8 @@ local function createStatusUI(parent: ScreenGui, isTouch: boolean, refs: UiRefs)
 
     local mapLabelContainer = createInstance("Frame", {
         Name = "MapLabelContainer",
-        Size = UDim2.new(0, UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING, 1, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Size = UDim2.new(0, UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING, 0, 0),
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(0, -UI_CONFIG.MAP_LABEL_PADDING, 0.5, 0),
         BackgroundColor3 = Color3.fromRGB(22, 26, 36),
@@ -484,16 +487,43 @@ local function createStatusUI(parent: ScreenGui, isTouch: boolean, refs: UiRefs)
         Parent = mapLabelContainer,
     })
 
+    createInstance("UIListLayout", {
+        FillDirection = Enum.FillDirection.Vertical,
+        HorizontalAlignment = Enum.HorizontalAlignment.Left,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 2),
+        Parent = mapLabelContainer,
+    })
+
     refs.mapLabel = createInstance("TextLabel", {
         Name = "MapLabel",
-        Size = UDim2.new(1, 0, 1, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Size = UDim2.new(1, 0, 0, 0),
         BackgroundTransparency = 1,
         Font = Enum.Font.GothamSemibold,
         Text = "",
         TextSize = math.max(12, UI_CONFIG.DEFAULT_TEXT_SIZE - 8),
         TextColor3 = Color3.fromRGB(210, 230, 255),
         TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        LayoutOrder = 1,
+        ZIndex = mapLabelContainer.ZIndex + 1,
+        Parent = mapLabelContainer,
+    })
+
+    refs.eventLabel = createInstance("TextLabel", {
+        Name = "EventLabel",
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Size = UDim2.new(1, 0, 0, 0),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.Gotham,
+        Text = "",
+        TextSize = math.max(11, UI_CONFIG.DEFAULT_TEXT_SIZE - 10),
+        TextColor3 = Color3.fromRGB(190, 210, 240),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        LayoutOrder = 2,
         ZIndex = mapLabelContainer.ZIndex + 1,
         Parent = mapLabelContainer,
     })
@@ -1130,6 +1160,7 @@ local highlightStyles = {
 local baseFramePosition = statusUI.frame.Position
 local baseLabelPosition = statusUI.label.Position
 local currentMapId: string? = nil
+local currentEventDisplayName: string? = nil
 local currentRemaining = 0
 local flashConnection: RBXScriptConnection? = nil
 local shakeConnection: RBXScriptConnection? = nil
@@ -1150,6 +1181,7 @@ local transitionState = {
 local specialEventState = {
     active = false,
     id = nil :: string?,
+    displayName = nil :: string?,
     randomized = false,
     randomToken = 0,
     hideToken = 0,
@@ -1171,6 +1203,9 @@ local invisibilityState = {
 }
 
 local pendingInvisiblePulseUpdate = false
+
+type HighlightTweenBundle = {tween: Tween, conn: RBXScriptConnection?}
+local invisibleHighlightTweens: {[Highlight]: HighlightTweenBundle} = {}
 
 local hotTouchActive = false
 local currentHotTouchHolderId: number? = nil
@@ -1661,6 +1696,38 @@ local function completeSpecialEventRandomization(finalName: string)
     showSpecialEvent(finalName, 3)
 end
 
+local function cancelInvisibleHighlightFade(highlight: Highlight)
+    local bundle = invisibleHighlightTweens[highlight]
+    if not bundle then
+        return
+    end
+
+    if bundle.conn then
+        bundle.conn:Disconnect()
+    end
+    bundle.tween:Cancel()
+    invisibleHighlightTweens[highlight] = nil
+end
+
+local function startInvisibleHighlightFade(highlight: Highlight)
+    cancelInvisibleHighlightFade(highlight)
+
+    local tween = TweenService:Create(highlight, TweenInfo.new(2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        FillTransparency = 1,
+        OutlineTransparency = 1,
+    })
+
+    local conn = tween.Completed:Connect(function()
+        local bundle = invisibleHighlightTweens[highlight]
+        if bundle and bundle.tween == tween then
+            invisibleHighlightTweens[highlight] = nil
+        end
+    end)
+
+    invisibleHighlightTweens[highlight] = {tween = tween, conn = conn}
+    tween:Play()
+end
+
 local function ensureInvisibleHighlight(character: Model): Highlight
     local highlight = character:FindFirstChild("InvisibleRevealHighlight") :: Highlight?
     if not highlight then
@@ -1672,6 +1739,10 @@ local function ensureInvisibleHighlight(character: Model): Highlight
         highlight.OutlineTransparency = 1
         highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         highlight.Parent = character
+        highlight.Enabled = true
+        highlight.Destroying:Connect(function()
+            cancelInvisibleHighlightFade(highlight)
+        end)
     end
 
     return highlight
@@ -1680,6 +1751,7 @@ end
 local function clearInvisibleHighlight(character: Model)
     local highlight = character:FindFirstChild("InvisibleRevealHighlight")
     if highlight then
+        cancelInvisibleHighlightFade(highlight :: Highlight)
         highlight:Destroy()
     end
 end
@@ -1779,6 +1851,7 @@ local function updateInvisiblePulseState()
             if character then
                 local highlight = character:FindFirstChild("InvisibleRevealHighlight") :: Highlight?
                 if highlight then
+                    cancelInvisibleHighlightFade(highlight)
                     highlight.FillTransparency = 1
                     highlight.OutlineTransparency = 1
                 end
@@ -1794,8 +1867,12 @@ local function updateInvisiblePulseState()
                     local character = player.Character
                     if character then
                         local highlight = ensureInvisibleHighlight(character)
+                        cancelInvisibleHighlightFade(highlight)
+                        highlight.FillColor = Color3.fromRGB(255, 255, 255)
+                        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
                         highlight.FillTransparency = 0.5
                         highlight.OutlineTransparency = 0
+                        highlight.Enabled = true
                     end
                 end
             end
@@ -1808,8 +1885,7 @@ local function updateInvisiblePulseState()
                         if character then
                             local highlight = character:FindFirstChild("InvisibleRevealHighlight") :: Highlight?
                             if highlight then
-                                highlight.FillTransparency = 1
-                                highlight.OutlineTransparency = 1
+                                startInvisibleHighlightFade(highlight)
                             end
                         end
                     end
@@ -3262,6 +3338,35 @@ local function getMapDisplayName(mapId: string): string
     return mapDisplayNames[mapId] or mapId
 end
 
+local function updateEventLabelText()
+    local label = uiRefs.eventLabel
+    local container = uiRefs.mapLabelContainer
+    if not label or not container then
+        return
+    end
+
+    if container:GetAttribute("HasMap") ~= true then
+        label.Text = ""
+        return
+    end
+
+    local displayName = currentEventDisplayName
+    if displayName and displayName ~= "" then
+        label.Text = string.format("Event: %s", displayName)
+    else
+        label.Text = "Event: None"
+    end
+end
+
+local function setCurrentEventDisplayName(name: string?)
+    if name and name ~= "" then
+        currentEventDisplayName = name
+    else
+        currentEventDisplayName = nil
+    end
+    updateEventLabelText()
+end
+
 local function updateMapLabel(mapId: string?)
     currentMapId = mapId
 
@@ -3275,10 +3380,12 @@ local function updateMapLabel(mapId: string?)
         targetLabel.Text = string.format("Map: %s", getMapDisplayName(mapId))
         container:SetAttribute("HasMap", true)
         container.Visible = statusUI.frame.Visible
+        updateEventLabelText()
     else
         targetLabel.Text = ""
         container:SetAttribute("HasMap", false)
         container.Visible = false
+        updateEventLabelText()
     end
 end
 
@@ -3807,6 +3914,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
         updateMapLabel(nil)
         specialEventState.active = false
         specialEventState.id = nil
+        specialEventState.displayName = nil
         specialEventState.randomized = false
         specialEventState.options = {}
         specialEventState.finalName = nil
@@ -3817,6 +3925,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
         setInvisibilityEnabled(false)
         setInvertedControlsEnabled(false)
         hideSpecialEvent(true)
+        setCurrentEventDisplayName(nil)
     elseif action == "SpecialEventRandomizing" then
         local headerText = if typeof(payload.header) == "string" then payload.header else "- Special Round -"
         specialEventUI.header.Text = headerText
@@ -3837,6 +3946,8 @@ statusRemote.OnClientEvent:Connect(function(payload)
 
         local duration = tonumber(payload.duration)
         local chosenName = if typeof(payload.chosenName) == "string" then payload.chosenName elseif typeof(payload.chosenId) == "string" then payload.chosenId else nil
+        specialEventState.displayName = "Randomizing..."
+        setCurrentEventDisplayName("Randomizing...")
         beginSpecialEventRandomization(options, chosenName, duration)
     elseif action == "SpecialEvent" then
         local headerText = if typeof(payload.header) == "string" then payload.header else "- Special Round -"
@@ -3846,6 +3957,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
         if isActive == false then
             specialEventState.active = false
             specialEventState.id = nil
+            specialEventState.displayName = nil
             specialEventState.randomized = false
             specialEventState.options = {}
             specialEventState.finalName = nil
@@ -3854,11 +3966,14 @@ statusRemote.OnClientEvent:Connect(function(payload)
             setInvertedControlsEnabled(false)
             hideSpecialEvent(true)
             setHotTouchActive(false)
+            setCurrentEventDisplayName(nil)
         else
             local eventId = if typeof(payload.id) == "string" then payload.id else nil
             local eventName = if typeof(payload.name) == "string" then payload.name elseif eventId then eventId else "Special Event"
             specialEventState.active = true
             specialEventState.id = eventId
+            specialEventState.displayName = eventName
+            setCurrentEventDisplayName(eventName)
 
             if eventId == "HotTouch" then
                 setHotTouchActive(true)
