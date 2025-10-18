@@ -903,6 +903,34 @@ local FIRE_COOLDOWN = 2.25 -- seconds between shots while stationary
 				Color3.fromRGB(200,110,255),
 			}
 
+			
+			-- AoE damage helper for rocket explosions
+			local function damageInRadius(center: Vector3, radius: number)
+				local params = OverlapParams.new()
+				local parts = Workspace:GetPartBoundsInRadius(center, radius, params)
+				for _, part in ipairs(parts) do
+					local parent = part.Parent
+					if not parent then continue end
+					local humanoid = parent:FindFirstChildWhichIsA("Humanoid")
+					if not humanoid and parent.Parent then
+						humanoid = parent.Parent:FindFirstChildWhichIsA("Humanoid")
+					end
+					if humanoid and humanoid.Health > 0 then
+						local character = humanoid.Parent
+						local hrp = character and character:FindFirstChild("HumanoidRootPart")
+						if hrp then
+							local distance = (hrp.Position - center).Magnitude
+							if distance <= radius then
+								local damage = math.clamp(ROCKET_BASE_DAMAGE * (1 - (distance / radius)), 10, ROCKET_BASE_DAMAGE)
+								humanoid:TakeDamage(damage)
+								local knock = (hrp.Position - center).Unit * ROCKET_KNOCKBACK
+								hrp.AssemblyLinearVelocity += knock
+							end
+						end
+					end
+				end
+			end
+
 			local function buildRocketModel(originCF: CFrame)
 				-- If a prebuilt rocket exists, use it (place a Model named KillBotRocket under ReplicatedStorage).
 				local prefab = ReplicatedStorage:FindFirstChild("KillBotRocket")
@@ -1015,14 +1043,14 @@ local FIRE_COOLDOWN = 2.25 -- seconds between shots while stationary
 				return true
 			end
 
-			local function spawnBot(index: number)
 			local function pickNewWaypoint()
 				-- 1/3 chance to bias toward a random player's HRP position
 				local usePlayer = (killBotRandom:NextInteger(1,3) == 1)
 				if usePlayer then
 					local candidates = getNeutralParticipantRecords()
 					if typeof(candidates) ~= "table" then candidates = {} end
-					if (candidates and type(candidates) == "table" and #candidates > 0) then
+					local function spawnBot(index: number)
+			if (candidates and type(candidates) == "table" and #candidates > 0) then
 						local pick = candidates[killBotRandom:NextInteger(1, #candidates)]
 						local character = pick.player and pick.player.Character
 						if character then
