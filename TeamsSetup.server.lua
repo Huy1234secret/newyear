@@ -278,77 +278,77 @@ Z_INDEX.SPRINT_BAR = Z_INDEX.SPRINT_CONTAINER + 1
 Z_INDEX.SPRINT_TEXT = Z_INDEX.SPRINT_CONTAINER + 2
 
 type UiRefs = {
-	local energyBarFill: Frame?,
-	local energyTextLabel: TextLabel?,
-	local sprintStatusLabel: TextLabel?,
-	local centerCursorImage: ImageLabel?,
-	local mapLabelContainer: Frame?,
-	local mapLabelStroke: UIStroke?,
-	local mapLabel: TextLabel?,
-	local eventLabel: TextLabel?,
-	local statusFrame: Frame?,
-	local hotTouchStatusLabel: TextLabel?,
-	local inventoryFrame: Frame?,
-	local inventoryToggleButton: ImageButton?,
-	local sprintActionButton: ImageButton?,
+        energyBarFill: Frame?,
+        energyTextLabel: TextLabel?,
+        sprintStatusLabel: TextLabel?,
+        centerCursorImage: ImageLabel?,
+        mapLabelContainer: Frame?,
+        mapLabelStroke: UIStroke?,
+        mapLabel: TextLabel?,
+        eventLabel: TextLabel?,
+        statusFrame: Frame?,
+        hotTouchStatusLabel: TextLabel?,
+        inventoryFrame: Frame?,
+        inventoryToggleButton: ImageButton?,
+        sprintActionButton: ImageButton?,
 }
 
 type StatusUI = {
-	local frame: Frame,
-	local label: TextLabel,
-	local labelStroke: UIStroke,
-	local stroke: UIStroke,
+        frame: Frame,
+        label: TextLabel,
+        labelStroke: UIStroke,
+        stroke: UIStroke,
 }
 
 type SpecialEventUI = {
-	local frame: Frame,
-	local stroke: UIStroke,
-	local gradient: UIGradient,
-	local header: TextLabel,
-	local title: TextLabel,
-	local scale: UIScale,
+        frame: Frame,
+        stroke: UIStroke,
+        gradient: UIGradient,
+        header: TextLabel,
+        title: TextLabel,
+        scale: UIScale,
 }
 
 type SprintDefaults = {
-	local backgroundColor: Color3,
-	local backgroundTransparency: number,
-	local strokeColor: Color3,
-	local strokeTransparency: number,
-	local energyBarFillColor: Color3,
-	local energyTextColor: Color3,
-	local energyGradientColor: ColorSequence,
+        backgroundColor: Color3,
+        backgroundTransparency: number,
+        strokeColor: Color3,
+        strokeTransparency: number,
+        energyBarFillColor: Color3,
+        energyTextColor: Color3,
+        energyGradientColor: ColorSequence,
 }
 
 type SprintUI = {
-	local container: Frame,
-	local background: Frame,
-	local backgroundStroke: UIStroke,
-	local energyFillGradient: UIGradient,
-	local basePosition: UDim2,
-	local baseRotation: number,
-	local defaults: SprintDefaults,
+        container: Frame,
+        background: Frame,
+        backgroundStroke: UIStroke,
+        energyFillGradient: UIGradient,
+        basePosition: UDim2,
+        baseRotation: number,
+        defaults: SprintDefaults,
 }
 
 type InventoryState = {
-	local basePosition: UDim2,
-	local baseRotation: number,
-	local setVisibility: ((boolean) -> ())?,
+        basePosition: UDim2,
+        baseRotation: number,
+        setVisibility: ((boolean) -> ())?,
 }
 
 type LayoutConfig = {
-	local slotPadding: number,
-	local slotSize: number,
-	local inventoryWidth: number,
-	local inventoryHeight: number,
-	local inventoryBottomMargin: number,
-	local energyLabelHeight: number,
-	local energyBarHeight: number,
-	local energyTopPadding: number,
-	local energyBottomPadding: number,
-	local energySpacing: number,
-	local sprintContainerHeight: number,
-	local energyTextWidth: number,
-	local sprintBottomOffset: number,
+        slotPadding: number,
+        slotSize: number,
+        inventoryWidth: number,
+        inventoryHeight: number,
+        inventoryBottomMargin: number,
+        energyLabelHeight: number,
+        energyBarHeight: number,
+        energyTopPadding: number,
+        energyBottomPadding: number,
+        energySpacing: number,
+        sprintContainerHeight: number,
+        energyTextWidth: number,
+        sprintBottomOffset: number,
 }
 
 local uiRefs: UiRefs = {
@@ -462,12 +462,12 @@ end
 type GuiButton = TextButton | ImageButton
 
 type InventorySlotUI = {
-	local frame: Frame,
-	local stroke: UIStroke,
-	local icon: ImageLabel,
-	local label: TextLabel,
-	local numberLabel: TextLabel,
-	local button: GuiButton,
+        frame: Frame,
+        stroke: UIStroke,
+        icon: ImageLabel,
+        label: TextLabel,
+        numberLabel: TextLabel,
+        button: GuiButton,
 }
 
 local inventorySlots: {InventorySlotUI} = {}
@@ -1307,9 +1307,9 @@ local flashConnection: RBXScriptConnection? = nil
 local shakeConnection: RBXScriptConnection? = nil
 
 type NeutralButtonShakeTarget = {
-	local instance: GuiObject,
-	local basePosition: UDim2,
-	local baseRotation: number,
+        instance: GuiObject,
+        basePosition: UDim2,
+        baseRotation: number,
 }
 
 local neutralButtonShakeTargets: {NeutralButtonShakeTarget} = {}
@@ -1349,10 +1349,10 @@ type HighlightTweenBundle = {tween: Tween, conn: RBXScriptConnection?}
 local invisibleHighlightTweens: {[Highlight]: HighlightTweenBundle} = {}
 
 type InvisibleCharacterFadeBundle = {
-	local value: NumberValue,
-	local tween: Tween,
-	local conn: RBXScriptConnection?,
-	local target: number,
+        value: NumberValue,
+        tween: Tween,
+        conn: RBXScriptConnection?,
+        target: number,
 }
 
 local invisibleCharacterFades: {[Model]: InvisibleCharacterFadeBundle} = {}
@@ -1508,9 +1508,9 @@ local invertedControlState = {
 type HighlightConnections = {RBXScriptConnection}
 
 type HighlightStyle = {
-	local outlineColor: Color3,
-	local fillColor: Color3,
-	local fillTransparency: number,
+        outlineColor: Color3,
+        fillColor: Color3,
+        fillTransparency: number,
 }
 
 local highlightState = {
@@ -1526,18 +1526,18 @@ local highlightState = {
 local deathMatchHighlightActive = false
 
 type SprintState = {
-	local energy: number,
-	local isSprinting: boolean,
-	local sprintIntent: boolean,
-	local keyboardIntent: boolean,
-	local touchIntent: boolean,
-	local zoneBlocked: boolean,
-	local eventDisabled: boolean,
-	local rechargeBlockedUntil: number,
-	local originalWalkSpeed: number,
-	local speedTween: Tween?,
-	local cameraTween: Tween?,
-	local originalCameraFov: number?,
+        energy: number,
+        isSprinting: boolean,
+        sprintIntent: boolean,
+        keyboardIntent: boolean,
+        touchIntent: boolean,
+        zoneBlocked: boolean,
+        eventDisabled: boolean,
+        rechargeBlockedUntil: number,
+        originalWalkSpeed: number,
+        speedTween: Tween?,
+        cameraTween: Tween?,
+        originalCameraFov: number?,
 }
 
 local MAX_SPRINT_ENERGY = 100
@@ -1588,16 +1588,16 @@ local mouse = if UserInputService.TouchEnabled then nil else localPlayer:GetMous
 local applyingMouseIcon = false
 
 type GearConnections = {
-	local equipped: RBXScriptConnection?,
-	local unequipped: RBXScriptConnection?,
-	local ancestry: RBXScriptConnection?,
-	local destroying: RBXScriptConnection?,
+        equipped: RBXScriptConnection?,
+        unequipped: RBXScriptConnection?,
+        ancestry: RBXScriptConnection?,
+        destroying: RBXScriptConnection?,
 }
 
 type GearTrackingInfo = {
-	local tool: Tool,
-	local isEquipped: boolean,
-	local connections: GearConnections,
+        tool: Tool,
+        isEquipped: boolean,
+        connections: GearConnections,
 }
 
 local trackedGearTools: {[Tool]: GearTrackingInfo} = {}
