@@ -847,6 +847,30 @@ do
 
 			local cf, _ = getActiveMapBounds()
 			local arenaCenter = cf.Position
+			-- Movement bounds: use current storm size for X/Z, and clamp Y within ±100 around arena center
+			local function currentBounds()
+				local stormSize = getStormHorizontalSize() -- Vector2 (X, Z)
+				local halfX, halfZ = stormSize.X * 0.5, stormSize.Y * 0.5
+				local minY, maxY = arenaCenter.Y - 100, arenaCenter.Y + 100
+				return halfX, halfZ, minY, maxY
+			end
+
+			local function clampToBounds(pos: Vector3)
+				local halfX, halfZ, minY, maxY = currentBounds()
+				local x = math.clamp(pos.X, arenaCenter.X - halfX, arenaCenter.X + halfX)
+				local z = math.clamp(pos.Z, arenaCenter.Z - halfZ, arenaCenter.Z + halfZ)
+				local y = math.clamp(pos.Y, minY, maxY)
+				return Vector3.new(x, y, z)
+			end
+
+			local function randomPointInBounds()
+				local halfX, halfZ, minY, maxY = currentBounds()
+				local x = killBotRandom:NextNumber(arenaCenter.X - halfX, arenaCenter.X + halfX)
+				local z = killBotRandom:NextNumber(arenaCenter.Z - halfZ, arenaCenter.Z + halfZ)
+				local y = killBotRandom:NextNumber(minY, maxY)
+				return Vector3.new(x, y, z)
+			end
+
 			local killBotRandom = Random.new()
 
 			-- Tunables (feel free to tweak)
@@ -867,6 +891,22 @@ do
 			local ROCKET_KNOCKBACK = 85
 
 			local colors = {
+			-- Keep a rocket's long axis pointing along its velocity so it flies "straight"
+			local function attachOrientationFollower(part: BasePart, getVelFn: () -> Vector3)
+				local conn
+				conn = RunService.Heartbeat:Connect(function()
+					if not part or not part.Parent then
+						if conn then conn:Disconnect() end
+						return
+					end
+					local v = getVelFn()
+					if v.Magnitude > 0.1 then
+						part.CFrame = CFrame.new(part.Position, part.Position + v)
+					end
+				end)
+				return conn
+			end
+
 				Color3.fromRGB(255,75,75),
 				Color3.fromRGB(75,255,140),
 				Color3.fromRGB(75,160,255),
@@ -874,11 +914,11 @@ do
 				Color3.fromRGB(200,110,255),
 			}
 
-			local function randomXZInArena()
+			local function randomXZInArena_DEPRECATED()
 				local stormSize = getStormHorizontalSize()
 				local x = killBotRandom:NextNumber(-stormSize.X/2, stormSize.X/2)
 				local z = killBotRandom:NextNumber(-stormSize.Y/2, stormSize.Y/2)
-				return Vector3.new(arenaCenter.X + x, arenaCenter.Y + HOVER_HEIGHT, arenaCenter.Z + z)
+				return randomPointInBounds()
 			end
 
 			local function damageInRadius(center: Vector3, radius: number)
@@ -998,6 +1038,7 @@ do
 
 				-- Cleanup
 				table.insert(state.rockets, function()
+					if orientConn then orientConn:Disconnect() end
 					if tConn then tConn:Disconnect() end
 					if model and model.Parent then model:Destroy() end
 				end)
@@ -1020,7 +1061,7 @@ do
 				ball.CanQuery = true
 				ball.CastShadow = true
 				ball.Transparency = 0.05
-				ball.Position = randomXZInArena()
+				ball.Position = randomPointInBounds()
 				ball.Parent = model
 
 				local attachment = Instance.new("Attachment")
@@ -1046,7 +1087,7 @@ do
 				model.Parent = Workspace
 				ball:SetNetworkOwner(nil)
 
-				local targetPos = randomXZInArena()
+				local targetPos = randomPointInBounds()
 				local botState = {
 					model = model,
 					ball = ball,
@@ -1083,7 +1124,8 @@ do
 
 					if bot.phase == "travel" then
 						-- Seek the one-time random target position
-						local offset = bot.targetPos - ball.Position
+						bot.targetPos = clampToBounds(bot.targetPos)
+					local offset = bot.targetPos - ball.Position
 						local dir = offset.Magnitude > 0 and offset.Unit or Vector3.zero
 						local needStop = offset.Magnitude <= ARRIVE_EPS
 
@@ -1103,6 +1145,13 @@ do
 					else -- hold
 						-- stay hovering – minimal damping
 						bot.vectorForce.Force = Vector3.new(0, Workspace.Gravity * ball.AssemblyMass, 0)
+
+						-- Keep bot inside the storm bounds; if out, move back inside
+						local clamped = clampToBounds(ball.Position)
+						if (ball.Position - clamped).Magnitude > 2 then
+							bot.targetPos = randomPointInBounds()
+							bot.phase = "travel"
+						end
 
 						-- Firing logic (pick ANY player in neutral records, regardless of distance/LOS)
 						bot.fireCooldown = math.max((bot.fireCooldown or 0) - dt, 0)
