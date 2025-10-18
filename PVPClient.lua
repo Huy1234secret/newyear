@@ -3184,8 +3184,8 @@ end)
 	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end
 
-local function spawnControlsWatchdog(5)
-	onCharacterAdded(character: Model)
+local function onCharacterAdded(character: Model)
+	spawnControlsWatchdog(5)
 	resetSprintState()
 	watchCharacterTools(character)
 	updateInventorySlots()
