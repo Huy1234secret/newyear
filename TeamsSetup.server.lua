@@ -1002,7 +1002,8 @@ local FIRE_COOLDOWN = 2.25 -- seconds between shots while stationary
 				local usePlayer = (killBotRandom:NextInteger(1,3) == 1)
 				if usePlayer then
 					local candidates = getNeutralParticipantRecords()
-					if #candidates > 0 then
+					if typeof(candidates) ~= "table" then candidates = {} end
+					if (candidates and type(candidates) == "table" and #candidates > 0) then
 						local pick = candidates[killBotRandom:NextInteger(1, #candidates)]
 						local character = pick.player and pick.player.Character
 						if character then
@@ -1135,7 +1136,8 @@ local FIRE_COOLDOWN = 2.25 -- seconds between shots while stationary
 						bot.nextFire = math.max((bot.nextFire or 0) - dt, 0)
 						if bot.nextFire <= 0 then
 							local candidates = getNeutralParticipantRecords()
-							if #candidates > 0 then
+					if typeof(candidates) ~= "table" then candidates = {} end
+							if (candidates and type(candidates) == "table" and #candidates > 0) then
 								local pick = candidates[killBotRandom:NextInteger(1, #candidates)]
 								local character = pick.player and pick.player.Character
 								if character then
