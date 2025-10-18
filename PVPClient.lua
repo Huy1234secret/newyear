@@ -1244,6 +1244,128 @@ local pendingInvisiblePulseUpdate = false
 type HighlightTweenBundle = {tween: Tween, conn: RBXScriptConnection?}
 local invisibleHighlightTweens: {[Highlight]: HighlightTweenBundle} = {}
 
+type InvisibleCharacterFadeBundle = {
+    value: NumberValue,
+    tween: Tween,
+    conn: RBXScriptConnection?,
+    target: number,
+}
+
+local invisibleCharacterFades: {[Model]: InvisibleCharacterFadeBundle} = {}
+
+local function forEachVisibleCharacterPart(character: Model, handler: (BasePart) -> ())
+    for _, descendant in character:GetDescendants() do
+        if descendant:IsA("BasePart") then
+            local belongsToTool = false
+            local ancestor = descendant.Parent
+            while ancestor and ancestor ~= character do
+                if ancestor:IsA("Tool") then
+                    belongsToTool = true
+                    break
+                end
+                ancestor = ancestor.Parent
+            end
+
+            if not belongsToTool then
+                handler(descendant)
+            end
+        end
+    end
+end
+
+local function applyTransparencyToCharacter(character: Model, transparency: number)
+    forEachVisibleCharacterPart(character, function(part)
+        part.LocalTransparencyModifier = transparency
+    end)
+end
+
+local function computeInvisibilityTransparency(enabled: boolean, owner: Player?): number
+    if not enabled then
+        return 0
+    end
+
+    if owner == localPlayer then
+        return 0.5
+    end
+
+    return 1
+end
+
+local function cancelInvisibleCharacterFade(character: Model, finalTransparency: number?)
+    local bundle = invisibleCharacterFades[character]
+    if not bundle then
+        if finalTransparency ~= nil then
+            applyTransparencyToCharacter(character, finalTransparency)
+        end
+        return
+    end
+
+    if bundle.conn then
+        bundle.conn:Disconnect()
+        bundle.conn = nil
+    end
+    bundle.tween:Cancel()
+    invisibleCharacterFades[character] = nil
+
+    local finalValue = if finalTransparency ~= nil then finalTransparency else bundle.target
+    bundle.value:Destroy()
+    applyTransparencyToCharacter(character, finalValue)
+end
+
+local function flashInvisibleCharacter(character: Model)
+    cancelInvisibleCharacterFade(character)
+    applyTransparencyToCharacter(character, 0)
+end
+
+local function startInvisibleCharacterFade(character: Model, owner: Player?, duration: number)
+    local targetTransparency = computeInvisibilityTransparency(true, owner)
+
+    if targetTransparency <= 0 then
+        return
+    end
+
+    cancelInvisibleCharacterFade(character)
+
+    local controller = Instance.new("NumberValue")
+    controller.Name = "InvisibleCharacterFade"
+    controller.Value = 0
+    controller.Parent = character
+
+    local tween = TweenService:Create(controller, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Value = targetTransparency,
+    })
+
+    local bundle: InvisibleCharacterFadeBundle = {
+        value = controller,
+        tween = tween,
+        conn = nil,
+        target = targetTransparency,
+    }
+
+    bundle.conn = controller:GetPropertyChangedSignal("Value"):Connect(function()
+        applyTransparencyToCharacter(character, controller.Value)
+    end)
+
+    invisibleCharacterFades[character] = bundle
+
+    tween.Completed:Connect(function()
+        if invisibleCharacterFades[character] ~= bundle then
+            return
+        end
+
+        if bundle.conn then
+            bundle.conn:Disconnect()
+            bundle.conn = nil
+        end
+
+        invisibleCharacterFades[character] = nil
+        controller:Destroy()
+        applyTransparencyToCharacter(character, bundle.target)
+    end)
+
+    tween:Play()
+end
+
 local invertedControlState = {
     active = false,
     requested = false,
@@ -1789,35 +1911,24 @@ local function clearInvisibleHighlight(character: Model)
         cancelInvisibleHighlightFade(highlight :: Highlight)
         highlight:Destroy()
     end
+    cancelInvisibleCharacterFade(character)
 end
 
 local function applyCharacterInvisibility(character: Model, enabled: boolean, owner: Player?)
-    for _, descendant in character:GetDescendants() do
-        if descendant:IsA("BasePart") then
-            local belongsToTool = false
-            local ancestor = descendant.Parent
-            while ancestor and ancestor ~= character do
-                if ancestor:IsA("Tool") then
-                    belongsToTool = true
-                    break
-                end
-                ancestor = ancestor.Parent
-            end
+    local targetTransparency = computeInvisibilityTransparency(enabled, owner)
+    local bundle = invisibleCharacterFades[character]
 
-            if not belongsToTool then
-                local targetTransparency = 0
-                if enabled then
-                    if owner == localPlayer then
-                        targetTransparency = 0.5
-                    else
-                        targetTransparency = 1
-                    end
-                end
-
-                descendant.LocalTransparencyModifier = targetTransparency
-            end
-        end
+    if not enabled then
+        cancelInvisibleCharacterFade(character, targetTransparency)
+        return
     end
+
+    if bundle then
+        bundle.target = targetTransparency
+        return
+    end
+
+    applyTransparencyToCharacter(character, targetTransparency)
 end
 
 local function updateInvisibilityForPlayer(player: Player)
@@ -1890,6 +2001,7 @@ local function updateInvisiblePulseState()
                     highlight.FillTransparency = 1
                     highlight.OutlineTransparency = 1
                 end
+                cancelInvisibleCharacterFade(character, computeInvisibilityTransparency(false, player))
             end
         end
         return
@@ -1908,6 +2020,12 @@ local function updateInvisiblePulseState()
                         highlight.FillTransparency = 0.5
                         highlight.OutlineTransparency = 0
                         highlight.Enabled = true
+                        flashInvisibleCharacter(character)
+                    end
+                else
+                    local character = player.Character
+                    if character then
+                        cancelInvisibleCharacterFade(character, computeInvisibilityTransparency(false, player))
                     end
                 end
             end
@@ -1921,6 +2039,9 @@ local function updateInvisiblePulseState()
                             local highlight = character:FindFirstChild("InvisibleRevealHighlight") :: Highlight?
                             if highlight then
                                 startInvisibleHighlightFade(highlight)
+                            end
+                            if player.Neutral then
+                                startInvisibleCharacterFade(character, player, 2)
                             end
                         end
                     end
@@ -2125,6 +2246,14 @@ local function enableInvertedControls()
             invertedControlState.keyboard.left = true
         elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
             invertedControlState.keyboard.right = true
+        elseif key == Enum.KeyCode.DPadUp then
+            invertedControlState.keyboard.forward = true
+        elseif key == Enum.KeyCode.DPadDown then
+            invertedControlState.keyboard.back = true
+        elseif key == Enum.KeyCode.DPadLeft then
+            invertedControlState.keyboard.left = true
+        elseif key == Enum.KeyCode.DPadRight then
+            invertedControlState.keyboard.right = true
         elseif key == Enum.KeyCode.Space or key == Enum.KeyCode.ButtonA then
             local humanoid = currentHumanoid
             if humanoid then
@@ -2142,6 +2271,14 @@ local function enableInvertedControls()
         elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left then
             invertedControlState.keyboard.left = false
         elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
+            invertedControlState.keyboard.right = false
+        elseif key == Enum.KeyCode.DPadUp then
+            invertedControlState.keyboard.forward = false
+        elseif key == Enum.KeyCode.DPadDown then
+            invertedControlState.keyboard.back = false
+        elseif key == Enum.KeyCode.DPadLeft then
+            invertedControlState.keyboard.left = false
+        elseif key == Enum.KeyCode.DPadRight then
             invertedControlState.keyboard.right = false
         elseif key == Enum.KeyCode.Thumbstick1 then
             invertedControlState.thumbstick = Vector2.new(0, 0)
@@ -2956,6 +3093,8 @@ local function onHumanoidAdded(humanoid: Humanoid)
             resetInvertedMovement()
         end
     end)
+
+    applyInvertedControlState()
 end
 
 local function onCharacterAdded(character: Model)
@@ -2978,6 +3117,8 @@ local function onCharacterAdded(character: Model)
             end
         end)
     end
+
+    applyInvertedControlState()
 end
 
 localPlayer.CharacterAdded:Connect(onCharacterAdded)
@@ -2999,9 +3140,7 @@ localPlayer.CharacterRemoving:Connect(function()
     if invertedControlState.active then
         resetInvertedMovement()
     end
-    if not invertedControlState.requested then
-        enableDefaultControlsIfDisabled()
-    end
+    enableDefaultControlsIfDisabled()
     if characterGearConn then
         characterGearConn:Disconnect()
         characterGearConn = nil
@@ -3056,6 +3195,13 @@ local function sprintAction(_: string, inputState: Enum.UserInputState, inputObj
             end
             return Enum.ContextActionResult.Sink
         end
+    elseif keyCode == Enum.KeyCode.ButtonX then
+        if inputState == Enum.UserInputState.Begin then
+            toggleKeyboardSprintIntent()
+            return Enum.ContextActionResult.Sink
+        elseif inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
+            return Enum.ContextActionResult.Sink
+        end
     elseif not inputObject then
         if inputState == Enum.UserInputState.Begin then
             toggleTouchSprintIntent()
@@ -3075,7 +3221,8 @@ ContextActionService:BindAction(
     Enum.KeyCode.LeftControl,
     Enum.KeyCode.RightControl,
     Enum.KeyCode.ButtonL3,
-    Enum.KeyCode.ButtonR3
+    Enum.KeyCode.ButtonR3,
+    Enum.KeyCode.ButtonX
 )
 sprintInteraction.actionBound = true
 ContextActionService:SetTitle("SprintAction", "Sprint")
