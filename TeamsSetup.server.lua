@@ -60,6 +60,12 @@ local STORM_MIN_HORIZONTAL_SIZE = 200
 local MAP_ANCHOR_DURATION = 5
 local HOT_TOUCH_TAG_SOUND_ID = "rbxassetid://2866718318"
 
+local SPECIAL_EVENT_MUSIC_IDS = {
+    HotTouch = "101070309888602",
+    Retro = "1837768352",
+    KillBot = "1836075187",
+}
+
 local remotesFolder = ReplicatedStorage:FindFirstChild("PVPRemotes")
 if not remotesFolder then
     remotesFolder = Instance.new("Folder")
@@ -2718,7 +2724,12 @@ local function startRound(player: Player, mapId: string, requestedEventId: strin
     sendRoundState("Starting", {
         map = mapId,
     })
-    playMapMusic(config)
+    local eventMusicId = if resolvedEventId then SPECIAL_EVENT_MUSIC_IDS[resolvedEventId] else nil
+    if eventMusicId then
+        playMusic(eventMusicId)
+    else
+        playMapMusic(config)
+    end
     activeMapConfig = config
 
     local mapClone = mapTemplate:Clone()

@@ -3449,7 +3449,8 @@ local StormEffects = (function()
         equalizer = nil :: EqualizerSoundEffect?,
         pitchShift = nil :: PitchShiftSoundEffect?,
         trackedPart = nil :: BasePart?,
-        exposureActive = false,
+        visualActive = false,
+        audioActive = false,
     }
 
     local function ensureOverlay()
@@ -3648,15 +3649,6 @@ local StormEffects = (function()
         end
 
         state.animationConn = RunService.RenderStepped:Connect(function(dt)
-            local gradient = state.gradient
-            local gradientFrame = state.gradientFrame
-            if gradient and gradientFrame then
-                local now = os.clock()
-                gradient.Rotation = (gradient.Rotation + dt * 45) % 360
-                gradient.Offset = Vector2.new(math.sin(now * 0.6) * 0.35, math.cos(now * 0.7) * 0.35)
-                gradientFrame.Rotation = (gradientFrame.Rotation + dt * 15) % 360
-            end
-
             local scanLine = state.scanLine
             if scanLine then
                 state.scanProgress += dt * 0.4
@@ -3675,10 +3667,9 @@ local StormEffects = (function()
         end
     end
 
-    local function enableEffects()
+    local function enableVisualEffects()
         ensureOverlay()
         ensureLightingEffects()
-        ensureAudioEffects()
 
         local overlayGui = state.overlayGui
         if overlayGui then
@@ -3692,19 +3683,21 @@ local StormEffects = (function()
         if depthOfField then
             depthOfField.Enabled = true
         end
-        local equalizer = state.equalizer
-        if equalizer then
-            equalizer.Enabled = true
+
+        local gradientFrame = state.gradientFrame
+        if gradientFrame then
+            gradientFrame.Rotation = 0
         end
-        local pitchShift = state.pitchShift
-        if pitchShift then
-            pitchShift.Enabled = true
+        local gradient = state.gradient
+        if gradient then
+            gradient.Rotation = 0
+            gradient.Offset = Vector2.new(0, 0)
         end
 
         startOverlayAnimation()
     end
 
-    local function disableEffects()
+    local function disableVisualEffects()
         local overlayGui = state.overlayGui
         if overlayGui then
             overlayGui.Enabled = false
@@ -3717,14 +3710,6 @@ local StormEffects = (function()
         if depthOfField then
             depthOfField.Enabled = false
         end
-        local equalizer = state.equalizer
-        if equalizer then
-            equalizer.Enabled = false
-        end
-        local pitchShift = state.pitchShift
-        if pitchShift then
-            pitchShift.Enabled = false
-        end
 
         stopOverlayAnimation()
         state.scanProgress = 0
@@ -3734,17 +3719,49 @@ local StormEffects = (function()
         end
     end
 
-    local function updateExposure(isActive: boolean)
-        if isActive == state.exposureActive then
-            return
+    local function enableAudioEffects()
+        ensureAudioEffects()
+
+        local equalizer = state.equalizer
+        if equalizer then
+            equalizer.Enabled = true
+        end
+        local pitchShift = state.pitchShift
+        if pitchShift then
+            pitchShift.Enabled = true
+        end
+    end
+
+    local function disableAudioEffects()
+        local equalizer = state.equalizer
+        if equalizer then
+            equalizer.Enabled = false
+        end
+        local pitchShift = state.pitchShift
+        if pitchShift then
+            pitchShift.Enabled = false
+        end
+    end
+
+    local function updateExposure(visualActive: boolean, audioActive: boolean)
+        if visualActive ~= state.visualActive then
+            state.visualActive = visualActive
+
+            if visualActive then
+                enableVisualEffects()
+            else
+                disableVisualEffects()
+            end
         end
 
-        state.exposureActive = isActive
+        if audioActive ~= state.audioActive then
+            state.audioActive = audioActive
 
-        if isActive then
-            enableEffects()
-        else
-            disableEffects()
+            if audioActive then
+                enableAudioEffects()
+            else
+                disableAudioEffects()
+            end
         end
     end
 
@@ -3754,7 +3771,7 @@ local StormEffects = (function()
             state.trackedPart = existing
         else
             state.trackedPart = nil
-            updateExposure(false)
+            updateExposure(false, false)
         end
     end
 
@@ -3767,7 +3784,7 @@ local StormEffects = (function()
     local function onDescendantRemoving(descendant: Instance)
         if descendant == state.trackedPart then
             state.trackedPart = nil
-            updateExposure(false)
+            updateExposure(false, false)
         end
     end
 
@@ -3777,39 +3794,50 @@ local StormEffects = (function()
             if storm and not storm.Parent then
                 state.trackedPart = nil
             end
-            updateExposure(false)
+            updateExposure(false, false)
             return
         end
 
         local character = localPlayer.Character
         if not character then
-            updateExposure(false)
+            updateExposure(false, false)
             return
         end
 
         local humanoid = character:FindFirstChildOfClass("Humanoid")
         if not humanoid or humanoid.Health <= 0 then
-            updateExposure(false)
+            updateExposure(false, false)
             return
         end
 
         local rootPart = character:FindFirstChild("HumanoidRootPart")
         if not rootPart or not rootPart:IsA("BasePart") then
-            updateExposure(false)
+            updateExposure(false, false)
             return
         end
 
         local halfSize = storm.Size * 0.5
         if halfSize.X <= 0 or halfSize.Z <= 0 then
-            updateExposure(false)
+            updateExposure(false, false)
             return
         end
 
         local relative = storm.CFrame:PointToObjectSpace(rootPart.Position)
         local outsideX = math.abs(relative.X) > halfSize.X
         local outsideZ = math.abs(relative.Z) > halfSize.Z
+        local characterOutside = outsideX or outsideZ
 
-        updateExposure(outsideX or outsideZ)
+        local camera = Workspace.CurrentCamera
+        local cameraOutside = false
+        if camera then
+            local cameraPosition = camera.CFrame.Position
+            local cameraRelative = storm.CFrame:PointToObjectSpace(cameraPosition)
+            if math.abs(cameraRelative.X) > halfSize.X or math.abs(cameraRelative.Z) > halfSize.Z then
+                cameraOutside = true
+            end
+        end
+
+        updateExposure(characterOutside, characterOutside or cameraOutside)
     end
 
     refreshPartReference()
