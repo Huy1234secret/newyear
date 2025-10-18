@@ -61,13 +61,15 @@ if isTouchDevice then
     StarterGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
 end
 
-local DEFAULT_BACKGROUND_COLOR = Color3.fromRGB(28, 32, 45)
-local DEFAULT_BACKGROUND_TRANSPARENCY = 0.15
-local DEFAULT_TEXT_SIZE = if isTouchDevice then 22 else 26
-local EMPHASIZED_TEXT_SIZE = if isTouchDevice then 28 else 32
-local USE_CUSTOM_INVENTORY_UI = false -- Disable the bespoke 10-slot bar in favor of Roblox's default backpack UI
-local MAP_LABEL_WIDTH = if isTouchDevice then 140 else 160
-local MAP_LABEL_PADDING = if isTouchDevice then 18 else 24
+local UI_CONFIG = {
+    DEFAULT_BACKGROUND_COLOR = Color3.fromRGB(28, 32, 45),
+    DEFAULT_BACKGROUND_TRANSPARENCY = 0.15,
+    DEFAULT_TEXT_SIZE = if isTouchDevice then 22 else 26,
+    EMPHASIZED_TEXT_SIZE = if isTouchDevice then 28 else 32,
+    USE_CUSTOM_INVENTORY_UI = false, -- Disable the bespoke 10-slot bar in favor of Roblox's default backpack UI
+    MAP_LABEL_WIDTH = if isTouchDevice then 140 else 160,
+    MAP_LABEL_PADDING = if isTouchDevice then 18 else 24,
+}
 
 local mapDisplayNames = {
     Crossroad = "Crossroad",
@@ -89,7 +91,7 @@ local function setBackpackCoreGuiEnabled(enabled: boolean)
     end
 end
 
-if USE_CUSTOM_INVENTORY_UI then
+if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
     setBackpackCoreGuiEnabled(false)
 
     local function ensureBackpackDisabled()
@@ -276,134 +278,136 @@ screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 5
 screenGui.Parent = playerGui
 
-local statusFrame = Instance.new("Frame")
-statusFrame.Name = "StatusFrame"
-statusFrame.Size = UDim2.fromOffset(isTouchDevice and 220 or 260, isTouchDevice and 52 or 56)
-statusFrame.Position = UDim2.new(0.5, 0, 0, 32)
-statusFrame.AnchorPoint = Vector2.new(0.5, 0)
-statusFrame.BackgroundColor3 = DEFAULT_BACKGROUND_COLOR
-statusFrame.BackgroundTransparency = DEFAULT_BACKGROUND_TRANSPARENCY
-statusFrame.Visible = false
-statusFrame.ZIndex = 10
-statusFrame.Parent = screenGui
+local statusUI = {}
+statusUI.frame = Instance.new("Frame")
+statusUI.frame.Name = "StatusFrame"
+statusUI.frame.Size = UDim2.fromOffset(isTouchDevice and 220 or 260, isTouchDevice and 52 or 56)
+statusUI.frame.Position = UDim2.new(0.5, 0, 0, 32)
+statusUI.frame.AnchorPoint = Vector2.new(0.5, 0)
+statusUI.frame.BackgroundColor3 = UI_CONFIG.DEFAULT_BACKGROUND_COLOR
+statusUI.frame.BackgroundTransparency = UI_CONFIG.DEFAULT_BACKGROUND_TRANSPARENCY
+statusUI.frame.Visible = false
+statusUI.frame.ZIndex = 10
+statusUI.frame.Parent = screenGui
 
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 12)
-corner.Parent = statusFrame
+corner.Parent = statusUI.frame
 
-local frameStroke = Instance.new("UIStroke")
-frameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-frameStroke.Thickness = 2
-frameStroke.Color = Color3.fromRGB(120, 135, 200)
-frameStroke.Transparency = 0.35
-frameStroke.Parent = statusFrame
+statusUI.stroke = Instance.new("UIStroke")
+statusUI.stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+statusUI.stroke.Thickness = 2
+statusUI.stroke.Color = Color3.fromRGB(120, 135, 200)
+statusUI.stroke.Transparency = 0.35
+statusUI.stroke.Parent = statusUI.frame
 
 local padding = Instance.new("UIPadding")
 padding.PaddingLeft = UDim.new(0, 16)
 padding.PaddingRight = UDim.new(0, 16)
-padding.Parent = statusFrame
+padding.Parent = statusUI.frame
 
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Name = "StatusLabel"
-local statusLabelOffset = math.floor((MAP_LABEL_WIDTH + MAP_LABEL_PADDING) * 0.5)
-statusLabel.Size = UDim2.new(1, -(MAP_LABEL_WIDTH + MAP_LABEL_PADDING), 1, 0)
-statusLabel.BackgroundTransparency = 1
-statusLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-statusLabel.Position = UDim2.new(0.5, -statusLabelOffset, 0.5, 0)
-statusLabel.Font = Enum.Font.GothamBold
-statusLabel.Text = ""
-statusLabel.TextSize = DEFAULT_TEXT_SIZE
-statusLabel.TextColor3 = Color3.fromRGB(245, 245, 255)
-statusLabel.TextXAlignment = Enum.TextXAlignment.Center
-statusLabel.TextYAlignment = Enum.TextYAlignment.Center
-statusLabel.ZIndex = 11
-statusLabel.Parent = statusFrame
+statusUI.label = Instance.new("TextLabel")
+statusUI.label.Name = "StatusLabel"
+local statusLabelOffset = math.floor((UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING) * 0.5)
+statusUI.label.Size = UDim2.new(1, -(UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING), 1, 0)
+statusUI.label.BackgroundTransparency = 1
+statusUI.label.AnchorPoint = Vector2.new(0.5, 0.5)
+statusUI.label.Position = UDim2.new(0.5, -statusLabelOffset, 0.5, 0)
+statusUI.label.Font = Enum.Font.GothamBold
+statusUI.label.Text = ""
+statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
+statusUI.label.TextColor3 = Color3.fromRGB(245, 245, 255)
+statusUI.label.TextXAlignment = Enum.TextXAlignment.Center
+statusUI.label.TextYAlignment = Enum.TextYAlignment.Center
+statusUI.label.ZIndex = 11
+statusUI.label.Parent = statusUI.frame
 
-local labelStroke = Instance.new("UIStroke")
-labelStroke.Color = Color3.fromRGB(20, 20, 35)
-labelStroke.Thickness = 2
-labelStroke.Transparency = 0.3
-labelStroke.Parent = statusLabel
+statusUI.labelStroke = Instance.new("UIStroke")
+statusUI.labelStroke.Color = Color3.fromRGB(20, 20, 35)
+statusUI.labelStroke.Thickness = 2
+statusUI.labelStroke.Transparency = 0.3
+statusUI.labelStroke.Parent = statusUI.label
 
 local createdMapLabel = Instance.new("TextLabel")
 createdMapLabel.Name = "MapLabel"
-createdMapLabel.Size = UDim2.new(0, MAP_LABEL_WIDTH, 1, 0)
+createdMapLabel.Size = UDim2.new(0, UI_CONFIG.MAP_LABEL_WIDTH, 1, 0)
 createdMapLabel.AnchorPoint = Vector2.new(1, 0.5)
-createdMapLabel.Position = UDim2.new(1, -math.floor(MAP_LABEL_PADDING * 0.5), 0.5, 0)
+createdMapLabel.Position = UDim2.new(1, -math.floor(UI_CONFIG.MAP_LABEL_PADDING * 0.5), 0.5, 0)
 createdMapLabel.BackgroundTransparency = 1
 createdMapLabel.Font = Enum.Font.GothamSemibold
 createdMapLabel.Text = ""
-createdMapLabel.TextSize = math.max(16, DEFAULT_TEXT_SIZE - 4)
+createdMapLabel.TextSize = math.max(16, UI_CONFIG.DEFAULT_TEXT_SIZE - 4)
 createdMapLabel.TextColor3 = Color3.fromRGB(210, 230, 255)
 createdMapLabel.TextXAlignment = Enum.TextXAlignment.Right
 createdMapLabel.TextYAlignment = Enum.TextYAlignment.Center
-createdMapLabel.ZIndex = statusLabel.ZIndex
+createdMapLabel.ZIndex = statusUI.label.ZIndex
 createdMapLabel.Visible = false
-createdMapLabel.Parent = statusFrame
+createdMapLabel.Parent = statusUI.frame
 uiRefs.mapLabel = createdMapLabel
 
-local specialEventFrame = Instance.new("Frame")
-specialEventFrame.Name = "SpecialEventFrame"
-specialEventFrame.Size = UDim2.fromOffset(360, 160)
-specialEventFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-specialEventFrame.Position = UDim2.new(0.5, 0, 0.35, 0)
-specialEventFrame.BackgroundColor3 = Color3.fromRGB(28, 32, 45)
-specialEventFrame.BackgroundTransparency = 1
-specialEventFrame.Visible = false
-specialEventFrame.ZIndex = 40
-specialEventFrame.Parent = screenGui
+local specialEventUI = {}
+specialEventUI.frame = Instance.new("Frame")
+specialEventUI.frame.Name = "SpecialEventFrame"
+specialEventUI.frame.Size = UDim2.fromOffset(360, 160)
+specialEventUI.frame.AnchorPoint = Vector2.new(0.5, 0.5)
+specialEventUI.frame.Position = UDim2.new(0.5, 0, 0.35, 0)
+specialEventUI.frame.BackgroundColor3 = Color3.fromRGB(28, 32, 45)
+specialEventUI.frame.BackgroundTransparency = 1
+specialEventUI.frame.Visible = false
+specialEventUI.frame.ZIndex = 40
+specialEventUI.frame.Parent = screenGui
 
 local specialEventCorner = Instance.new("UICorner")
 specialEventCorner.CornerRadius = UDim.new(0, 14)
-specialEventCorner.Parent = specialEventFrame
+specialEventCorner.Parent = specialEventUI.frame
 
-local specialEventStroke = Instance.new("UIStroke")
-specialEventStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-specialEventStroke.Thickness = 2
-specialEventStroke.Color = Color3.fromRGB(120, 135, 200)
-specialEventStroke.Transparency = 0.35
-specialEventStroke.Parent = specialEventFrame
+specialEventUI.stroke = Instance.new("UIStroke")
+specialEventUI.stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+specialEventUI.stroke.Thickness = 2
+specialEventUI.stroke.Color = Color3.fromRGB(120, 135, 200)
+specialEventUI.stroke.Transparency = 0.35
+specialEventUI.stroke.Parent = specialEventUI.frame
 
-local specialEventGradient = Instance.new("UIGradient")
-specialEventGradient.Color = ColorSequence.new({
+specialEventUI.gradient = Instance.new("UIGradient")
+specialEventUI.gradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 55, 80)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 32, 45)),
 })
-specialEventGradient.Rotation = 90
-specialEventGradient.Parent = specialEventFrame
+specialEventUI.gradient.Rotation = 90
+specialEventUI.gradient.Parent = specialEventUI.frame
 
-local specialEventHeader = Instance.new("TextLabel")
-specialEventHeader.Name = "Header"
-specialEventHeader.Size = UDim2.new(1, -40, 0, 42)
-specialEventHeader.Position = UDim2.new(0, 20, 0, 18)
-specialEventHeader.BackgroundTransparency = 1
-specialEventHeader.Font = Enum.Font.GothamBold
-specialEventHeader.Text = "- Special Round -"
-specialEventHeader.TextScaled = false
-specialEventHeader.TextSize = if isTouchDevice then 22 else 24
-specialEventHeader.TextColor3 = Color3.fromRGB(245, 245, 255)
-specialEventHeader.TextXAlignment = Enum.TextXAlignment.Center
-specialEventHeader.TextYAlignment = Enum.TextYAlignment.Center
-specialEventHeader.ZIndex = specialEventFrame.ZIndex + 1
-specialEventHeader.Parent = specialEventFrame
+specialEventUI.header = Instance.new("TextLabel")
+specialEventUI.header.Name = "Header"
+specialEventUI.header.Size = UDim2.new(1, -40, 0, 42)
+specialEventUI.header.Position = UDim2.new(0, 20, 0, 18)
+specialEventUI.header.BackgroundTransparency = 1
+specialEventUI.header.Font = Enum.Font.GothamBold
+specialEventUI.header.Text = "- Special Round -"
+specialEventUI.header.TextScaled = false
+specialEventUI.header.TextSize = if isTouchDevice then 22 else 24
+specialEventUI.header.TextColor3 = Color3.fromRGB(245, 245, 255)
+specialEventUI.header.TextXAlignment = Enum.TextXAlignment.Center
+specialEventUI.header.TextYAlignment = Enum.TextYAlignment.Center
+specialEventUI.header.ZIndex = specialEventUI.frame.ZIndex + 1
+specialEventUI.header.Parent = specialEventUI.frame
 
-local specialEventTitle = Instance.new("TextLabel")
-specialEventTitle.Name = "Title"
-specialEventTitle.Size = UDim2.new(1, -60, 0, 60)
-specialEventTitle.Position = UDim2.new(0, 30, 0, 70)
-specialEventTitle.BackgroundTransparency = 1
-specialEventTitle.Font = Enum.Font.GothamBlack
-specialEventTitle.Text = ""
-specialEventTitle.TextScaled = true
-specialEventTitle.TextWrapped = true
-specialEventTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-specialEventTitle.ZIndex = specialEventFrame.ZIndex + 1
-specialEventTitle.Parent = specialEventFrame
+specialEventUI.title = Instance.new("TextLabel")
+specialEventUI.title.Name = "Title"
+specialEventUI.title.Size = UDim2.new(1, -60, 0, 60)
+specialEventUI.title.Position = UDim2.new(0, 30, 0, 70)
+specialEventUI.title.BackgroundTransparency = 1
+specialEventUI.title.Font = Enum.Font.GothamBlack
+specialEventUI.title.Text = ""
+specialEventUI.title.TextScaled = true
+specialEventUI.title.TextWrapped = true
+specialEventUI.title.TextColor3 = Color3.fromRGB(255, 255, 255)
+specialEventUI.title.ZIndex = specialEventUI.frame.ZIndex + 1
+specialEventUI.title.Parent = specialEventUI.frame
 
-local specialEventScale = Instance.new("UIScale")
-specialEventScale.Name = "Scale"
-specialEventScale.Scale = 1
-specialEventScale.Parent = specialEventFrame
+specialEventUI.scale = Instance.new("UIScale")
+specialEventUI.scale.Name = "Scale"
+specialEventUI.scale.Scale = 1
+specialEventUI.scale.Parent = specialEventUI.frame
 
 local viewportWidth = 1024
 do
@@ -435,7 +439,7 @@ local energySpacing = if isTouchDevice then 3 else 4
 local sprintContainerHeight = energyTopPadding + energyLabelHeight + energySpacing + energyBarHeight + energyBottomPadding
 local energyTextWidth = if isTouchDevice then 80 else 92
 
-local estimatedInventoryHeight = if USE_CUSTOM_INVENTORY_UI then inventoryHeight elseif isTouchDevice then math.max(48, math.floor(slotSize * 1.15)) else 0
+local estimatedInventoryHeight = if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then inventoryHeight elseif isTouchDevice then math.max(48, math.floor(slotSize * 1.15)) else 0
 local sprintBottomOffset = inventoryBottomMargin + estimatedInventoryHeight + energyContainerGap
 
 local sprintContainer = Instance.new("Frame")
@@ -565,7 +569,7 @@ local energyGradientDefault = energyFillGradient.Color
 local inventoryBasePosition = UDim2.new(0.5, 0, 1, -inventoryBottomMargin)
 local inventoryBaseRotation = 0
 
-if USE_CUSTOM_INVENTORY_UI then
+if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
     uiRefs.inventoryFrame = Instance.new("Frame")
     uiRefs.inventoryFrame.Name = "InventoryBar"
     uiRefs.inventoryFrame.AnchorPoint = Vector2.new(0.5, 1)
@@ -759,7 +763,7 @@ else
         inventoryVisible = visible
     end
 end
-local defaultColor = statusLabel.TextColor3
+local defaultColor = statusUI.label.TextColor3
 local countdownColor = Color3.fromRGB(245, 245, 255)
 local matchColor = Color3.fromRGB(210, 235, 255)
 local deathMatchBackground = Color3.fromRGB(60, 10, 10)
@@ -777,8 +781,8 @@ local highlightStyles = {
     },
 }
 
-local baseFramePosition = statusFrame.Position
-local baseLabelPosition = statusLabel.Position
+local baseFramePosition = statusUI.frame.Position
+local baseLabelPosition = statusUI.label.Position
 local currentMapId: string? = nil
 local currentRemaining = 0
 local flashConnection: RBXScriptConnection? = nil
@@ -1180,26 +1184,26 @@ local function hideSpecialEvent(immediate: boolean?)
     specialEventState.hideToken += 1
     local token = specialEventState.hideToken
 
-    if not specialEventFrame then
+    if not specialEventUI.frame then
         return
     end
 
     if immediate then
-        specialEventFrame.Visible = false
+        specialEventUI.frame.Visible = false
         return
     end
 
-    local fadeTween = TweenService:Create(specialEventFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+    local fadeTween = TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
         BackgroundTransparency = 1,
     })
-    local scaleTween = TweenService:Create(specialEventScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+    local scaleTween = TweenService:Create(specialEventUI.scale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
         Scale = 0.85,
     })
 
     fadeTween.Completed:Connect(function()
         if specialEventState.hideToken == token then
-            specialEventFrame.Visible = false
-            specialEventScale.Scale = 1
+            specialEventUI.frame.Visible = false
+            specialEventUI.scale.Scale = 1
         end
     end)
 
@@ -1211,16 +1215,16 @@ local function showSpecialEvent(titleText: string, keepSeconds: number?)
     specialEventState.hideToken += 1
     local token = specialEventState.hideToken
 
-    specialEventTitle.Text = titleText
-    specialEventFrame.Visible = true
-    specialEventFrame.BackgroundTransparency = 1
-    specialEventScale.Scale = 0.2
+    specialEventUI.title.Text = titleText
+    specialEventUI.frame.Visible = true
+    specialEventUI.frame.BackgroundTransparency = 1
+    specialEventUI.scale.Scale = 0.2
 
-    TweenService:Create(specialEventFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+    TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
         BackgroundTransparency = 0.05,
     }):Play()
 
-    TweenService:Create(specialEventScale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    TweenService:Create(specialEventUI.scale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
         Scale = 1,
     }):Play()
 
@@ -1257,7 +1261,7 @@ local function beginSpecialEventRandomization(options: {{id: string?, name: stri
         while specialEventState.randomized and specialEventState.randomToken == token do
             local option = options[((index - 1) % count) + 1]
             if option then
-                specialEventTitle.Text = option.name or option.id or "???"
+                specialEventUI.title.Text = option.name or option.id or "???"
             end
             index += 1
 
@@ -1278,7 +1282,7 @@ local function completeSpecialEventRandomization(finalName: string)
     end
 
     specialEventState.randomized = false
-    specialEventTitle.Text = finalName
+    specialEventUI.title.Text = finalName
     showSpecialEvent(finalName, 3)
 end
 
@@ -2582,16 +2586,16 @@ RunService.Heartbeat:Connect(function(deltaTime)
 end)
 
 local function resetFrameVisual()
-    statusFrame.BackgroundColor3 = DEFAULT_BACKGROUND_COLOR
-    statusFrame.BackgroundTransparency = DEFAULT_BACKGROUND_TRANSPARENCY
-    frameStroke.Color = Color3.fromRGB(120, 135, 200)
-    frameStroke.Transparency = 0.35
-    statusFrame.Position = baseFramePosition
-    statusLabel.TextColor3 = defaultColor
-    statusLabel.TextSize = DEFAULT_TEXT_SIZE
-    statusLabel.Position = baseLabelPosition
-    statusLabel.Rotation = 0
-    labelStroke.Transparency = 0.3
+    statusUI.frame.BackgroundColor3 = UI_CONFIG.DEFAULT_BACKGROUND_COLOR
+    statusUI.frame.BackgroundTransparency = UI_CONFIG.DEFAULT_BACKGROUND_TRANSPARENCY
+    statusUI.stroke.Color = Color3.fromRGB(120, 135, 200)
+    statusUI.stroke.Transparency = 0.35
+    statusUI.frame.Position = baseFramePosition
+    statusUI.label.TextColor3 = defaultColor
+    statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
+    statusUI.label.Position = baseLabelPosition
+    statusUI.label.Rotation = 0
+    statusUI.labelStroke.Transparency = 0.3
 end
 
 local function stopFlash()
@@ -2600,23 +2604,23 @@ local function stopFlash()
         flashConnection = nil
     end
 
-    statusLabel.TextColor3 = matchColor
-    labelStroke.Color = Color3.fromRGB(20, 20, 35)
-    labelStroke.Transparency = 0.3
+    statusUI.label.TextColor3 = matchColor
+    statusUI.labelStroke.Color = Color3.fromRGB(20, 20, 35)
+    statusUI.labelStroke.Transparency = 0.3
 end
 
 local function startFlash()
     stopFlash()
 
-    labelStroke.Color = Color3.fromRGB(255, 110, 110)
-    labelStroke.Transparency = 0
+    statusUI.labelStroke.Color = Color3.fromRGB(255, 110, 110)
+    statusUI.labelStroke.Transparency = 0
 
     flashConnection = RunService.RenderStepped:Connect(function()
         local timeScale = math.clamp(currentRemaining / 30, 0, 1)
         local frequency = 3 + (1 - timeScale) * 6
         local pulse = math.abs(math.sin(os.clock() * frequency))
         local green = 60 + math.floor(140 * (1 - pulse))
-        statusLabel.TextColor3 = Color3.fromRGB(255, green, green)
+        statusUI.label.TextColor3 = Color3.fromRGB(255, green, green)
     end)
 end
 
@@ -2659,11 +2663,11 @@ local function stopShake()
 
     resetNeutralButtonShakeTargets()
 
-    statusFrame.Position = baseFramePosition
-    statusLabel.Position = baseLabelPosition
-    statusLabel.Rotation = 0
-    statusLabel.TextColor3 = defaultColor
-    statusLabel.TextSize = DEFAULT_TEXT_SIZE
+    statusUI.frame.Position = baseFramePosition
+    statusUI.label.Position = baseLabelPosition
+    statusUI.label.Rotation = 0
+    statusUI.label.TextColor3 = defaultColor
+    statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
 
     if uiRefs.inventoryFrame then
         uiRefs.inventoryFrame.Position = inventoryBasePosition
@@ -2693,12 +2697,12 @@ local function startDeathMatchEffect()
     stopFlash()
     stopShake()
 
-    statusFrame.BackgroundColor3 = deathMatchBackground
-    frameStroke.Color = deathMatchStroke
-    frameStroke.Transparency = 0
-    statusFrame.BackgroundTransparency = 1
-    statusLabel.TextSize = EMPHASIZED_TEXT_SIZE
-    labelStroke.Transparency = 0
+    statusUI.frame.BackgroundColor3 = deathMatchBackground
+    statusUI.stroke.Color = deathMatchStroke
+    statusUI.stroke.Transparency = 0
+    statusUI.frame.BackgroundTransparency = 1
+    statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
+    statusUI.labelStroke.Transparency = 0
 
     collectNeutralButtonShakeTargets()
 
@@ -2707,18 +2711,18 @@ local function startDeathMatchEffect()
         local frameMagnitude = 1 + math.abs(math.sin(now * 5)) * 1.4
         local offsetX = math.noise(now * 8, 0, 0) * frameMagnitude * 4
         local offsetY = math.noise(now * 9, 1, 0) * frameMagnitude * 3
-        statusFrame.Position = baseFramePosition + UDim2.fromOffset(offsetX, offsetY)
+        statusUI.frame.Position = baseFramePosition + UDim2.fromOffset(offsetX, offsetY)
 
         local textMagnitude = 0.5 + math.abs(math.sin(now * 12)) * 1.5
         local textOffsetX = math.noise(now * 20, 2, 0) * textMagnitude * 4
         local textOffsetY = math.noise(now * 18, 3, 0) * textMagnitude * 3
         local buttonOffset = UDim2.fromOffset(textOffsetX, textOffsetY)
-        statusLabel.Position = baseLabelPosition + buttonOffset
-        statusLabel.Rotation = math.noise(now * 14, 4, 0) * 8
+        statusUI.label.Position = baseLabelPosition + buttonOffset
+        statusUI.label.Rotation = math.noise(now * 14, 4, 0) * 8
 
         local pulse = (math.sin(now * 6) + 1) / 2
         local colorOffset = math.floor(40 * pulse)
-        statusLabel.TextColor3 = Color3.fromRGB(255, 90 + colorOffset, 90 + colorOffset)
+        statusUI.label.TextColor3 = Color3.fromRGB(255, 90 + colorOffset, 90 + colorOffset)
 
         if uiRefs.inventoryFrame then
             local inventoryMagnitude = 0.6 + math.abs(math.sin(now * 6)) * 1.3
@@ -2794,8 +2798,8 @@ local function hideStatus()
     stopFlash()
     stopShake()
     stopDeathMatchTransition()
-    statusFrame.Visible = false
-    statusLabel.Text = ""
+    statusUI.frame.Visible = false
+    statusUI.label.Text = ""
 end
 
 local function getMapDisplayName(mapId: string): string
@@ -3209,18 +3213,18 @@ statusRemote.OnClientEvent:Connect(function(payload)
         stopShake()
         stopFlash()
         resetFrameVisual()
-        statusFrame.BackgroundTransparency = DEFAULT_BACKGROUND_TRANSPARENCY
-        statusFrame.Visible = true
-        statusLabel.TextColor3 = countdownColor
-        statusLabel.TextSize = EMPHASIZED_TEXT_SIZE
-        statusLabel.Text = formatCountdown(currentRemaining)
-        labelStroke.Transparency = 0.1
+        statusUI.frame.BackgroundTransparency = UI_CONFIG.DEFAULT_BACKGROUND_TRANSPARENCY
+        statusUI.frame.Visible = true
+        statusUI.label.TextColor3 = countdownColor
+        statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
+        statusUI.label.Text = formatCountdown(currentRemaining)
+        statusUI.labelStroke.Transparency = 0.1
     elseif action == "MatchTimer" then
         currentRemaining = math.max(0, math.floor(tonumber(payload.remaining) or 0))
-        statusFrame.Visible = true
+        statusUI.frame.Visible = true
         resetFrameVisual()
-        statusLabel.TextColor3 = matchColor
-        statusLabel.Text = formatTimer(currentRemaining)
+        statusUI.label.TextColor3 = matchColor
+        statusUI.label.Text = formatTimer(currentRemaining)
 
         if currentRemaining <= 30 then
             startFlash()
@@ -3230,15 +3234,15 @@ statusRemote.OnClientEvent:Connect(function(payload)
     elseif action == "DeathMatchTransition" then
         stopFlash()
         stopShake()
-        statusFrame.Visible = true
-        statusFrame.BackgroundColor3 = deathMatchBackground
-        frameStroke.Color = deathMatchStroke
-        frameStroke.Transparency = 0
-        statusLabel.TextColor3 = matchColor
-        statusLabel.TextSize = EMPHASIZED_TEXT_SIZE
-        statusLabel.Text = "Death Match"
-        statusFrame.BackgroundTransparency = 1
-        labelStroke.Transparency = 0
+        statusUI.frame.Visible = true
+        statusUI.frame.BackgroundColor3 = deathMatchBackground
+        statusUI.stroke.Color = deathMatchStroke
+        statusUI.stroke.Transparency = 0
+        statusUI.label.TextColor3 = matchColor
+        statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
+        statusUI.label.Text = "Death Match"
+        statusUI.frame.BackgroundTransparency = 1
+        statusUI.labelStroke.Transparency = 0
 
         local duration = tonumber(payload.duration) or 3
         deathMatchHighlightActive = true
@@ -3249,8 +3253,8 @@ statusRemote.OnClientEvent:Connect(function(payload)
         if isActive then
             deathMatchHighlightActive = true
             stopDeathMatchTransition()
-            statusFrame.Visible = true
-            statusLabel.Text = "Death Match"
+            statusUI.frame.Visible = true
+            statusUI.label.Text = "Death Match"
             startDeathMatchEffect()
         else
             deathMatchHighlightActive = false
@@ -3258,7 +3262,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
             stopFlash()
             stopDeathMatchTransition()
             resetFrameVisual()
-            statusFrame.Visible = false
+            statusUI.frame.Visible = false
         end
     elseif action == "RoundEnded" then
         deathMatchHighlightActive = false
@@ -3267,11 +3271,11 @@ statusRemote.OnClientEvent:Connect(function(payload)
         stopFlash()
         stopShake()
         resetFrameVisual()
-        statusFrame.Visible = true
-        statusLabel.TextColor3 = countdownColor
-        statusLabel.TextSize = DEFAULT_TEXT_SIZE
-        statusLabel.Text = "Intermission"
-        labelStroke.Transparency = 0.3
+        statusUI.frame.Visible = true
+        statusUI.label.TextColor3 = countdownColor
+        statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
+        statusUI.label.Text = "Intermission"
+        statusUI.labelStroke.Transparency = 0.3
         updateMapLabel(nil)
         specialEventState.active = false
         specialEventState.id = nil
@@ -3287,7 +3291,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
         hideSpecialEvent(true)
     elseif action == "SpecialEventRandomizing" then
         local headerText = if typeof(payload.header) == "string" then payload.header else "- Special Round -"
-        specialEventHeader.Text = headerText
+        specialEventUI.header.Text = headerText
 
         local options: {{id: string?, name: string?}} = {}
         if typeof(payload.options) == "table" then
@@ -3308,7 +3312,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
         beginSpecialEventRandomization(options, chosenName, duration)
     elseif action == "SpecialEvent" then
         local headerText = if typeof(payload.header) == "string" then payload.header else "- Special Round -"
-        specialEventHeader.Text = headerText
+        specialEventUI.header.Text = headerText
 
         local isActive = payload.active
         if isActive == false then
