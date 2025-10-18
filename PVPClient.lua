@@ -4168,7 +4168,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		statusUI.stroke.Transparency = 0
 		statusUI.label.TextColor3 = matchColor
 		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
-		statusUI.label.Text = "Death Match"
+		statusUI.label.Text = "Sudden Death"
 		statusUI.frame.BackgroundTransparency = 1
 		statusUI.labelStroke.Transparency = 0
 
@@ -4182,7 +4182,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
 			deathMatchHighlightActive = true
 			stopDeathMatchTransition()
 			statusUI.frame.Visible = true
-			statusUI.label.Text = "Death Match"
+			statusUI.label.Text = "Sudden Death"
 			startDeathMatchEffect()
 		else
 			deathMatchHighlightActive = false
