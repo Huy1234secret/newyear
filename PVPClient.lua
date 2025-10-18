@@ -855,6 +855,8 @@ local invisibilityState = {
     playerRemovingConn = nil :: RBXScriptConnection?,
 }
 
+local pendingInvisiblePulseUpdate = false
+
 local invertedControlState = {
     active = false,
     keyboard = {
@@ -1208,7 +1210,11 @@ local function updateHighlightActivation()
         disableHighlights()
     end
 
-    updateInvisiblePulseState()
+    if updateInvisiblePulseState then
+        updateInvisiblePulseState()
+    else
+        pendingInvisiblePulseUpdate = true
+    end
 end
 
 local function hideSpecialEvent(immediate: boolean?)
@@ -1470,6 +1476,11 @@ local function updateInvisiblePulseState()
             end
         end
     end)
+end
+
+if pendingInvisiblePulseUpdate then
+    pendingInvisiblePulseUpdate = false
+    updateInvisiblePulseState()
 end
 
 local function setInvisibilityEnabled(enabled: boolean)
