@@ -966,7 +966,17 @@ local FIRE_COOLDOWN = 2.25 -- seconds between shots while stationary
 				bv.MaxForce = Vector3.new(1e6,1e6,1e6)
 				bv.Velocity = dir * ROCKET_SPEED
 				bv.Parent = root
-				local orientConn = attachOrientationFollower(root, function() return bv.Velocity end)
+				local orientConn
+				orientConn = RunService.Heartbeat:Connect(function()
+					if not root or not root.Parent then
+						if orientConn then orientConn:Disconnect() end
+						return
+					end
+					local v = bv.Velocity
+					if v.Magnitude > 0.1 then
+						root.CFrame = CFrame.new(root.Position, root.Position + v)
+					end
+				end)
 
 				-- Simple trail
 				local trail = Instance.new("Trail")
@@ -996,7 +1006,6 @@ local FIRE_COOLDOWN = 2.25 -- seconds between shots while stationary
 
 				-- Cleanup
 				table.insert(state.rockets, function()
-					if orientConn then orientConn:Disconnect() end
 					if orientConn then orientConn:Disconnect() end
 					if tConn then tConn:Disconnect() end
 					if model and model.Parent then model:Destroy() end
