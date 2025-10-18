@@ -306,20 +306,21 @@ createInstance("UIPadding", {
     Parent = statusUI.frame,
 })
 
+local statusLabelOffset = math.floor((UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING) * 0.5)
+
 statusUI.label = createInstance("TextLabel", {
     Name = "StatusLabel",
-local statusLabelOffset = math.floor((UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING) * 0.5)
-statusUI.label.Size = UDim2.new(1, -(UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING), 1, 0)
-statusUI.label.BackgroundTransparency = 1
-statusUI.label.AnchorPoint = Vector2.new(0.5, 0.5)
-statusUI.label.Position = UDim2.new(0.5, -statusLabelOffset, 0.5, 0)
-statusUI.label.Font = Enum.Font.GothamBold
-statusUI.label.Text = ""
-statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
-statusUI.label.TextColor3 = Color3.fromRGB(245, 245, 255)
-statusUI.label.TextXAlignment = Enum.TextXAlignment.Center
-statusUI.label.TextYAlignment = Enum.TextYAlignment.Center
-statusUI.label.ZIndex = 11
+    Size = UDim2.new(1, -(UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING), 1, 0),
+    BackgroundTransparency = 1,
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0.5, -statusLabelOffset, 0.5, 0),
+    Font = Enum.Font.GothamBold,
+    Text = "",
+    TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE,
+    TextColor3 = Color3.fromRGB(245, 245, 255),
+    TextXAlignment = Enum.TextXAlignment.Center,
+    TextYAlignment = Enum.TextYAlignment.Center,
+    ZIndex = 11,
     Parent = statusUI.frame,
 })
 
