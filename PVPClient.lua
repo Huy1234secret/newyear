@@ -1,4 +1,49 @@
 --!strict
+-- === Movement reset helper to stop stuck-forward after respawn ===
+local function resetMovementState(humanoid: Humanoid?)
+	local Players = game:GetService("Players")
+	local CAS = game:GetService("ContextActionService")
+
+	-- Unbind any custom actions that may block default controls
+	pcall(function()
+		CAS:UnbindAction("DisableMovement")
+		CAS:UnbindAction("Inverted_Move")
+		CAS:UnbindAction("Inverted_Look")
+	end)
+
+	-- Soft reset PlayerModule controls
+	local okPM, controls = pcall(function()
+		local player = Players.LocalPlayer
+		local ps = player and player:FindFirstChildOfClass("PlayerScripts")
+		local pm = ps and ps:FindFirstChild("PlayerModule")
+		if not pm then return nil end
+		local PM = require(pm)
+		return PM:GetControls()
+	end)
+	if okPM and controls then
+		pcall(function() controls:Disable() end)
+	end
+
+	-- Nudge humanoid state & clear movement intents
+	if humanoid and humanoid.Parent then
+		pcall(function()
+			-- Zero the movement vector and suppress jump for a tick
+			humanoid:Move(Vector3.new(0,0,0), true)
+			humanoid.Jump = false
+			-- Sometimes RunningNoPhysics -> Running helps clear residual velocity intents
+			humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+			task.wait(0.02)
+			humanoid:ChangeState(Enum.HumanoidStateType.Running)
+		end)
+	end
+
+	-- Re-enable controls after a tiny delay so PlayerModule rebinds default actions
+	task.wait(0.03)
+	if okPM and controls then
+		pcall(function() controls:Enable() end)
+	end
+end
+
 -- Place this LocalScript in StarterPlayerScripts so each player can see match updates.
 
 
@@ -1722,7 +1767,7 @@ local function trackPlayerForHighlights(targetPlayer: Player)
 	end)
 
 	connections[#connections + 1] = targetPlayer.CharacterRemoving:Connect(function()
-		if invertedControlState and invertedControlState.active then disableInvertedControls() end
+		resetMovementState(humanoid)if invertedControlState and invertedControlState.active then disableInvertedControls() end
 		hardEnableDefaultControls()
 		removeHighlightForPlayer(targetPlayer)
 	end)
@@ -2389,9 +2434,15 @@ local function enableInvertedControls()
 end
 
 local function applyInvertedControlState()
+	-- Reset any stuck inputs immediately and shortly after spawn
+	resetMovementState(humanoid)
+	task.delay(0.20, function() resetMovementState(humanoid) end)
+	task.delay(0.60, function() resetMovementState(humanoid) end)
 	-- safety: if not inverted after spawn, re-enable defaults
 	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 	local shouldEnable = invertedControlState.requested and localPlayer.Neutral
 	if shouldEnable then
 		enableInvertedControls()
@@ -2407,9 +2458,15 @@ end
 local function setInvertedControlsEnabled(enabled: boolean)
 	invertedControlState.requested = enabled
 	applyInvertedControlState()
+	-- Reset any stuck inputs immediately and shortly after spawn
+	resetMovementState(humanoid)
+	task.delay(0.20, function() resetMovementState(humanoid) end)
+	task.delay(0.60, function() resetMovementState(humanoid) end)
 	-- safety: if not inverted after spawn, re-enable defaults
 	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end
 
 local function getSprintActionButton(): ImageButton?
@@ -3072,18 +3129,30 @@ localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
 	updateHighlightActivation()
 	setSprintEventDisabled(specialEventState.effects.sprintDisabled)
 	applyInvertedControlState()
+	-- Reset any stuck inputs immediately and shortly after spawn
+	resetMovementState(humanoid)
+	task.delay(0.20, function() resetMovementState(humanoid) end)
+	task.delay(0.60, function() resetMovementState(humanoid) end)
 	-- safety: if not inverted after spawn, re-enable defaults
 	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end)
 
 localPlayer:GetPropertyChangedSignal("Neutral"):Connect(function()
 	updateHighlightActivation()
 	setSprintEventDisabled(specialEventState.effects.sprintDisabled)
 	applyInvertedControlState()
+	-- Reset any stuck inputs immediately and shortly after spawn
+	resetMovementState(humanoid)
+	task.delay(0.20, function() resetMovementState(humanoid) end)
+	task.delay(0.60, function() resetMovementState(humanoid) end)
 	-- safety: if not inverted after spawn, re-enable defaults
 	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end)
 
 initializeBackpackTracking()
@@ -3176,16 +3245,22 @@ local function onHumanoidAdded(humanoid: Humanoid)
 		stopSprinting(true)
 		if invertedControlState.active then disableInvertedControls() end
 	hardEnableDefaultControls()
+resetMovementState(humanoid)
 end)
 
 	applyInvertedControlState()
+	-- Reset any stuck inputs immediately and shortly after spawn
+	resetMovementState(humanoid)
+	task.delay(0.20, function() resetMovementState(humanoid) end)
+	task.delay(0.60, function() resetMovementState(humanoid) end)
 	-- safety: if not inverted after spawn, re-enable defaults
 	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end
 
 local function onCharacterAdded(character: Model)
-	spawnControlsWatchdog(5)
 	resetSprintState()
 	watchCharacterTools(character)
 	updateInventorySlots()
@@ -3207,15 +3282,21 @@ local function onCharacterAdded(character: Model)
 	end
 
 	applyInvertedControlState()
+	-- Reset any stuck inputs immediately and shortly after spawn
+	resetMovementState(humanoid)
+	task.delay(0.20, function() resetMovementState(humanoid) end)
+	task.delay(0.60, function() resetMovementState(humanoid) end)
 	-- safety: if not inverted after spawn, re-enable defaults
 	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(2.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(3.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end
 
 localPlayer.CharacterAdded:Connect(onCharacterAdded)
 
 localPlayer.CharacterRemoving:Connect(function()
-		if invertedControlState and invertedControlState.active then disableInvertedControls() end
+		resetMovementState(humanoid)if invertedControlState and invertedControlState.active then disableInvertedControls() end
 		hardEnableDefaultControls()
 	sprintState.keyboardIntent = false
 	sprintState.touchIntent = false
@@ -3241,7 +3322,6 @@ localPlayer.CharacterRemoving:Connect(function()
 end)
 
 if localPlayer.Character then
-	spawnControlsWatchdog(5)
 	onCharacterAdded(localPlayer.Character)
 else
 	resetSprintState()
@@ -4372,17 +4452,3 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		end
 	end
 end)
-
--- Spawn watchdog: for the first few seconds after spawn, ensure controls aren't stuck disabled
-local function spawnControlsWatchdog(durationSec)
-	local alive = true
-	task.delay(durationSec, function() alive = false end)
-	task.spawn(function()
-		while alive do
-			if not (invertedControlState and invertedControlState.active) then
-				hardEnableDefaultControls()
-			end
-			task.wait(0.5)
-		end
-	end)
-end
