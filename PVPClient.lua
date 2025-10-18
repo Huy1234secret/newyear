@@ -3489,6 +3489,8 @@ local StormEffects = (function()
         depthOfField = nil :: DepthOfFieldEffect?,
         equalizer = nil :: EqualizerSoundEffect?,
         pitchShift = nil :: PitchShiftSoundEffect?,
+        reverb = nil :: ReverbSoundEffect?,
+        originalAmbientReverb = SoundService.AmbientReverb,
         trackedPart = nil :: BasePart?,
         visualActive = false,
         audioActive = false,
@@ -3653,9 +3655,9 @@ local StormEffects = (function()
         if not equalizer or not equalizer.Parent then
             equalizer = Instance.new("EqualizerSoundEffect")
             equalizer.Name = "StormEqualizer"
-            equalizer.LowGain = 6
-            equalizer.MidGain = -3
-            equalizer.HighGain = -12
+            equalizer.LowGain = 8
+            equalizer.MidGain = -10
+            equalizer.HighGain = -18
             equalizer.Priority = 5
             equalizer.Enabled = false
             equalizer.Parent = SoundService
@@ -3674,7 +3676,7 @@ local StormEffects = (function()
         if not pitchShift or not pitchShift.Parent then
             pitchShift = Instance.new("PitchShiftSoundEffect")
             pitchShift.Name = "StormPitchShift"
-            pitchShift.Octave = 0.88
+            pitchShift.Octave = 0.85
             pitchShift.Priority = 5
             pitchShift.Enabled = false
             pitchShift.Parent = SoundService
@@ -3682,6 +3684,27 @@ local StormEffects = (function()
             pitchShift.Parent = SoundService
         end
         state.pitchShift = pitchShift
+
+        local reverb = state.reverb
+        if not reverb then
+            local existingReverb = SoundService:FindFirstChild("StormReverb")
+            if existingReverb and existingReverb:IsA("ReverbSoundEffect") then
+                reverb = existingReverb
+            end
+        end
+        if not reverb or not reverb.Parent then
+            reverb = Instance.new("ReverbSoundEffect")
+            reverb.Name = "StormReverb"
+            reverb.DecayTime = 0.4
+            reverb.DryLevel = -8
+            reverb.WetLevel = -3
+            reverb.Priority = 5
+            reverb.Enabled = false
+            reverb.Parent = SoundService
+        else
+            reverb.Parent = SoundService
+        end
+        state.reverb = reverb
     end
 
     local function startOverlayAnimation()
@@ -3771,6 +3794,14 @@ local StormEffects = (function()
         if pitchShift then
             pitchShift.Enabled = true
         end
+        local reverb = state.reverb
+        if reverb then
+            reverb.Enabled = true
+        end
+        if SoundService.AmbientReverb ~= Enum.ReverbType.Underwater then
+            state.originalAmbientReverb = state.originalAmbientReverb or SoundService.AmbientReverb
+            SoundService.AmbientReverb = Enum.ReverbType.Underwater
+        end
     end
 
     local function disableAudioEffects()
@@ -3781,6 +3812,14 @@ local StormEffects = (function()
         local pitchShift = state.pitchShift
         if pitchShift then
             pitchShift.Enabled = false
+        end
+        local reverb = state.reverb
+        if reverb then
+            reverb.Enabled = false
+        end
+        local originalReverb = state.originalAmbientReverb
+        if originalReverb then
+            SoundService.AmbientReverb = originalReverb
         end
     end
 
