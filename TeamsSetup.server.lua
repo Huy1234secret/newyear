@@ -853,7 +853,7 @@ do
 			local function currentBounds()
 				local stormSize = getStormHorizontalSize() -- Vector2 (X, Z)
 				local halfX, halfZ = stormSize.X * 0.5, stormSize.Y * 0.5
-				local minY, maxY = arenaCenter.Y - 100, arenaCenter.Y + 100
+				local minY, maxY = arenaCenter.Y + 100, arenaCenter.Y + 200
 				return halfX, halfZ, minY, maxY
 			end
 
@@ -1130,6 +1130,7 @@ local function randomXZInArena_DEPRECATED()
 					holdTimer = 0,
 					waypointTimer = 0,
 				}
+				botState.phaseOffset = math.rad(killBotRandom:NextInteger(0, 360))
 
 
 				model.Destroying:Connect(function()
@@ -1173,7 +1174,7 @@ local function randomXZInArena_DEPRECATED()
 						else
 							local dir = offset.Unit
 							-- bobbing on Y for that classic hover feel
-							local bob = math.sin(os.clock() * 4 + (ball:GetDebugId():byte() % 10)) * 2.0
+							local bob = math.sin(os.clock() * 4 + (bot.phaseOffset or 0)) * 2.0
 							local desiredVel = Vector3.new(dir.X, dir.Y, dir.Z) * TRAVEL_MAX_SPEED + Vector3.new(0, bob, 0)
 							local accel = (desiredVel - ball.AssemblyLinearVelocity) * TRAVEL_ACCEL_GAIN
 							-- include gravity cancel
