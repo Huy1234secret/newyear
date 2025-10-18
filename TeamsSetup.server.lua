@@ -670,6 +670,7 @@ do
                 local botState = {
                     part = bot,
                     alive = true,
+                    activeTween = nil :: Tween?,
                 }
                 table.insert(state.bots, botState)
 
@@ -684,14 +685,23 @@ do
                         )
 
                         local travelTime = rng:NextNumber(3, 6)
-                        TweenService:Create(bot, TweenInfo.new(travelTime, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-                            Position = target,
-                        }):Play()
+                        local part = botState.part
+                        if part and part.Parent then
+                            local tween = TweenService:Create(part, TweenInfo.new(travelTime, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+                                CFrame = CFrame.new(target),
+                            })
+                            botState.activeTween = tween
+                            tween:Play()
+                        end
 
                         local elapsed = 0
                         while elapsed < travelTime and botState.alive and roundInProgress and context.roundId == currentRoundId do
                             task.wait(0.2)
                             elapsed += 0.2
+                        end
+
+                        if botState.activeTween and botState.activeTween.PlaybackState ~= Enum.PlaybackState.Playing then
+                            botState.activeTween = nil
                         end
                     end
                 end)
@@ -771,6 +781,10 @@ do
 
             for _, botState in state.bots do
                 botState.alive = false
+                if botState.activeTween then
+                    botState.activeTween:Cancel()
+                    botState.activeTween = nil
+                end
                 if botState.part then
                     botState.part:Destroy()
                 end
@@ -1616,6 +1630,20 @@ local function clearPVPTools(player: Player)
     end
 end
 
+local function findToolByName(root: Instance?, targetName: string): Tool?
+    if not root then
+        return nil
+    end
+
+    for _, descendant in ipairs(root:GetDescendants()) do
+        if descendant:IsA("Tool") and descendant.Name == targetName then
+            return descendant
+        end
+    end
+
+    return nil
+end
+
 local function giveParticipantGear(record: ParticipantRecord)
     local player = record.player
     clearPVPTools(player)
@@ -1637,20 +1665,21 @@ local function giveParticipantGear(record: ParticipantRecord)
         end
     end
 
-    if not gearsFolder then
+    local classicSwordTemplate = findToolByName(gearsFolder, "ClassicSword")
+    if not classicSwordTemplate then
         return
     end
 
-    for _, item in gearsFolder:GetChildren() do
-        if item:IsA("Tool") then
-            local backpackTool = item:Clone()
-            backpackTool:SetAttribute("PVPGenerated", true)
-            backpackTool.Parent = backpack
+    local starterGear = player:FindFirstChild("StarterGear")
 
-            local starterTool = item:Clone()
-            starterTool:SetAttribute("PVPGenerated", true)
-            starterTool.Parent = player.StarterGear
-        end
+    local backpackTool = classicSwordTemplate:Clone()
+    backpackTool:SetAttribute("PVPGenerated", true)
+    backpackTool.Parent = backpack
+
+    if starterGear and starterGear:IsA("Folder") then
+        local starterTool = classicSwordTemplate:Clone()
+        starterTool:SetAttribute("PVPGenerated", true)
+        starterTool.Parent = starterGear
     end
 end
 
@@ -2231,6 +2260,25 @@ local function startRound(player: Player, mapId: string, requestedEventId: strin
 
     local eventContext = setActiveSpecialEvent(resolvedEventId, roundId)
 
+    local randomRevealDuration = 3
+
+    local function dispatchSpecialEventStatus(context: SpecialEventContext?, randomized: boolean)
+        if context then
+            sendStatusUpdate({
+                action = "SpecialEvent",
+                header = "- Special Round -",
+                id = context.definition.id,
+                name = context.definition.displayName,
+                randomized = randomized,
+            })
+        else
+            sendStatusUpdate({
+                action = "SpecialEvent",
+                active = false,
+            })
+        end
+    end
+
     if rolledRandomEvent then
         local eventOptions = {}
         for _, definition in ipairs(specialEventList) do
@@ -2246,24 +2294,22 @@ local function startRound(player: Player, mapId: string, requestedEventId: strin
             options = eventOptions,
             chosenId = if eventContext then eventContext.definition.id else nil,
             chosenName = if eventContext then eventContext.definition.displayName else nil,
-            duration = 3,
+            duration = randomRevealDuration,
         })
+
+        task.delay(randomRevealDuration, function()
+            if not roundInProgress or currentRoundId ~= roundId then
+                return
+            end
+
+            dispatchSpecialEventStatus(eventContext, true)
+        end)
+    else
+        dispatchSpecialEventStatus(eventContext, false)
     end
 
     if eventContext then
-        sendStatusUpdate({
-            action = "SpecialEvent",
-            header = "- Special Round -",
-            id = eventContext.definition.id,
-            name = eventContext.definition.displayName,
-            randomized = rolledRandomEvent,
-        })
         callSpecialEventCallback(eventContext, "onRoundPrepared", config, mapClone)
-    else
-        sendStatusUpdate({
-            action = "SpecialEvent",
-            active = false,
-        })
     end
 
     task.delay(MAP_ANCHOR_DURATION, function()
