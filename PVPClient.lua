@@ -1,6 +1,27 @@
 --!strict
 -- Place this LocalScript in StarterPlayerScripts so each player can see match updates.
 
+
+-- === Safety helper: hard-enable Roblox default controls (idempotent) ===
+local function hardEnableDefaultControls()
+	local player = game:GetService("Players").LocalPlayer
+	local playerScripts = player:FindFirstChildOfClass("PlayerScripts")
+	if not playerScripts then return end
+	local pm = playerScripts:FindFirstChild("PlayerModule")
+	if not pm then return end
+	local ok, PlayerModule = pcall(function() return require(pm) end)
+	if not ok or not PlayerModule then return end
+	local controlsOk, controls = pcall(function() return PlayerModule:GetControls() end)
+	if controlsOk and controls then
+		pcall(function() controls:Enable() end)
+	end
+	-- Also release any ContextAction "Disable" binds commonly used by inverted code
+	pcall(function()
+		game:GetService("ContextActionService"):UnbindAction("DisableMovement")
+		game:GetService("ContextActionService"):UnbindAction("Inverted_Move")
+		game:GetService("ContextActionService"):UnbindAction("Inverted_Look")
+	end)
+end
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1701,6 +1722,8 @@ local function trackPlayerForHighlights(targetPlayer: Player)
 	end)
 
 	connections[#connections + 1] = targetPlayer.CharacterRemoving:Connect(function()
+		if invertedControlState and invertedControlState.active then disableInvertedControls() end
+		hardEnableDefaultControls()
 		removeHighlightForPlayer(targetPlayer)
 	end)
 
@@ -2366,6 +2389,9 @@ local function enableInvertedControls()
 end
 
 local function applyInvertedControlState()
+	-- safety: if not inverted after spawn, re-enable defaults
+	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 	local shouldEnable = invertedControlState.requested and localPlayer.Neutral
 	if shouldEnable then
 		enableInvertedControls()
@@ -2381,6 +2407,9 @@ end
 local function setInvertedControlsEnabled(enabled: boolean)
 	invertedControlState.requested = enabled
 	applyInvertedControlState()
+	-- safety: if not inverted after spawn, re-enable defaults
+	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end
 
 local function getSprintActionButton(): ImageButton?
@@ -3043,12 +3072,18 @@ localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
 	updateHighlightActivation()
 	setSprintEventDisabled(specialEventState.effects.sprintDisabled)
 	applyInvertedControlState()
+	-- safety: if not inverted after spawn, re-enable defaults
+	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end)
 
 localPlayer:GetPropertyChangedSignal("Neutral"):Connect(function()
 	updateHighlightActivation()
 	setSprintEventDisabled(specialEventState.effects.sprintDisabled)
 	applyInvertedControlState()
+	-- safety: if not inverted after spawn, re-enable defaults
+	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end)
 
 initializeBackpackTracking()
@@ -3139,15 +3174,18 @@ local function onHumanoidAdded(humanoid: Humanoid)
 		sprintState.touchIntent = false
 		recomputeSprintIntent()
 		stopSprinting(true)
-		if invertedControlState.active then
-			resetInvertedMovement()
-		end
-	end)
+		if invertedControlState.active then disableInvertedControls() end
+	hardEnableDefaultControls()
+end)
 
 	applyInvertedControlState()
+	-- safety: if not inverted after spawn, re-enable defaults
+	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end
 
-local function onCharacterAdded(character: Model)
+local function spawnControlsWatchdog(5)
+	onCharacterAdded(character: Model)
 	resetSprintState()
 	watchCharacterTools(character)
 	updateInventorySlots()
@@ -3169,11 +3207,16 @@ local function onCharacterAdded(character: Model)
 	end
 
 	applyInvertedControlState()
+	-- safety: if not inverted after spawn, re-enable defaults
+	task.delay(0.2, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
+	task.delay(1.0, function() if not (invertedControlState and invertedControlState.active) then hardEnableDefaultControls() end end)
 end
 
 localPlayer.CharacterAdded:Connect(onCharacterAdded)
 
 localPlayer.CharacterRemoving:Connect(function()
+		if invertedControlState and invertedControlState.active then disableInvertedControls() end
+		hardEnableDefaultControls()
 	sprintState.keyboardIntent = false
 	sprintState.touchIntent = false
 	recomputeSprintIntent()
@@ -3187,9 +3230,7 @@ localPlayer.CharacterRemoving:Connect(function()
 		humanoidSprintBonusConn = nil
 	end
 	currentHumanoid = nil
-	if invertedControlState.active then
-		resetInvertedMovement()
-	end
+	if invertedControlState.active then disableInvertedControls() end
 	enableDefaultControlsIfDisabled()
 	if characterGearConn then
 		characterGearConn:Disconnect()
@@ -3200,6 +3241,7 @@ localPlayer.CharacterRemoving:Connect(function()
 end)
 
 if localPlayer.Character then
+	spawnControlsWatchdog(5)
 	onCharacterAdded(localPlayer.Character)
 else
 	resetSprintState()
@@ -4168,7 +4210,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		statusUI.stroke.Transparency = 0
 		statusUI.label.TextColor3 = matchColor
 		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
-		statusUI.label.Text = "Sudden Death"
+		statusUI.label.Text = "Death Match"
 		statusUI.frame.BackgroundTransparency = 1
 		statusUI.labelStroke.Transparency = 0
 
@@ -4182,7 +4224,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
 			deathMatchHighlightActive = true
 			stopDeathMatchTransition()
 			statusUI.frame.Visible = true
-			statusUI.label.Text = "Sudden Death"
+			statusUI.label.Text = "Death Match"
 			startDeathMatchEffect()
 		else
 			deathMatchHighlightActive = false
@@ -4330,3 +4372,17 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		end
 	end
 end)
+
+-- Spawn watchdog: for the first few seconds after spawn, ensure controls aren't stuck disabled
+local function spawnControlsWatchdog(durationSec)
+	local alive = true
+	task.delay(durationSec, function() alive = false end)
+	task.spawn(function()
+		while alive do
+			if not (invertedControlState and invertedControlState.active) then
+				hardEnableDefaultControls()
+			end
+			task.wait(0.5)
+		end
+	end)
+end
