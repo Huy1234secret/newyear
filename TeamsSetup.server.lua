@@ -58,6 +58,7 @@ local DEATHMATCH_TRANSITION_DURATION = 3
 local DEATHMATCH_MUSIC_ID = "117047384857700"
 local STORM_MIN_HORIZONTAL_SIZE = 200
 local MAP_ANCHOR_DURATION = 5
+local HOT_TOUCH_TAG_SOUND_ID = "rbxassetid://2866718318"
 
 local remotesFolder = ReplicatedStorage:FindFirstChild("PVPRemotes")
 if not remotesFolder then
@@ -915,6 +916,69 @@ do
             }
             state.HotTouch = hotState
 
+            local function broadcastSelecting()
+                sendStatusUpdate({
+                    action = "HotTouchStatus",
+                    state = "Selecting",
+                })
+            end
+
+            local function playTagSound(record: ParticipantRecord)
+                local character = record.player.Character
+                if not character then
+                    return
+                end
+
+                local rootPart = character:FindFirstChild("HumanoidRootPart")
+                if not rootPart or not rootPart:IsA("BasePart") then
+                    return
+                end
+
+                local sound = Instance.new("Sound")
+                sound.Name = "HotTouchTagSound"
+                sound.SoundId = HOT_TOUCH_TAG_SOUND_ID
+                sound.RollOffMode = Enum.RollOffMode.Linear
+                sound.RollOffMaxDistance = 100
+                sound.RollOffMinDistance = 15
+                sound.EmitterSize = 10
+                sound.Volume = 1
+                sound.Parent = rootPart
+                sound:Play()
+                Debris:AddItem(sound, 4)
+            end
+
+            local function broadcastHolder(record: ParticipantRecord)
+                local player = record.player
+                sendStatusUpdate({
+                    action = "HotTouchStatus",
+                    state = "Holder",
+                    userId = player.UserId,
+                    name = player.Name,
+                    displayName = player.DisplayName,
+                })
+                sendStatusUpdate({
+                    action = "HotTouchTagged",
+                    userId = player.UserId,
+                })
+                playTagSound(record)
+            end
+
+            local function broadcastCompletion(winner: ParticipantRecord?)
+                local payload: {[string]: any} = {
+                    action = "HotTouchStatus",
+                    state = "Complete",
+                }
+
+                if winner and winner.player then
+                    local player = winner.player
+                    payload.userId = player.UserId
+                    payload.name = player.Name
+                    payload.displayName = player.DisplayName
+                end
+
+                sendStatusUpdate(payload)
+            end
+
             sendStatusUpdate({
                 action = "MatchMessage",
                 text = "Survive",
@@ -1134,6 +1198,9 @@ do
                         updateHolderVisual(newRecord, true)
                         updateTimerVisual()
                         attachHolderConnections(newRecord)
+                        broadcastHolder(newRecord)
+                    else
+                        broadcastSelecting()
                     end
                     return
                 end
@@ -1147,6 +1214,9 @@ do
                     updateHolderVisual(newRecord, true)
                     updateTimerVisual()
                     attachHolderConnections(newRecord)
+                    broadcastHolder(newRecord)
+                else
+                    broadcastSelecting()
                 end
             end
 
@@ -1164,8 +1234,10 @@ do
                 end
 
                 if #candidates <= 1 then
+                    local winner = if #candidates == 1 then candidates[1] else nil
                     setHolder(nil, false)
                     hotState.running = false
+                    broadcastCompletion(winner)
                     return
                 end
 
@@ -1174,6 +1246,7 @@ do
                 setHolder(chosen, true)
             end
 
+            broadcastSelecting()
             selectNextHolder()
 
             task.spawn(function()
@@ -1212,6 +1285,10 @@ do
                 hotState.running = false
                 detachHolder(hotState.holder)
                 hotState.holder = nil
+                sendStatusUpdate({
+                    action = "HotTouchStatus",
+                    state = "Clear",
+                })
             end
         end,
         onParticipantEliminated = function(context, record)
@@ -2447,10 +2524,6 @@ local function startRound(player: Player, mapId: string, requestedEventId: strin
         dispatchSpecialEventStatus(eventContext, false)
     end
 
-    if eventContext then
-        callSpecialEventCallback(eventContext, "onRoundPrepared", config, mapClone)
-    end
-
     task.delay(MAP_ANCHOR_DURATION, function()
         for part, wasAnchored in originalAnchoredStates do
             if part.Parent then
@@ -2567,6 +2640,10 @@ local function startRound(player: Player, mapId: string, requestedEventId: strin
                 disableParticipantHealing(record)
             end
         end
+    end
+
+    if activeSpecialEvent then
+        callSpecialEventCallback(activeSpecialEvent, "onRoundPrepared", config, mapClone)
     end
 
     callSpecialEventCallback(activeSpecialEvent, "onCountdownComplete")
