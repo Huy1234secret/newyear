@@ -1113,15 +1113,17 @@ do
                 rocket.CanTouch = true
                 rocket.Anchored = false
 
-                local launchOrigin = ball.Position + (ball.CFrame.LookVector * 2)
+                local launchOrigin = ball.Position
                 local targetPosition = targetHRP.Position
                 local toTarget = targetPosition - launchOrigin
                 if toTarget.Magnitude == 0 then
                     toTarget = ball.CFrame.LookVector
+                    targetPosition = launchOrigin + toTarget
                 end
                 local targetDirection = toTarget.Unit
+                local spawnPosition = launchOrigin + targetDirection * 2
 
-                rocket.CFrame = CFrame.lookAt(launchOrigin, launchOrigin + targetDirection)
+                rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + targetDirection)
                 rocket.Parent = Workspace
                 rocket:SetNetworkOwner(nil)
 
