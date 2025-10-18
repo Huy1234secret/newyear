@@ -359,6 +359,26 @@ local function getNeutralParticipantRecords(): {ParticipantRecord}
     return records
 end
 
+local function clearPVPTools(player: Player)
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    if backpack then
+        for _, tool in backpack:GetChildren() do
+            if tool:GetAttribute("PVPGenerated") then
+                tool:Destroy()
+            end
+        end
+    end
+
+    local starterGear = player:FindFirstChild("StarterGear")
+    if starterGear then
+        for _, tool in starterGear:GetChildren() do
+            if tool:GetAttribute("PVPGenerated") then
+                tool:Destroy()
+            end
+        end
+    end
+end
+
 local function getParticipantFromPlayer(targetPlayer: Player): ParticipantRecord?
     local record = participantRecords[targetPlayer]
     if record and record.roundId == currentRoundId then
@@ -836,8 +856,9 @@ do
             local SEEK_STRENGTH = 0.55
             local LOS_CHECK = true
 
-            local ROCKET_SPEED = 90
-            local ROCKET_LIFETIME = 6
+            local ROCKET_SPEED = 55
+            local ROCKET_LIFETIME = 12
+            local ROCKET_ARM_DELAY = 0.3
             local ROCKET_BLAST_RADIUS = 12
             local ROCKET_BASE_DAMAGE = 55
             local ROCKET_KNOCKBACK = 60
@@ -1107,6 +1128,7 @@ do
                 local detonated = false
                 local touchedConn: RBXScriptConnection? = nil
                 local destroyingConn: RBXScriptConnection? = nil
+                local spawnTime = os.clock()
 
                 rocket.AssemblyLinearVelocity = targetDirection * ROCKET_SPEED
 
@@ -1143,12 +1165,33 @@ do
                     end
                 end
 
+                local function shouldIgnoreHit(hit: Instance?): boolean
+                    if not hit then
+                        return true
+                    end
+
+                    if hit:IsDescendantOf(rocket) then
+                        return true
+                    end
+
+                    local model = botState.model
+                    if model and hit:IsDescendantOf(model) then
+                        return true
+                    end
+
+                    return false
+                end
+
                 touchedConn = rocket.Touched:Connect(function(hit)
                     if detonated then
                         return
                     end
 
-                    if hit and hit:IsDescendantOf(rocket) then
+                    if shouldIgnoreHit(hit) then
+                        return
+                    end
+
+                    if os.clock() - spawnTime < ROCKET_ARM_DELAY then
                         return
                     end
 
@@ -1159,7 +1202,16 @@ do
                     disconnectAll()
                 end)
 
-                task.delay(ROCKET_LIFETIME, explode)
+                task.delay(ROCKET_LIFETIME, function()
+                    if detonated then
+                        return
+                    end
+
+                    disconnectAll()
+                    if rocket.Parent then
+                        rocket:Destroy()
+                    end
+                end)
                 Debris:AddItem(rocket, ROCKET_LIFETIME + 1)
 
                 table.insert(state.rockets, function()
@@ -2163,26 +2215,6 @@ local function cleanupParticipant(player: Player)
     end
 
     participantRecords[player] = nil
-end
-
-local function clearPVPTools(player: Player)
-    local backpack = player:FindFirstChildOfClass("Backpack")
-    if backpack then
-        for _, tool in backpack:GetChildren() do
-            if tool:GetAttribute("PVPGenerated") then
-                tool:Destroy()
-            end
-        end
-    end
-
-    local starterGear = player:FindFirstChild("StarterGear")
-    if starterGear then
-        for _, tool in starterGear:GetChildren() do
-            if tool:GetAttribute("PVPGenerated") then
-                tool:Destroy()
-            end
-        end
-    end
 end
 
 local function findToolByName(root: Instance?, targetName: string): Tool?

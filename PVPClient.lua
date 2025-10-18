@@ -1255,6 +1255,25 @@ type InvisibleCharacterFadeBundle = {
 
 local invisibleCharacterFades: {[Model]: InvisibleCharacterFadeBundle} = {}
 
+local invisibleHumanoidNameDisplay: {[Humanoid]: Enum.HumanoidDisplayDistanceType} = {}
+
+local function setHumanoidNameHidden(humanoid: Humanoid, hidden: boolean)
+    if hidden then
+        if not invisibleHumanoidNameDisplay[humanoid] then
+            invisibleHumanoidNameDisplay[humanoid] = humanoid.DisplayDistanceType
+        end
+        humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+    else
+        local previous = invisibleHumanoidNameDisplay[humanoid]
+        invisibleHumanoidNameDisplay[humanoid] = nil
+        if previous then
+            humanoid.DisplayDistanceType = previous
+        elseif humanoid.DisplayDistanceType == Enum.HumanoidDisplayDistanceType.None then
+            humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+        end
+    end
+end
+
 local function forEachVisibleCharacterPart(character: Model, handler: (BasePart) -> ())
     for _, descendant in character:GetDescendants() do
         if descendant:IsA("BasePart") then
@@ -1732,7 +1751,7 @@ local function updateHighlightActivation()
     local team = localPlayer.Team
     if team and team.Name == "Spectate" then
         desiredContext = "Spectate"
-    elseif deathMatchHighlightActive and localPlayer.Neutral then
+    elseif deathMatchHighlightActive and localPlayer.Neutral and not invisibilityState.enabled then
         desiredContext = "DeathMatch"
     end
 
@@ -1914,11 +1933,21 @@ local function clearInvisibleHighlight(character: Model)
         highlight:Destroy()
     end
     cancelInvisibleCharacterFade(character)
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        setHumanoidNameHidden(humanoid, false)
+    end
 end
 
 local function applyCharacterInvisibility(character: Model, enabled: boolean, owner: Player?)
     local targetTransparency = computeInvisibilityTransparency(enabled, owner)
     local bundle = invisibleCharacterFades[character]
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        setHumanoidNameHidden(humanoid, enabled)
+    end
 
     if not enabled then
         cancelInvisibleCharacterFade(character, targetTransparency)
@@ -1962,6 +1991,8 @@ local function clearInvisibilityTracking()
             clearInvisibleHighlight(player.Character)
         end
     end
+
+    table.clear(invisibleHumanoidNameDisplay)
 end
 
 local function trackPlayerForInvisibility(player: Player)
@@ -1993,7 +2024,7 @@ local function updateInvisiblePulseState()
     invisibilityState.pulseToken += 1
     local token = invisibilityState.pulseToken
 
-    if not invisibilityState.enabled or deathMatchHighlightActive then
+    if not invisibilityState.enabled then
         for _, player in Players:GetPlayers() do
             local character = player.Character
             if character then
@@ -2010,7 +2041,7 @@ local function updateInvisiblePulseState()
     end
 
     task.spawn(function()
-        while invisibilityState.enabled and not deathMatchHighlightActive and invisibilityState.pulseToken == token do
+        while invisibilityState.enabled and invisibilityState.pulseToken == token do
             for _, player in Players:GetPlayers() do
                 if player.Neutral then
                     local character = player.Character
@@ -2051,7 +2082,7 @@ local function updateInvisiblePulseState()
             end)
 
             local elapsed = 0
-            while elapsed < 5 and invisibilityState.enabled and not deathMatchHighlightActive and invisibilityState.pulseToken == token do
+            while elapsed < 5 and invisibilityState.enabled and invisibilityState.pulseToken == token do
                 task.wait(0.2)
                 elapsed += 0.2
             end
@@ -2069,6 +2100,9 @@ local function setInvisibilityEnabled(enabled: boolean)
         updateInvisiblePulseState()
         for _, player in Players:GetPlayers() do
             updateInvisibilityForPlayer(player)
+        end
+        if updateHighlightActivation then
+            updateHighlightActivation()
         end
         return
     end
@@ -2095,6 +2129,11 @@ local function setInvisibilityEnabled(enabled: boolean)
                     end
                     invisibilityState.playerConnections[player] = nil
                 end
+
+                local character = player.Character
+                if character then
+                    clearInvisibleHighlight(character)
+                end
             end)
         end
     else
@@ -2111,6 +2150,9 @@ local function setInvisibilityEnabled(enabled: boolean)
     end
 
     updateInvisiblePulseState()
+    if updateHighlightActivation then
+        updateHighlightActivation()
+    end
 end
 
 local function resetInvertedMovement()
@@ -2226,13 +2268,13 @@ local function disableInvertedControls()
 end
 
 local function enableInvertedControls()
-    if invertedControlState.active then
-        return
-    end
-
     disableDefaultControls()
 
     resetInvertedMovement()
+
+    if invertedControlState.active then
+        return
+    end
 
     local function onInputBegan(input: InputObject, processed: boolean)
         if processed then
@@ -3973,25 +4015,16 @@ local StormEffects = (function()
     end
 
     local function updateExposure(visualActive: boolean, audioActive: boolean)
-        if visualActive ~= state.visualActive then
-            state.visualActive = visualActive
-
-            if visualActive then
-                enableVisualEffects()
-            else
-                disableVisualEffects()
-            end
+        if state.visualActive or visualActive then
+            disableVisualEffects()
         end
 
-        if audioActive ~= state.audioActive then
-            state.audioActive = audioActive
-
-            if audioActive then
-                enableAudioEffects()
-            else
-                disableAudioEffects()
-            end
+        if state.audioActive or audioActive then
+            disableAudioEffects()
         end
+
+        state.visualActive = false
+        state.audioActive = false
     end
 
     local function refreshPartReference()
