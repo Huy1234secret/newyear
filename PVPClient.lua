@@ -78,6 +78,18 @@ local mapDisplayNames = {
     Doomspire = "Doomspire",
 }
 
+local function createInstance(className: string, props: {[string]: any})
+    local instance = Instance.new(className)
+    for key, value in pairs(props) do
+        if key == "Parent" then
+            instance.Parent = value
+        else
+            instance[key] = value
+        end
+    end
+    return instance
+end
+
 local playerModule: any = nil
 local playerControls: any = nil
 
@@ -290,24 +302,27 @@ statusUI.frame.Visible = false
 statusUI.frame.ZIndex = 10
 statusUI.frame.Parent = screenGui
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 12)
-corner.Parent = statusUI.frame
+createInstance("UICorner", {
+    CornerRadius = UDim.new(0, 12),
+    Parent = statusUI.frame,
+})
 
-statusUI.stroke = Instance.new("UIStroke")
-statusUI.stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-statusUI.stroke.Thickness = 2
-statusUI.stroke.Color = Color3.fromRGB(120, 135, 200)
-statusUI.stroke.Transparency = 0.35
-statusUI.stroke.Parent = statusUI.frame
+statusUI.stroke = createInstance("UIStroke", {
+    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    Thickness = 2,
+    Color = Color3.fromRGB(120, 135, 200),
+    Transparency = 0.35,
+    Parent = statusUI.frame,
+})
 
-local padding = Instance.new("UIPadding")
-padding.PaddingLeft = UDim.new(0, 16)
-padding.PaddingRight = UDim.new(0, 16)
-padding.Parent = statusUI.frame
+createInstance("UIPadding", {
+    PaddingLeft = UDim.new(0, 16),
+    PaddingRight = UDim.new(0, 16),
+    Parent = statusUI.frame,
+})
 
-statusUI.label = Instance.new("TextLabel")
-statusUI.label.Name = "StatusLabel"
+statusUI.label = createInstance("TextLabel", {
+    Name = "StatusLabel",
 local statusLabelOffset = math.floor((UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING) * 0.5)
 statusUI.label.Size = UDim2.new(1, -(UI_CONFIG.MAP_LABEL_WIDTH + UI_CONFIG.MAP_LABEL_PADDING), 1, 0)
 statusUI.label.BackgroundTransparency = 1
@@ -320,94 +335,103 @@ statusUI.label.TextColor3 = Color3.fromRGB(245, 245, 255)
 statusUI.label.TextXAlignment = Enum.TextXAlignment.Center
 statusUI.label.TextYAlignment = Enum.TextYAlignment.Center
 statusUI.label.ZIndex = 11
-statusUI.label.Parent = statusUI.frame
+    Parent = statusUI.frame,
+})
 
-statusUI.labelStroke = Instance.new("UIStroke")
-statusUI.labelStroke.Color = Color3.fromRGB(20, 20, 35)
-statusUI.labelStroke.Thickness = 2
-statusUI.labelStroke.Transparency = 0.3
-statusUI.labelStroke.Parent = statusUI.label
+statusUI.labelStroke = createInstance("UIStroke", {
+    Color = Color3.fromRGB(20, 20, 35),
+    Thickness = 2,
+    Transparency = 0.3,
+    Parent = statusUI.label,
+})
 
-local createdMapLabel = Instance.new("TextLabel")
-createdMapLabel.Name = "MapLabel"
-createdMapLabel.Size = UDim2.new(0, UI_CONFIG.MAP_LABEL_WIDTH, 1, 0)
-createdMapLabel.AnchorPoint = Vector2.new(1, 0.5)
-createdMapLabel.Position = UDim2.new(1, -math.floor(UI_CONFIG.MAP_LABEL_PADDING * 0.5), 0.5, 0)
-createdMapLabel.BackgroundTransparency = 1
-createdMapLabel.Font = Enum.Font.GothamSemibold
-createdMapLabel.Text = ""
-createdMapLabel.TextSize = math.max(16, UI_CONFIG.DEFAULT_TEXT_SIZE - 4)
-createdMapLabel.TextColor3 = Color3.fromRGB(210, 230, 255)
-createdMapLabel.TextXAlignment = Enum.TextXAlignment.Right
-createdMapLabel.TextYAlignment = Enum.TextYAlignment.Center
-createdMapLabel.ZIndex = statusUI.label.ZIndex
-createdMapLabel.Visible = false
-createdMapLabel.Parent = statusUI.frame
-uiRefs.mapLabel = createdMapLabel
+uiRefs.mapLabel = createInstance("TextLabel", {
+    Name = "MapLabel",
+    Size = UDim2.new(0, UI_CONFIG.MAP_LABEL_WIDTH, 1, 0),
+    AnchorPoint = Vector2.new(1, 0.5),
+    Position = UDim2.new(1, -math.floor(UI_CONFIG.MAP_LABEL_PADDING * 0.5), 0.5, 0),
+    BackgroundTransparency = 1,
+    Font = Enum.Font.GothamSemibold,
+    Text = "",
+    TextSize = math.max(16, UI_CONFIG.DEFAULT_TEXT_SIZE - 4),
+    TextColor3 = Color3.fromRGB(210, 230, 255),
+    TextXAlignment = Enum.TextXAlignment.Right,
+    TextYAlignment = Enum.TextYAlignment.Center,
+    ZIndex = statusUI.label.ZIndex,
+    Visible = false,
+    Parent = statusUI.frame,
+})
 
 local specialEventUI = {}
-specialEventUI.frame = Instance.new("Frame")
-specialEventUI.frame.Name = "SpecialEventFrame"
-specialEventUI.frame.Size = UDim2.fromOffset(360, 160)
-specialEventUI.frame.AnchorPoint = Vector2.new(0.5, 0.5)
-specialEventUI.frame.Position = UDim2.new(0.5, 0, 0.35, 0)
-specialEventUI.frame.BackgroundColor3 = Color3.fromRGB(28, 32, 45)
-specialEventUI.frame.BackgroundTransparency = 1
-specialEventUI.frame.Visible = false
-specialEventUI.frame.ZIndex = 40
-specialEventUI.frame.Parent = screenGui
-
-local specialEventCorner = Instance.new("UICorner")
-specialEventCorner.CornerRadius = UDim.new(0, 14)
-specialEventCorner.Parent = specialEventUI.frame
-
-specialEventUI.stroke = Instance.new("UIStroke")
-specialEventUI.stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-specialEventUI.stroke.Thickness = 2
-specialEventUI.stroke.Color = Color3.fromRGB(120, 135, 200)
-specialEventUI.stroke.Transparency = 0.35
-specialEventUI.stroke.Parent = specialEventUI.frame
-
-specialEventUI.gradient = Instance.new("UIGradient")
-specialEventUI.gradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 55, 80)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 32, 45)),
+specialEventUI.frame = createInstance("Frame", {
+    Name = "SpecialEventFrame",
+    Size = UDim2.fromOffset(360, 160),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0.5, 0, 0.35, 0),
+    BackgroundColor3 = Color3.fromRGB(28, 32, 45),
+    BackgroundTransparency = 1,
+    Visible = false,
+    ZIndex = 40,
+    Parent = screenGui,
 })
-specialEventUI.gradient.Rotation = 90
-specialEventUI.gradient.Parent = specialEventUI.frame
 
-specialEventUI.header = Instance.new("TextLabel")
-specialEventUI.header.Name = "Header"
-specialEventUI.header.Size = UDim2.new(1, -40, 0, 42)
-specialEventUI.header.Position = UDim2.new(0, 20, 0, 18)
-specialEventUI.header.BackgroundTransparency = 1
-specialEventUI.header.Font = Enum.Font.GothamBold
-specialEventUI.header.Text = "- Special Round -"
-specialEventUI.header.TextScaled = false
-specialEventUI.header.TextSize = if isTouchDevice then 22 else 24
-specialEventUI.header.TextColor3 = Color3.fromRGB(245, 245, 255)
-specialEventUI.header.TextXAlignment = Enum.TextXAlignment.Center
-specialEventUI.header.TextYAlignment = Enum.TextYAlignment.Center
-specialEventUI.header.ZIndex = specialEventUI.frame.ZIndex + 1
-specialEventUI.header.Parent = specialEventUI.frame
+createInstance("UICorner", {
+    CornerRadius = UDim.new(0, 14),
+    Parent = specialEventUI.frame,
+})
 
-specialEventUI.title = Instance.new("TextLabel")
-specialEventUI.title.Name = "Title"
-specialEventUI.title.Size = UDim2.new(1, -60, 0, 60)
-specialEventUI.title.Position = UDim2.new(0, 30, 0, 70)
-specialEventUI.title.BackgroundTransparency = 1
-specialEventUI.title.Font = Enum.Font.GothamBlack
-specialEventUI.title.Text = ""
-specialEventUI.title.TextScaled = true
-specialEventUI.title.TextWrapped = true
-specialEventUI.title.TextColor3 = Color3.fromRGB(255, 255, 255)
-specialEventUI.title.ZIndex = specialEventUI.frame.ZIndex + 1
-specialEventUI.title.Parent = specialEventUI.frame
+specialEventUI.stroke = createInstance("UIStroke", {
+    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    Thickness = 2,
+    Color = Color3.fromRGB(120, 135, 200),
+    Transparency = 0.35,
+    Parent = specialEventUI.frame,
+})
 
-specialEventUI.scale = Instance.new("UIScale")
-specialEventUI.scale.Name = "Scale"
-specialEventUI.scale.Scale = 1
-specialEventUI.scale.Parent = specialEventUI.frame
+specialEventUI.gradient = createInstance("UIGradient", {
+    Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 55, 80)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 32, 45)),
+    }),
+    Rotation = 90,
+    Parent = specialEventUI.frame,
+})
+
+specialEventUI.header = createInstance("TextLabel", {
+    Name = "Header",
+    Size = UDim2.new(1, -40, 0, 42),
+    Position = UDim2.new(0, 20, 0, 18),
+    BackgroundTransparency = 1,
+    Font = Enum.Font.GothamBold,
+    Text = "- Special Round -",
+    TextScaled = false,
+    TextSize = if isTouchDevice then 22 else 24,
+    TextColor3 = Color3.fromRGB(245, 245, 255),
+    TextXAlignment = Enum.TextXAlignment.Center,
+    TextYAlignment = Enum.TextYAlignment.Center,
+    ZIndex = specialEventUI.frame.ZIndex + 1,
+    Parent = specialEventUI.frame,
+})
+
+specialEventUI.title = createInstance("TextLabel", {
+    Name = "Title",
+    Size = UDim2.new(1, -60, 0, 60),
+    Position = UDim2.new(0, 30, 0, 70),
+    BackgroundTransparency = 1,
+    Font = Enum.Font.GothamBlack,
+    Text = "",
+    TextScaled = true,
+    TextWrapped = true,
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    ZIndex = specialEventUI.frame.ZIndex + 1,
+    Parent = specialEventUI.frame,
+})
+
+specialEventUI.scale = createInstance("UIScale", {
+    Name = "Scale",
+    Scale = 1,
+    Parent = specialEventUI.frame,
+})
 
 local viewportWidth = 1024
 do
@@ -442,119 +466,133 @@ local energyTextWidth = if isTouchDevice then 80 else 92
 local estimatedInventoryHeight = if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then inventoryHeight elseif isTouchDevice then math.max(48, math.floor(slotSize * 1.15)) else 0
 local sprintBottomOffset = inventoryBottomMargin + estimatedInventoryHeight + energyContainerGap
 
-local sprintContainer = Instance.new("Frame")
-sprintContainer.Name = "SprintEnergyContainer"
-sprintContainer.Size = UDim2.fromOffset(inventoryWidth, sprintContainerHeight)
-sprintContainer.Position = UDim2.new(0.5, 0, 1, -sprintBottomOffset)
-sprintContainer.AnchorPoint = Vector2.new(0.5, 1)
-sprintContainer.BackgroundTransparency = 1
-sprintContainer.ZIndex = 5
-sprintContainer.Parent = screenGui
-
-local sprintPadding = Instance.new("UIPadding")
-sprintPadding.PaddingTop = UDim.new(0, energyTopPadding)
-sprintPadding.PaddingBottom = UDim.new(0, energyBottomPadding)
-sprintPadding.PaddingLeft = UDim.new(0, 8)
-sprintPadding.PaddingRight = UDim.new(0, 8)
-sprintPadding.Parent = sprintContainer
-
-uiRefs.sprintStatusLabel = Instance.new("TextLabel")
-uiRefs.sprintStatusLabel.Name = "SprintStatus"
-uiRefs.sprintStatusLabel.Size = UDim2.new(1, -8, 0, energyLabelHeight)
-uiRefs.sprintStatusLabel.Position = UDim2.new(0.5, 0, 0, 0)
-uiRefs.sprintStatusLabel.AnchorPoint = Vector2.new(0.5, 0)
-uiRefs.sprintStatusLabel.BackgroundTransparency = 1
-uiRefs.sprintStatusLabel.Font = Enum.Font.GothamSemibold
-uiRefs.sprintStatusLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
-uiRefs.sprintStatusLabel.TextSize = isTouchDevice and 14 or 16
-uiRefs.sprintStatusLabel.TextScaled = false
-uiRefs.sprintStatusLabel.Text = "Sprint OFF"
-uiRefs.sprintStatusLabel.ZIndex = 7
-uiRefs.sprintStatusLabel.Parent = sprintContainer
-
-local sprintBackground = Instance.new("Frame")
-sprintBackground.Name = "EnergyBackground"
-sprintBackground.Size = UDim2.new(1, -16, 0, energyBarHeight)
-sprintBackground.Position = UDim2.new(0.5, 0, 0, energyLabelHeight + energySpacing)
-sprintBackground.AnchorPoint = Vector2.new(0.5, 0)
-sprintBackground.BackgroundColor3 = Color3.fromRGB(34, 52, 82)
-sprintBackground.BackgroundTransparency = 0.15
-sprintBackground.Parent = sprintContainer
-
-local sprintBackgroundCorner = Instance.new("UICorner")
-sprintBackgroundCorner.CornerRadius = UDim.new(0, 10)
-sprintBackgroundCorner.Parent = sprintBackground
-
-local sprintBackgroundStroke = Instance.new("UIStroke")
-sprintBackgroundStroke.Thickness = 1.5
-sprintBackgroundStroke.Transparency = 0.35
-sprintBackgroundStroke.Color = Color3.fromRGB(80, 130, 200)
-sprintBackgroundStroke.Parent = sprintBackground
-
-local energyFillContainer = Instance.new("Frame")
-energyFillContainer.Name = "EnergyFill"
-energyFillContainer.AnchorPoint = Vector2.new(0, 0.5)
-energyFillContainer.Position = UDim2.new(0, 6, 0.5, 0)
-energyFillContainer.Size = UDim2.new(1, -(energyTextWidth + 20), 1, 0)
-energyFillContainer.BackgroundTransparency = 1
-energyFillContainer.ClipsDescendants = true
-energyFillContainer.Parent = sprintBackground
-
-local energyFillBackground = Instance.new("Frame")
-energyFillBackground.Name = "EnergyFillBackground"
-energyFillBackground.Size = UDim2.new(1, 0, 1, 0)
-energyFillBackground.BackgroundColor3 = Color3.fromRGB(52, 80, 130)
-energyFillBackground.BackgroundTransparency = 0.3
-energyFillBackground.Parent = energyFillContainer
-
-local energyFillBackgroundCorner = Instance.new("UICorner")
-energyFillBackgroundCorner.CornerRadius = UDim.new(0, 7)
-energyFillBackgroundCorner.Parent = energyFillBackground
-
-uiRefs.energyBarFill = Instance.new("Frame")
-uiRefs.energyBarFill.Name = "EnergyFillValue"
-uiRefs.energyBarFill.AnchorPoint = Vector2.new(0, 0.5)
-uiRefs.energyBarFill.Position = UDim2.new(0, 0, 0.5, 0)
-uiRefs.energyBarFill.Size = UDim2.new(1, 0, 1, 0)
-uiRefs.energyBarFill.BackgroundColor3 = Color3.fromRGB(80, 190, 255)
-uiRefs.energyBarFill.Parent = energyFillBackground
-
-local energyFillCorner = Instance.new("UICorner")
-energyFillCorner.CornerRadius = UDim.new(0, 7)
-energyFillCorner.Parent = uiRefs.energyBarFill
-
-local energyFillGradient = Instance.new("UIGradient")
-energyFillGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 190, 255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 240, 200)),
+local sprintContainer = createInstance("Frame", {
+    Name = "SprintEnergyContainer",
+    Size = UDim2.fromOffset(inventoryWidth, sprintContainerHeight),
+    Position = UDim2.new(0.5, 0, 1, -sprintBottomOffset),
+    AnchorPoint = Vector2.new(0.5, 1),
+    BackgroundTransparency = 1,
+    ZIndex = 5,
+    Parent = screenGui,
 })
-energyFillGradient.Parent = uiRefs.energyBarFill
 
-uiRefs.energyTextLabel = Instance.new("TextLabel")
-uiRefs.energyTextLabel.Name = "EnergyText"
-uiRefs.energyTextLabel.AnchorPoint = Vector2.new(1, 0.5)
-uiRefs.energyTextLabel.Position = UDim2.new(1, -8, 0.5, 0)
-uiRefs.energyTextLabel.Size = UDim2.new(0, energyTextWidth, 0, energyBarHeight)
-uiRefs.energyTextLabel.BackgroundTransparency = 1
-uiRefs.energyTextLabel.Font = Enum.Font.GothamSemibold
-uiRefs.energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
-uiRefs.energyTextLabel.TextScaled = false
-uiRefs.energyTextLabel.TextSize = isTouchDevice and 14 or 15
-uiRefs.energyTextLabel.TextXAlignment = Enum.TextXAlignment.Right
-uiRefs.energyTextLabel.TextYAlignment = Enum.TextYAlignment.Center
-uiRefs.energyTextLabel.Text = "Energy 100%"
-uiRefs.energyTextLabel.Parent = sprintBackground
+createInstance("UIPadding", {
+    PaddingTop = UDim.new(0, energyTopPadding),
+    PaddingBottom = UDim.new(0, energyBottomPadding),
+    PaddingLeft = UDim.new(0, 8),
+    PaddingRight = UDim.new(0, 8),
+    Parent = sprintContainer,
+})
 
-uiRefs.centerCursorImage = Instance.new("ImageLabel")
-uiRefs.centerCursorImage.Name = "ShiftLockCursor"
-uiRefs.centerCursorImage.BackgroundTransparency = 1
-uiRefs.centerCursorImage.AnchorPoint = Vector2.new(0.5, 0.5)
-uiRefs.centerCursorImage.Position = UDim2.fromScale(0.5, 0.5)
-uiRefs.centerCursorImage.Size = UDim2.fromOffset(isTouchDevice and 40 or 48, isTouchDevice and 40 or 48)
-uiRefs.centerCursorImage.Image = GEAR_CURSOR_IMAGE_ASSET
-uiRefs.centerCursorImage.ZIndex = 50
-uiRefs.centerCursorImage.Visible = false
-uiRefs.centerCursorImage.Parent = screenGui
+uiRefs.sprintStatusLabel = createInstance("TextLabel", {
+    Name = "SprintStatus",
+    Size = UDim2.new(1, -8, 0, energyLabelHeight),
+    Position = UDim2.new(0.5, 0, 0, 0),
+    AnchorPoint = Vector2.new(0.5, 0),
+    BackgroundTransparency = 1,
+    Font = Enum.Font.GothamSemibold,
+    TextColor3 = Color3.fromRGB(210, 235, 255),
+    TextSize = isTouchDevice and 14 or 16,
+    TextScaled = false,
+    Text = "Sprint OFF",
+    ZIndex = 7,
+    Parent = sprintContainer,
+})
+
+local sprintBackground = createInstance("Frame", {
+    Name = "EnergyBackground",
+    Size = UDim2.new(1, -16, 0, energyBarHeight),
+    Position = UDim2.new(0.5, 0, 0, energyLabelHeight + energySpacing),
+    AnchorPoint = Vector2.new(0.5, 0),
+    BackgroundColor3 = Color3.fromRGB(34, 52, 82),
+    BackgroundTransparency = 0.15,
+    Parent = sprintContainer,
+})
+
+createInstance("UICorner", {
+    CornerRadius = UDim.new(0, 10),
+    Parent = sprintBackground,
+})
+
+local sprintBackgroundStroke = createInstance("UIStroke", {
+    Thickness = 1.5,
+    Transparency = 0.35,
+    Color = Color3.fromRGB(80, 130, 200),
+    Parent = sprintBackground,
+})
+
+local energyFillContainer = createInstance("Frame", {
+    Name = "EnergyFill",
+    AnchorPoint = Vector2.new(0, 0.5),
+    Position = UDim2.new(0, 6, 0.5, 0),
+    Size = UDim2.new(1, -(energyTextWidth + 20), 1, 0),
+    BackgroundTransparency = 1,
+    ClipsDescendants = true,
+    Parent = sprintBackground,
+})
+
+local energyFillBackground = createInstance("Frame", {
+    Name = "EnergyFillBackground",
+    Size = UDim2.new(1, 0, 1, 0),
+    BackgroundColor3 = Color3.fromRGB(52, 80, 130),
+    BackgroundTransparency = 0.3,
+    Parent = energyFillContainer,
+})
+
+createInstance("UICorner", {
+    CornerRadius = UDim.new(0, 7),
+    Parent = energyFillBackground,
+})
+
+uiRefs.energyBarFill = createInstance("Frame", {
+    Name = "EnergyFillValue",
+    AnchorPoint = Vector2.new(0, 0.5),
+    Position = UDim2.new(0, 0, 0.5, 0),
+    Size = UDim2.new(1, 0, 1, 0),
+    BackgroundColor3 = Color3.fromRGB(80, 190, 255),
+    Parent = energyFillBackground,
+})
+
+createInstance("UICorner", {
+    CornerRadius = UDim.new(0, 7),
+    Parent = uiRefs.energyBarFill,
+})
+
+local energyFillGradient = createInstance("UIGradient", {
+    Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 190, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 240, 200)),
+    }),
+    Parent = uiRefs.energyBarFill,
+})
+
+uiRefs.energyTextLabel = createInstance("TextLabel", {
+    Name = "EnergyText",
+    AnchorPoint = Vector2.new(1, 0.5),
+    Position = UDim2.new(1, -8, 0.5, 0),
+    Size = UDim2.new(0, energyTextWidth, 0, energyBarHeight),
+    BackgroundTransparency = 1,
+    Font = Enum.Font.GothamSemibold,
+    TextColor3 = Color3.fromRGB(210, 235, 255),
+    TextScaled = false,
+    TextSize = isTouchDevice and 14 or 15,
+    TextXAlignment = Enum.TextXAlignment.Right,
+    TextYAlignment = Enum.TextYAlignment.Center,
+    Text = "Energy 100%",
+    Parent = sprintBackground,
+})
+
+uiRefs.centerCursorImage = createInstance("ImageLabel", {
+    Name = "ShiftLockCursor",
+    BackgroundTransparency = 1,
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.fromOffset(isTouchDevice and 40 or 48, isTouchDevice and 40 or 48),
+    Image = GEAR_CURSOR_IMAGE_ASSET,
+    ZIndex = 50,
+    Visible = false,
+    Parent = screenGui,
+})
 
 local sprintContainerBasePosition = sprintContainer.Position
 local sprintContainerBaseRotation = sprintContainer.Rotation
@@ -570,14 +608,15 @@ local inventoryBasePosition = UDim2.new(0.5, 0, 1, -inventoryBottomMargin)
 local inventoryBaseRotation = 0
 
 if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
-    uiRefs.inventoryFrame = Instance.new("Frame")
-    uiRefs.inventoryFrame.Name = "InventoryBar"
-    uiRefs.inventoryFrame.AnchorPoint = Vector2.new(0.5, 1)
-    uiRefs.inventoryFrame.Size = UDim2.fromOffset(inventoryWidth, inventoryHeight)
-    uiRefs.inventoryFrame.Position = UDim2.new(0.5, 0, 1, -inventoryBottomMargin)
-    uiRefs.inventoryFrame.BackgroundTransparency = 1
-    uiRefs.inventoryFrame.ZIndex = INVENTORY_BASE_ZINDEX
-    uiRefs.inventoryFrame.Parent = screenGui
+    uiRefs.inventoryFrame = createInstance("Frame", {
+        Name = "InventoryBar",
+        AnchorPoint = Vector2.new(0.5, 1),
+        Size = UDim2.fromOffset(inventoryWidth, inventoryHeight),
+        Position = UDim2.new(0.5, 0, 1, -inventoryBottomMargin),
+        BackgroundTransparency = 1,
+        ZIndex = INVENTORY_BASE_ZINDEX,
+        Parent = screenGui,
+    })
 
     inventoryBasePosition = uiRefs.inventoryFrame.Position
     inventoryBaseRotation = uiRefs.inventoryFrame.Rotation
@@ -608,17 +647,18 @@ if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
     end
 
     if isTouchDevice then
-        uiRefs.inventoryToggleButton = Instance.new("ImageButton")
-        uiRefs.inventoryToggleButton.Name = "InventoryToggleButton"
-        uiRefs.inventoryToggleButton.AnchorPoint = Vector2.new(0.5, 1)
-        uiRefs.inventoryToggleButton.Size = UDim2.fromOffset(math.max(56, math.floor(slotSize * 1.1)), math.max(56, math.floor(slotSize * 1.1)))
-        uiRefs.inventoryToggleButton.Position = UDim2.new(0.5, 0, 1, -8)
-        uiRefs.inventoryToggleButton.BackgroundTransparency = 1
-        uiRefs.inventoryToggleButton.AutoButtonColor = true
-        uiRefs.inventoryToggleButton.Image = "rbxasset://textures/ui/Backpack/BackpackButton.png"
-        uiRefs.inventoryToggleButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
-        uiRefs.inventoryToggleButton.ZIndex = 50
-        uiRefs.inventoryToggleButton.Parent = screenGui
+        uiRefs.inventoryToggleButton = createInstance("ImageButton", {
+            Name = "InventoryToggleButton",
+            AnchorPoint = Vector2.new(0.5, 1),
+            Size = UDim2.fromOffset(math.max(56, math.floor(slotSize * 1.1)), math.max(56, math.floor(slotSize * 1.1))),
+            Position = UDim2.new(0.5, 0, 1, -8),
+            BackgroundTransparency = 1,
+            AutoButtonColor = true,
+            Image = "rbxasset://textures/ui/Backpack/BackpackButton.png",
+            ImageColor3 = Color3.fromRGB(255, 255, 255),
+            ZIndex = 50,
+            Parent = screenGui,
+        })
 
         uiRefs.inventoryToggleButton.Activated:Connect(function()
             setInventoryVisibility(not inventoryVisible)
@@ -628,101 +668,113 @@ if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
 
     setInventoryVisibility(not isTouchDevice)
 
-    local slotContainer = Instance.new("Frame")
-    slotContainer.Name = "SlotContainer"
-    slotContainer.Size = UDim2.new(1, 0, 1, 0)
-    slotContainer.BackgroundTransparency = 1
-    slotContainer.Parent = uiRefs.inventoryFrame
+    local slotContainer = createInstance("Frame", {
+        Name = "SlotContainer",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Parent = uiRefs.inventoryFrame,
+    })
 
-    local slotPaddingContainer = Instance.new("UIPadding")
-    slotPaddingContainer.PaddingLeft = UDim.new(0, 12)
-    slotPaddingContainer.PaddingRight = UDim.new(0, 12)
-    slotPaddingContainer.PaddingTop = UDim.new(0, 4)
-    slotPaddingContainer.PaddingBottom = UDim.new(0, 0)
-    slotPaddingContainer.Parent = slotContainer
+    createInstance("UIPadding", {
+        PaddingLeft = UDim.new(0, 12),
+        PaddingRight = UDim.new(0, 12),
+        PaddingTop = UDim.new(0, 4),
+        PaddingBottom = UDim.new(0, 0),
+        Parent = slotContainer,
+    })
 
-    local slotLayout = Instance.new("UIListLayout")
-    slotLayout.FillDirection = Enum.FillDirection.Horizontal
-    slotLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    slotLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    slotLayout.Padding = UDim.new(0, slotPadding)
-    slotLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    slotLayout.Parent = slotContainer
+    createInstance("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        Padding = UDim.new(0, slotPadding),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = slotContainer,
+    })
 
     for slotIndex = 1, 10 do
-        local slotFrame = Instance.new("Frame")
-        slotFrame.Name = string.format("Slot_%d", slotIndex)
-        slotFrame.Size = UDim2.fromOffset(slotSize, slotSize)
-        slotFrame.BackgroundColor3 = Color3.fromRGB(24, 28, 40)
-        slotFrame.BackgroundTransparency = 0.2
-        slotFrame.ZIndex = SLOT_CONTENT_BASE_ZINDEX
-        slotFrame.LayoutOrder = slotIndex
-        slotFrame.Parent = slotContainer
+        local slotUI = {}
+        slotUI.frame = createInstance("Frame", {
+            Name = string.format("Slot_%d", slotIndex),
+            Size = UDim2.fromOffset(slotSize, slotSize),
+            BackgroundColor3 = Color3.fromRGB(24, 28, 40),
+            BackgroundTransparency = 0.2,
+            ZIndex = SLOT_CONTENT_BASE_ZINDEX,
+            LayoutOrder = slotIndex,
+            Parent = slotContainer,
+        })
 
-        local slotCorner = Instance.new("UICorner")
-        slotCorner.CornerRadius = UDim.new(0, 8)
-        slotCorner.Parent = slotFrame
+        createInstance("UICorner", {
+            CornerRadius = UDim.new(0, 8),
+            Parent = slotUI.frame,
+        })
 
-        local slotStroke = Instance.new("UIStroke")
-        slotStroke.Color = Color3.fromRGB(80, 100, 150)
-        slotStroke.Thickness = 1.5
-        slotStroke.Transparency = 0.3
-        slotStroke.Parent = slotFrame
-
-        local numberLabel = Instance.new("TextLabel")
-        numberLabel.Name = "KeyLabel"
-        numberLabel.AnchorPoint = Vector2.new(0, 0)
-        numberLabel.Size = UDim2.new(0, 24, 0, 18)
-        numberLabel.Position = UDim2.new(0, 0, 0, 0)
-        numberLabel.BackgroundTransparency = 1
-        numberLabel.Font = Enum.Font.GothamSemibold
-        numberLabel.TextColor3 = Color3.fromRGB(140, 150, 180)
-        numberLabel.TextSize = 12
-        numberLabel.TextXAlignment = Enum.TextXAlignment.Left
-        numberLabel.TextYAlignment = Enum.TextYAlignment.Top
-        numberLabel.Text = slotIndex == 10 and "0" or tostring(slotIndex)
-        numberLabel.ZIndex = SLOT_TEXT_ZINDEX
-        numberLabel.Parent = slotFrame
+        slotUI.stroke = createInstance("UIStroke", {
+            Color = Color3.fromRGB(80, 100, 150),
+            Thickness = 1.5,
+            Transparency = 0.3,
+            Parent = slotUI.frame,
+        })
 
         local nameLabelHeight = math.max(12, math.floor(slotSize * 0.35))
         local iconPadding = math.max(8, math.floor(slotSize * 0.3))
-        local iconImage = Instance.new("ImageLabel")
-        iconImage.Name = "Icon"
-        iconImage.BackgroundTransparency = 1
-        iconImage.Size = UDim2.new(1, -12, 0, math.max(0, slotSize - (nameLabelHeight + iconPadding)))
-        iconImage.Position = UDim2.new(0.5, 0, 0, math.floor(iconPadding * 0.5))
-        iconImage.AnchorPoint = Vector2.new(0.5, 0)
-        iconImage.Image = ""
-        iconImage.ScaleType = Enum.ScaleType.Fit
-        iconImage.ZIndex = SLOT_ICON_ZINDEX
-        iconImage.Parent = slotFrame
 
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Name = "Name"
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.Position = UDim2.new(0.5, 0, 1, -4)
-        nameLabel.AnchorPoint = Vector2.new(0.5, 1)
-        nameLabel.Size = UDim2.new(1, -8, 0, nameLabelHeight)
-        nameLabel.Font = Enum.Font.Gotham
-        nameLabel.Text = ""
-        nameLabel.TextColor3 = Color3.fromRGB(200, 210, 230)
-        nameLabel.TextSize = math.max(10, math.floor(nameLabelHeight * 0.65))
-        nameLabel.TextScaled = false
-        nameLabel.TextWrapped = true
-        nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
-        nameLabel.ZIndex = SLOT_TEXT_ZINDEX
-        nameLabel.Parent = slotFrame
+        slotUI.numberLabel = createInstance("TextLabel", {
+            Name = "KeyLabel",
+            AnchorPoint = Vector2.new(0, 0),
+            Size = UDim2.new(0, 24, 0, 18),
+            Position = UDim2.new(0, 0, 0, 0),
+            BackgroundTransparency = 1,
+            Font = Enum.Font.GothamSemibold,
+            TextColor3 = Color3.fromRGB(140, 150, 180),
+            TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            Text = slotIndex == 10 and "0" or tostring(slotIndex),
+            ZIndex = SLOT_TEXT_ZINDEX,
+            Parent = slotUI.frame,
+        })
 
-        local slotButton = Instance.new("ImageButton")
-        slotButton.Name = "SelectButton"
-        slotButton.BackgroundTransparency = 1
-        slotButton.Size = UDim2.new(1, 0, 1, 0)
-        slotButton.AutoButtonColor = false
-        slotButton.ImageTransparency = 1
-        slotButton.Active = true
-        slotButton.Selectable = false
-        slotButton.ZIndex = SLOT_BUTTON_ZINDEX
-        slotButton.Parent = slotFrame
+        slotUI.icon = createInstance("ImageLabel", {
+            Name = "Icon",
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -12, 0, math.max(0, slotSize - (nameLabelHeight + iconPadding))),
+            Position = UDim2.new(0.5, 0, 0, math.floor(iconPadding * 0.5)),
+            AnchorPoint = Vector2.new(0.5, 0),
+            Image = "",
+            ScaleType = Enum.ScaleType.Fit,
+            ZIndex = SLOT_ICON_ZINDEX,
+            Parent = slotUI.frame,
+        })
+
+        slotUI.label = createInstance("TextLabel", {
+            Name = "Name",
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0.5, 0, 1, -4),
+            AnchorPoint = Vector2.new(0.5, 1),
+            Size = UDim2.new(1, -8, 0, nameLabelHeight),
+            Font = Enum.Font.Gotham,
+            Text = "",
+            TextColor3 = Color3.fromRGB(200, 210, 230),
+            TextSize = math.max(10, math.floor(nameLabelHeight * 0.65)),
+            TextScaled = false,
+            TextWrapped = true,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            ZIndex = SLOT_TEXT_ZINDEX,
+            Parent = slotUI.frame,
+        })
+
+        slotUI.button = createInstance("ImageButton", {
+            Name = "SelectButton",
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, 0),
+            AutoButtonColor = false,
+            ImageTransparency = 1,
+            Active = true,
+            Selectable = false,
+            ZIndex = SLOT_BUTTON_ZINDEX,
+            Parent = slotUI.frame,
+        })
 
         local currentSlotIndex = slotIndex
         local lastTriggerTime = 0
@@ -738,8 +790,8 @@ if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
             end
         end
 
-        slotButton.Activated:Connect(triggerSelection)
-        slotButton.InputBegan:Connect(function(input)
+        slotUI.button.Activated:Connect(triggerSelection)
+        slotUI.button.InputBegan:Connect(function(input)
             local inputType = input.UserInputType
             if inputType == Enum.UserInputType.MouseButton1
                 or inputType == Enum.UserInputType.Touch
@@ -749,14 +801,7 @@ if UI_CONFIG.USE_CUSTOM_INVENTORY_UI then
             end
         end)
 
-        inventorySlots[slotIndex] = {
-            frame = slotFrame,
-            stroke = slotStroke,
-            icon = iconImage,
-            label = nameLabel,
-            numberLabel = numberLabel,
-            button = slotButton,
-        }
+        inventorySlots[slotIndex] = slotUI
     end
 else
     setInventoryVisibility = function(visible: boolean)
