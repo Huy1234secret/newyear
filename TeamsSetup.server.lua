@@ -891,6 +891,15 @@ do
 			local ROCKET_KNOCKBACK = 85
 
 			local colors = {
+				Color3.fromRGB(255,75,75),
+				Color3.fromRGB(75,255,140),
+				Color3.fromRGB(75,160,255),
+				Color3.fromRGB(255,200,85),
+				Color3.fromRGB(200,110,255),
+			}
+
+			
+
 			-- Keep a rocket's long axis pointing along its velocity so it flies "straight"
 			local function attachOrientationFollower(part: BasePart, getVelFn: () -> Vector3)
 				local conn
@@ -907,14 +916,7 @@ do
 				return conn
 			end
 
-				Color3.fromRGB(255,75,75),
-				Color3.fromRGB(75,255,140),
-				Color3.fromRGB(75,160,255),
-				Color3.fromRGB(255,200,85),
-				Color3.fromRGB(200,110,255),
-			}
-
-			local function randomXZInArena_DEPRECATED()
+local function randomXZInArena_DEPRECATED()
 				local stormSize = getStormHorizontalSize()
 				local x = killBotRandom:NextNumber(-stormSize.X/2, stormSize.X/2)
 				local z = killBotRandom:NextNumber(-stormSize.Y/2, stormSize.Y/2)
