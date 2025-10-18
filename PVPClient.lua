@@ -2244,6 +2244,14 @@ local function updateInvertedMovement()
     humanoid:Move(moveVector, true)
 end
 
+local function ensureInvertedHeartbeat()
+    if invertedControlState.heartbeatConn then
+        invertedControlState.heartbeatConn:Disconnect()
+    end
+
+    invertedControlState.heartbeatConn = RunService.Heartbeat:Connect(updateInvertedMovement)
+end
+
 local function disableInvertedControls()
     for _, connection in invertedControlState.connections do
         connection:Disconnect()
@@ -2273,6 +2281,7 @@ local function enableInvertedControls()
     resetInvertedMovement()
 
     if invertedControlState.active then
+        ensureInvertedHeartbeat()
         return
     end
 
@@ -2351,10 +2360,7 @@ local function enableInvertedControls()
         end
     end)
 
-    if invertedControlState.heartbeatConn then
-        invertedControlState.heartbeatConn:Disconnect()
-    end
-    invertedControlState.heartbeatConn = RunService.Heartbeat:Connect(updateInvertedMovement)
+    ensureInvertedHeartbeat()
 
     invertedControlState.active = true
 end
