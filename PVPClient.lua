@@ -156,74 +156,41 @@ local SLOT_ICON_ZINDEX = SLOT_CONTENT_BASE_ZINDEX + 1
 local SLOT_TEXT_ZINDEX = SLOT_CONTENT_BASE_ZINDEX + 2
 local SLOT_BUTTON_ZINDEX = SLOT_CONTENT_BASE_ZINDEX + 4
 
-type UIState = {
-    energyBarFill: Frame?,
-    energyTextLabel: TextLabel?,
-    sprintStatusLabel: TextLabel?,
-    centerCursorImage: ImageLabel?,
-    mapLabel: TextLabel?,
-    inventoryFrame: Frame?,
-    inventoryToggleButton: ImageButton?,
-    inventoryVisible: boolean,
-    inventoryAutoOpened: boolean,
-    setInventoryVisibility: ((boolean) -> ())?,
-    noSprintPart: BasePart?,
-    sprintActionButton: ImageButton?,
-    sprintActionBound: boolean,
-}
+local energyBarFill: Frame? = nil
+local energyTextLabel: TextLabel? = nil
+local sprintStatusLabel: TextLabel? = nil
+local centerCursorImage: ImageLabel? = nil
+local mapLabel: TextLabel? = nil
 
-local uiState: UIState = {
-    energyBarFill = nil,
-    energyTextLabel = nil,
-    sprintStatusLabel = nil,
-    centerCursorImage = nil,
-    mapLabel = nil,
-    inventoryFrame = nil,
-    inventoryToggleButton = nil,
-    inventoryVisible = true,
-    inventoryAutoOpened = false,
-    setInventoryVisibility = nil,
-    noSprintPart = nil,
-    sprintActionButton = nil,
-    sprintActionBound = false,
-}
+local inventoryFrame: Frame? = nil
+local inventoryToggleButton: ImageButton? = nil
+local inventoryVisible = true
+local inventoryAutoOpened = false
+local setInventoryVisibility: (boolean) -> ()
 
-type StormState = {
-    overlayGui: ScreenGui?,
-    gradientFrame: Frame?,
-    gradient: UIGradient?,
-    scanLine: Frame?,
-    animationConn: RBXScriptConnection?,
-    scanProgress: number,
-    colorCorrection: ColorCorrectionEffect?,
-    depthOfField: DepthOfFieldEffect?,
-    equalizer: EqualizerSoundEffect?,
-    pitchShift: PitchShiftSoundEffect?,
-    trackedPart: BasePart?,
-    exposureActive: boolean,
-}
+local noSprintPart: BasePart? = nil
+local sprintActionButton: ImageButton? = nil
+local sprintActionBound = false
 
-local stormState: StormState = {
-    overlayGui = nil,
-    gradientFrame = nil,
-    gradient = nil,
-    scanLine = nil,
-    animationConn = nil,
-    scanProgress = 0,
-    colorCorrection = nil,
-    depthOfField = nil,
-    equalizer = nil,
-    pitchShift = nil,
-    trackedPart = nil,
-    exposureActive = false,
-}
+local stormOverlayGui: ScreenGui? = nil
+local stormGradientFrame: Frame? = nil
+local stormGradient: UIGradient? = nil
+local stormScanLine: Frame? = nil
+local stormOverlayAnimationConn: RBXScriptConnection? = nil
+local stormScanProgress = 0
+local stormColorCorrection: ColorCorrectionEffect? = nil
+local stormDepthOfField: DepthOfFieldEffect? = nil
+local stormEqualizer: EqualizerSoundEffect? = nil
+local stormPitchShift: PitchShiftSoundEffect? = nil
+local trackedStormPart: BasePart? = nil
+local stormExposureActive = false
 
 local function updateNoSprintPartReference()
     local found = Workspace:FindFirstChild("NoSprintPart", true)
     if found and found:IsA("BasePart") then
-        uiState.noSprintPart = found
+        noSprintPart = found
     else
-        uiState.noSprintPart = nil
+        noSprintPart = nil
     end
 end
 
@@ -231,13 +198,13 @@ updateNoSprintPartReference()
 
 Workspace.DescendantAdded:Connect(function(descendant)
     if descendant.Name == "NoSprintPart" and descendant:IsA("BasePart") then
-        uiState.noSprintPart = descendant
+        noSprintPart = descendant
     end
 end)
 
 Workspace.DescendantRemoving:Connect(function(descendant)
-    if descendant == uiState.noSprintPart then
-        uiState.noSprintPart = nil
+    if descendant == noSprintPart then
+        noSprintPart = nil
     end
 end)
 
@@ -356,7 +323,7 @@ createdMapLabel.TextYAlignment = Enum.TextYAlignment.Center
 createdMapLabel.ZIndex = statusLabel.ZIndex
 createdMapLabel.Visible = false
 createdMapLabel.Parent = statusFrame
-uiState.mapLabel = createdMapLabel
+mapLabel = createdMapLabel
 
 local specialEventFrame = Instance.new("Frame")
 specialEventFrame.Name = "SpecialEventFrame"
@@ -470,19 +437,19 @@ sprintPadding.PaddingLeft = UDim.new(0, 8)
 sprintPadding.PaddingRight = UDim.new(0, 8)
 sprintPadding.Parent = sprintContainer
 
-uiState.sprintStatusLabel = Instance.new("TextLabel")
-uiState.sprintStatusLabel.Name = "SprintStatus"
-uiState.sprintStatusLabel.Size = UDim2.new(1, -8, 0, energyLabelHeight)
-uiState.sprintStatusLabel.Position = UDim2.new(0.5, 0, 0, 0)
-uiState.sprintStatusLabel.AnchorPoint = Vector2.new(0.5, 0)
-uiState.sprintStatusLabel.BackgroundTransparency = 1
-uiState.sprintStatusLabel.Font = Enum.Font.GothamSemibold
-uiState.sprintStatusLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
-uiState.sprintStatusLabel.TextSize = isTouchDevice and 14 or 16
-uiState.sprintStatusLabel.TextScaled = false
-uiState.sprintStatusLabel.Text = "Sprint OFF"
-uiState.sprintStatusLabel.ZIndex = 7
-uiState.sprintStatusLabel.Parent = sprintContainer
+sprintStatusLabel = Instance.new("TextLabel")
+sprintStatusLabel.Name = "SprintStatus"
+sprintStatusLabel.Size = UDim2.new(1, -8, 0, energyLabelHeight)
+sprintStatusLabel.Position = UDim2.new(0.5, 0, 0, 0)
+sprintStatusLabel.AnchorPoint = Vector2.new(0.5, 0)
+sprintStatusLabel.BackgroundTransparency = 1
+sprintStatusLabel.Font = Enum.Font.GothamSemibold
+sprintStatusLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
+sprintStatusLabel.TextSize = isTouchDevice and 14 or 16
+sprintStatusLabel.TextScaled = false
+sprintStatusLabel.Text = "Sprint OFF"
+sprintStatusLabel.ZIndex = 7
+sprintStatusLabel.Parent = sprintContainer
 
 local sprintBackground = Instance.new("Frame")
 sprintBackground.Name = "EnergyBackground"
@@ -523,50 +490,50 @@ local energyFillBackgroundCorner = Instance.new("UICorner")
 energyFillBackgroundCorner.CornerRadius = UDim.new(0, 7)
 energyFillBackgroundCorner.Parent = energyFillBackground
 
-uiState.energyBarFill = Instance.new("Frame")
-uiState.energyBarFill.Name = "EnergyFillValue"
-uiState.energyBarFill.AnchorPoint = Vector2.new(0, 0.5)
-uiState.energyBarFill.Position = UDim2.new(0, 0, 0.5, 0)
-uiState.energyBarFill.Size = UDim2.new(1, 0, 1, 0)
-uiState.energyBarFill.BackgroundColor3 = Color3.fromRGB(80, 190, 255)
-uiState.energyBarFill.Parent = energyFillBackground
+energyBarFill = Instance.new("Frame")
+energyBarFill.Name = "EnergyFillValue"
+energyBarFill.AnchorPoint = Vector2.new(0, 0.5)
+energyBarFill.Position = UDim2.new(0, 0, 0.5, 0)
+energyBarFill.Size = UDim2.new(1, 0, 1, 0)
+energyBarFill.BackgroundColor3 = Color3.fromRGB(80, 190, 255)
+energyBarFill.Parent = energyFillBackground
 
 local energyFillCorner = Instance.new("UICorner")
 energyFillCorner.CornerRadius = UDim.new(0, 7)
-energyFillCorner.Parent = uiState.energyBarFill
+energyFillCorner.Parent = energyBarFill
 
 local energyFillGradient = Instance.new("UIGradient")
 energyFillGradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 190, 255)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 240, 200)),
 })
-energyFillGradient.Parent = uiState.energyBarFill
+energyFillGradient.Parent = energyBarFill
 
-uiState.energyTextLabel = Instance.new("TextLabel")
-uiState.energyTextLabel.Name = "EnergyText"
-uiState.energyTextLabel.AnchorPoint = Vector2.new(1, 0.5)
-uiState.energyTextLabel.Position = UDim2.new(1, -8, 0.5, 0)
-uiState.energyTextLabel.Size = UDim2.new(0, energyTextWidth, 0, energyBarHeight)
-uiState.energyTextLabel.BackgroundTransparency = 1
-uiState.energyTextLabel.Font = Enum.Font.GothamSemibold
-uiState.energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
-uiState.energyTextLabel.TextScaled = false
-uiState.energyTextLabel.TextSize = isTouchDevice and 14 or 15
-uiState.energyTextLabel.TextXAlignment = Enum.TextXAlignment.Right
-uiState.energyTextLabel.TextYAlignment = Enum.TextYAlignment.Center
-uiState.energyTextLabel.Text = "Energy 100%"
-uiState.energyTextLabel.Parent = sprintBackground
+energyTextLabel = Instance.new("TextLabel")
+energyTextLabel.Name = "EnergyText"
+energyTextLabel.AnchorPoint = Vector2.new(1, 0.5)
+energyTextLabel.Position = UDim2.new(1, -8, 0.5, 0)
+energyTextLabel.Size = UDim2.new(0, energyTextWidth, 0, energyBarHeight)
+energyTextLabel.BackgroundTransparency = 1
+energyTextLabel.Font = Enum.Font.GothamSemibold
+energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
+energyTextLabel.TextScaled = false
+energyTextLabel.TextSize = isTouchDevice and 14 or 15
+energyTextLabel.TextXAlignment = Enum.TextXAlignment.Right
+energyTextLabel.TextYAlignment = Enum.TextYAlignment.Center
+energyTextLabel.Text = "Energy 100%"
+energyTextLabel.Parent = sprintBackground
 
-uiState.centerCursorImage = Instance.new("ImageLabel")
-uiState.centerCursorImage.Name = "ShiftLockCursor"
-uiState.centerCursorImage.BackgroundTransparency = 1
-uiState.centerCursorImage.AnchorPoint = Vector2.new(0.5, 0.5)
-uiState.centerCursorImage.Position = UDim2.fromScale(0.5, 0.5)
-uiState.centerCursorImage.Size = UDim2.fromOffset(isTouchDevice and 40 or 48, isTouchDevice and 40 or 48)
-uiState.centerCursorImage.Image = GEAR_CURSOR_IMAGE_ASSET
-uiState.centerCursorImage.ZIndex = 50
-uiState.centerCursorImage.Visible = false
-uiState.centerCursorImage.Parent = screenGui
+centerCursorImage = Instance.new("ImageLabel")
+centerCursorImage.Name = "ShiftLockCursor"
+centerCursorImage.BackgroundTransparency = 1
+centerCursorImage.AnchorPoint = Vector2.new(0.5, 0.5)
+centerCursorImage.Position = UDim2.fromScale(0.5, 0.5)
+centerCursorImage.Size = UDim2.fromOffset(isTouchDevice and 40 or 48, isTouchDevice and 40 or 48)
+centerCursorImage.Image = GEAR_CURSOR_IMAGE_ASSET
+centerCursorImage.ZIndex = 50
+centerCursorImage.Visible = false
+centerCursorImage.Parent = screenGui
 
 local sprintContainerBasePosition = sprintContainer.Position
 local sprintContainerBaseRotation = sprintContainer.Rotation
@@ -574,33 +541,33 @@ local sprintBackgroundDefaultColor = sprintBackground.BackgroundColor3
 local sprintBackgroundDefaultTransparency = sprintBackground.BackgroundTransparency
 local sprintBackgroundStrokeDefaultColor = sprintBackgroundStroke.Color
 local sprintBackgroundStrokeDefaultTransparency = sprintBackgroundStroke.Transparency
-local energyBarFillDefaultColor = uiState.energyBarFill.BackgroundColor3
-local energyTextDefaultColor = uiState.energyTextLabel.TextColor3
+local energyBarFillDefaultColor = energyBarFill.BackgroundColor3
+local energyTextDefaultColor = energyTextLabel.TextColor3
 local energyGradientDefault = energyFillGradient.Color
 
 local inventoryBasePosition = UDim2.new(0.5, 0, 1, -inventoryBottomMargin)
 local inventoryBaseRotation = 0
 
 if USE_CUSTOM_INVENTORY_UI then
-    uiState.inventoryFrame = Instance.new("Frame")
-    uiState.inventoryFrame.Name = "InventoryBar"
-    uiState.inventoryFrame.AnchorPoint = Vector2.new(0.5, 1)
-    uiState.inventoryFrame.Size = UDim2.fromOffset(inventoryWidth, inventoryHeight)
-    uiState.inventoryFrame.Position = UDim2.new(0.5, 0, 1, -inventoryBottomMargin)
-    uiState.inventoryFrame.BackgroundTransparency = 1
-    uiState.inventoryFrame.ZIndex = INVENTORY_BASE_ZINDEX
-    uiState.inventoryFrame.Parent = screenGui
+    inventoryFrame = Instance.new("Frame")
+    inventoryFrame.Name = "InventoryBar"
+    inventoryFrame.AnchorPoint = Vector2.new(0.5, 1)
+    inventoryFrame.Size = UDim2.fromOffset(inventoryWidth, inventoryHeight)
+    inventoryFrame.Position = UDim2.new(0.5, 0, 1, -inventoryBottomMargin)
+    inventoryFrame.BackgroundTransparency = 1
+    inventoryFrame.ZIndex = INVENTORY_BASE_ZINDEX
+    inventoryFrame.Parent = screenGui
 
-    inventoryBasePosition = uiState.inventoryFrame.Position
-    inventoryBaseRotation = uiState.inventoryFrame.Rotation
+    inventoryBasePosition = inventoryFrame.Position
+    inventoryBaseRotation = inventoryFrame.Rotation
 
     local function updateInventoryToggleVisual()
-        local button = uiState.inventoryToggleButton
+        local button = inventoryToggleButton
         if not button then
             return
         end
 
-        if uiState.inventoryVisible then
+        if inventoryVisible then
             button.ImageTransparency = 0
             button.ImageColor3 = Color3.fromRGB(255, 255, 255)
         else
@@ -609,42 +576,42 @@ if USE_CUSTOM_INVENTORY_UI then
         end
     end
 
-    uiState.setInventoryVisibility = function(visible: boolean)
-        uiState.inventoryVisible = visible
+    setInventoryVisibility = function(visible: boolean)
+        inventoryVisible = visible
 
-        if uiState.inventoryFrame then
-            uiState.inventoryFrame.Visible = visible
+        if inventoryFrame then
+            inventoryFrame.Visible = visible
         end
 
         updateInventoryToggleVisual()
     end
 
     if isTouchDevice then
-        uiState.inventoryToggleButton = Instance.new("ImageButton")
-        uiState.inventoryToggleButton.Name = "InventoryToggleButton"
-        uiState.inventoryToggleButton.AnchorPoint = Vector2.new(0.5, 1)
-        uiState.inventoryToggleButton.Size = UDim2.fromOffset(math.max(56, math.floor(slotSize * 1.1)), math.max(56, math.floor(slotSize * 1.1)))
-        uiState.inventoryToggleButton.Position = UDim2.new(0.5, 0, 1, -8)
-        uiState.inventoryToggleButton.BackgroundTransparency = 1
-        uiState.inventoryToggleButton.AutoButtonColor = true
-        uiState.inventoryToggleButton.Image = "rbxasset://textures/ui/Backpack/BackpackButton.png"
-        uiState.inventoryToggleButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
-        uiState.inventoryToggleButton.ZIndex = 50
-        uiState.inventoryToggleButton.Parent = screenGui
+        inventoryToggleButton = Instance.new("ImageButton")
+        inventoryToggleButton.Name = "InventoryToggleButton"
+        inventoryToggleButton.AnchorPoint = Vector2.new(0.5, 1)
+        inventoryToggleButton.Size = UDim2.fromOffset(math.max(56, math.floor(slotSize * 1.1)), math.max(56, math.floor(slotSize * 1.1)))
+        inventoryToggleButton.Position = UDim2.new(0.5, 0, 1, -8)
+        inventoryToggleButton.BackgroundTransparency = 1
+        inventoryToggleButton.AutoButtonColor = true
+        inventoryToggleButton.Image = "rbxasset://textures/ui/Backpack/BackpackButton.png"
+        inventoryToggleButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
+        inventoryToggleButton.ZIndex = 50
+        inventoryToggleButton.Parent = screenGui
 
-        uiState.inventoryToggleButton.Activated:Connect(function()
-            uiState.setInventoryVisibility(not uiState.inventoryVisible)
-            uiState.inventoryAutoOpened = true
+        inventoryToggleButton.Activated:Connect(function()
+            setInventoryVisibility(not inventoryVisible)
+            inventoryAutoOpened = true
         end)
     end
 
-    uiState.setInventoryVisibility(not isTouchDevice)
+    setInventoryVisibility(not isTouchDevice)
 
     local slotContainer = Instance.new("Frame")
     slotContainer.Name = "SlotContainer"
     slotContainer.Size = UDim2.new(1, 0, 1, 0)
     slotContainer.BackgroundTransparency = 1
-    slotContainer.Parent = uiState.inventoryFrame
+    slotContainer.Parent = inventoryFrame
 
     local slotPaddingContainer = Instance.new("UIPadding")
     slotPaddingContainer.PaddingLeft = UDim.new(0, 12)
@@ -771,8 +738,8 @@ if USE_CUSTOM_INVENTORY_UI then
         }
     end
 else
-    uiState.setInventoryVisibility = function(visible: boolean)
-        uiState.inventoryVisible = visible
+    setInventoryVisibility = function(visible: boolean)
+        inventoryVisible = visible
     end
 end
 local defaultColor = statusLabel.TextColor3
@@ -1644,23 +1611,23 @@ local function setInvertedControlsEnabled(enabled: boolean)
 end
 
 local function getSprintActionButton(): ImageButton?
-    local button = uiState.sprintActionButton
+    local button = sprintActionButton
     if button and button.Parent then
         return button
     end
 
     button = ContextActionService:GetButton("SprintAction")
     if button and button:IsA("ImageButton") then
-        uiState.sprintActionButton = button
+        sprintActionButton = button
         return button
     end
 
-    uiState.sprintActionButton = nil
+    sprintActionButton = nil
     return nil
 end
 
 local function updateSprintButtonState()
-    if not uiState.sprintActionBound then
+    if not sprintActionBound then
         return
     end
 
@@ -1719,39 +1686,39 @@ local function setSprintEventDisabled(disabled: boolean)
 end
 
 local function updateEnergyUI()
-    if not uiState.energyBarFill or not uiState.energyTextLabel then
+    if not energyBarFill or not energyTextLabel then
         return
     end
 
     local normalized = math.clamp(sprintState.energy / MAX_SPRINT_ENERGY, 0, 1)
     if normalized <= 0 then
-        uiState.energyBarFill.Visible = false
+        energyBarFill.Visible = false
     else
-        uiState.energyBarFill.Visible = true
-        uiState.energyBarFill.Size = UDim2.new(normalized, 0, 1, 0)
+        energyBarFill.Visible = true
+        energyBarFill.Size = UDim2.new(normalized, 0, 1, 0)
     end
 
     local percent = math.clamp(math.floor(normalized * 100 + 0.5), 0, 100)
-    uiState.energyTextLabel.Text = string.format("Energy %d%%", percent)
+    energyTextLabel.Text = string.format("Energy %d%%", percent)
 
     if percent <= 15 then
-        uiState.energyTextLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
+        energyTextLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
     elseif sprintState.isSprinting then
-        uiState.energyTextLabel.TextColor3 = Color3.fromRGB(180, 255, 220)
+        energyTextLabel.TextColor3 = Color3.fromRGB(180, 255, 220)
     else
-        uiState.energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
+        energyTextLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
     end
 
-    if uiState.sprintStatusLabel then
+    if sprintStatusLabel then
         if sprintState.isSprinting then
-            uiState.sprintStatusLabel.Text = "Sprint ON"
-            uiState.sprintStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 220)
+            sprintStatusLabel.Text = "Sprint ON"
+            sprintStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 220)
         else
-            uiState.sprintStatusLabel.Text = "Sprint OFF"
+            sprintStatusLabel.Text = "Sprint OFF"
             if sprintState.energy <= 0 or sprintState.zoneBlocked or sprintState.eventDisabled then
-                uiState.sprintStatusLabel.TextColor3 = Color3.fromRGB(255, 140, 140)
+                sprintStatusLabel.TextColor3 = Color3.fromRGB(255, 140, 140)
             else
-                uiState.sprintStatusLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
+                sprintStatusLabel.TextColor3 = Color3.fromRGB(210, 235, 255)
             end
         end
     end
@@ -1945,21 +1912,21 @@ local function applyDesktopCursorIcon()
         applyingMouseIcon = false
     end
 
-    if uiState.centerCursorImage then
-        uiState.centerCursorImage.Image = if iconAsset ~= "" then iconAsset else ""
+    if centerCursorImage then
+        centerCursorImage.Image = if iconAsset ~= "" then iconAsset else ""
     end
 end
 
 local function updateCenterCursorVisibility()
-    if not uiState.centerCursorImage then
+    if not centerCursorImage then
         return
     end
 
     local shouldShow = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
         and currentCursorImageAsset ~= ""
-    uiState.centerCursorImage.Visible = shouldShow
+    centerCursorImage.Visible = shouldShow
     if shouldShow then
-        uiState.centerCursorImage.Image = currentCursorImageAsset
+        centerCursorImage.Image = currentCursorImageAsset
     end
 end
 
@@ -2016,10 +1983,10 @@ updateInventorySlots = function()
 
     local toolCount = #trackedGearOrder
     if toolCount == 0 then
-        uiState.inventoryAutoOpened = false
-    elseif isTouchDevice and not uiState.inventoryVisible and not uiState.inventoryAutoOpened then
-        uiState.inventoryAutoOpened = true
-        uiState.setInventoryVisibility(true)
+        inventoryAutoOpened = false
+    elseif isTouchDevice and not inventoryVisible and not inventoryAutoOpened then
+        inventoryAutoOpened = true
+        setInventoryVisibility(true)
     end
 
     for slotIndex = 1, 10 do
@@ -2489,7 +2456,7 @@ ContextActionService:BindAction(
     Enum.KeyCode.ButtonL3,
     Enum.KeyCode.ButtonR3
 )
-uiState.sprintActionBound = true
+sprintActionBound = true
 ContextActionService:SetTitle("SprintAction", "Sprint")
 ContextActionService:SetImage("SprintAction", GEAR_CURSOR_IMAGE_ASSET)
 updateSprintButtonState()
@@ -2528,7 +2495,7 @@ RunService.Heartbeat:Connect(function(deltaTime)
     end
 
     local zoneBlocked = false
-    local zonePart = uiState.noSprintPart
+    local zonePart = noSprintPart
     if zonePart and zonePart.Parent and humanoid then
         local rootPart = getHumanoidRootPart(humanoid)
         if rootPart then
@@ -2681,9 +2648,9 @@ local function stopShake()
     statusLabel.TextColor3 = defaultColor
     statusLabel.TextSize = DEFAULT_TEXT_SIZE
 
-    if uiState.inventoryFrame then
-        uiState.inventoryFrame.Position = inventoryBasePosition
-        uiState.inventoryFrame.Rotation = inventoryBaseRotation
+    if inventoryFrame then
+        inventoryFrame.Position = inventoryBasePosition
+        inventoryFrame.Rotation = inventoryBaseRotation
     end
     sprintContainer.Position = sprintContainerBasePosition
     sprintContainer.Rotation = sprintContainerBaseRotation
@@ -2691,8 +2658,8 @@ local function stopShake()
     sprintBackground.BackgroundTransparency = sprintBackgroundDefaultTransparency
     sprintBackgroundStroke.Color = sprintBackgroundStrokeDefaultColor
     sprintBackgroundStroke.Transparency = sprintBackgroundStrokeDefaultTransparency
-    uiState.energyBarFill.BackgroundColor3 = energyBarFillDefaultColor
-    uiState.energyTextLabel.TextColor3 = energyTextDefaultColor
+    energyBarFill.BackgroundColor3 = energyBarFillDefaultColor
+    energyTextLabel.TextColor3 = energyTextDefaultColor
     energyFillGradient.Color = energyGradientDefault
 
     for _, slot in inventorySlots do
@@ -2736,12 +2703,12 @@ local function startDeathMatchEffect()
         local colorOffset = math.floor(40 * pulse)
         statusLabel.TextColor3 = Color3.fromRGB(255, 90 + colorOffset, 90 + colorOffset)
 
-        if uiState.inventoryFrame then
+        if inventoryFrame then
             local inventoryMagnitude = 0.6 + math.abs(math.sin(now * 6)) * 1.3
             local inventoryOffsetX = math.noise(now * 11, 5, 0) * inventoryMagnitude * 3
             local inventoryOffsetY = math.noise(now * 10, 6, 0) * inventoryMagnitude * 2
-            uiState.inventoryFrame.Position = inventoryBasePosition + UDim2.fromOffset(inventoryOffsetX, inventoryOffsetY)
-            uiState.inventoryFrame.Rotation = math.noise(now * 9, 7, 0) * 2.4
+            inventoryFrame.Position = inventoryBasePosition + UDim2.fromOffset(inventoryOffsetX, inventoryOffsetY)
+            inventoryFrame.Rotation = math.noise(now * 9, 7, 0) * 2.4
         end
 
         local sprintOffsetX = math.noise(now * 7, 8, 0) * 2.6
@@ -2763,12 +2730,12 @@ local function startDeathMatchEffect()
 
         local energyPulse = math.abs(math.sin(now * 18))
         local energyGreen = 40 + math.floor(150 * (1 - energyPulse))
-        uiState.energyBarFill.BackgroundColor3 = Color3.fromRGB(255, energyGreen, energyGreen)
+        energyBarFill.BackgroundColor3 = Color3.fromRGB(255, energyGreen, energyGreen)
         energyFillGradient.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(255, math.max(0, energyGreen - 60), math.max(0, energyGreen - 60))),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255, energyGreen, energyGreen)),
         })
-        uiState.energyTextLabel.TextColor3 = Color3.fromRGB(255, 180 - math.floor(80 * flashAmount), 180 - math.floor(80 * flashAmount))
+        energyTextLabel.TextColor3 = Color3.fromRGB(255, 180 - math.floor(80 * flashAmount), 180 - math.floor(80 * flashAmount))
 
         for slotIndex = 1, 10 do
             local slot = inventorySlots[slotIndex]
@@ -2821,7 +2788,7 @@ end
 local function updateMapLabel(mapId: string?)
     currentMapId = mapId
 
-    local targetLabel = uiState.mapLabel
+    local targetLabel = mapLabel
     if not targetLabel then
         return
     end
@@ -2849,15 +2816,15 @@ local function formatTimer(seconds: number): string
 end
 
 local function ensureStormOverlay()
-    local existingGui = stormState.overlayGui
+    local existingGui = stormOverlayGui
     if existingGui and not existingGui.Parent then
-        stormState.overlayGui = nil
-        stormState.gradientFrame = nil
-        stormState.gradient = nil
-        stormState.scanLine = nil
-        if stormState.animationConn then
-            stormState.animationConn:Disconnect()
-            stormState.animationConn = nil
+        stormOverlayGui = nil
+        stormGradientFrame = nil
+        stormGradient = nil
+        stormScanLine = nil
+        if stormOverlayAnimationConn then
+            stormOverlayAnimationConn:Disconnect()
+            stormOverlayAnimationConn = nil
         end
         existingGui = nil
     end
@@ -2865,21 +2832,21 @@ local function ensureStormOverlay()
     if not existingGui then
         local foundGui = playerGui:FindFirstChild("StormExposureOverlay")
         if foundGui and foundGui:IsA("ScreenGui") then
-            stormState.overlayGui = foundGui
+            stormOverlayGui = foundGui
             existingGui = foundGui
 
             local container = foundGui:FindFirstChild("Container")
             if container and container:IsA("Frame") then
                 local gradientFrame = container:FindFirstChild("Gradient")
                 if gradientFrame and gradientFrame:IsA("Frame") then
-                    stormState.gradientFrame = gradientFrame
+                    stormGradientFrame = gradientFrame
                     local gradient = gradientFrame:FindFirstChildWhichIsA("UIGradient")
-                    stormState.gradient = gradient
+                    stormGradient = gradient
                 end
 
                 local scanLineFrame = container:FindFirstChild("ScanLine")
                 if scanLineFrame and scanLineFrame:IsA("Frame") then
-                    stormState.scanLine = scanLineFrame
+                    stormScanLine = scanLineFrame
                 end
             end
         end
@@ -2900,7 +2867,7 @@ local function ensureStormOverlay()
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
     gui.Enabled = false
     gui.Parent = playerGui
-    stormState.overlayGui = gui
+    stormOverlayGui = gui
 
     local container = Instance.new("Frame")
     container.Name = "Container"
@@ -2917,7 +2884,7 @@ local function ensureStormOverlay()
     gradientFrame.BackgroundColor3 = Color3.fromRGB(180, 70, 255)
     gradientFrame.BackgroundTransparency = 0.38
     gradientFrame.Parent = container
-    stormState.gradientFrame = gradientFrame
+    stormGradientFrame = gradientFrame
 
     local gradient = Instance.new("UIGradient")
     gradient.Color = ColorSequence.new({
@@ -2931,7 +2898,7 @@ local function ensureStormOverlay()
     })
     gradient.GradientType = Enum.GradientType.Radial
     gradient.Parent = gradientFrame
-    stormState.gradient = gradient
+    stormGradient = gradient
 
     local gradientStroke = Instance.new("UIStroke")
     gradientStroke.Thickness = 2
@@ -2953,12 +2920,12 @@ local function ensureStormOverlay()
     scanLine.BackgroundTransparency = 0.35
     scanLine.Position = UDim2.new(0, 0, 0, 0)
     scanLine.Parent = container
-    stormState.scanLine = scanLine
-    stormState.scanProgress = 0
+    stormScanLine = scanLine
+    stormScanProgress = 0
 end
 
 local function ensureStormLightingEffects()
-    local colorCorrection = stormState.colorCorrection
+    local colorCorrection = stormColorCorrection
     if not colorCorrection then
         local existingEffect = Lighting:FindFirstChild("StormColorCorrection")
         if existingEffect and existingEffect:IsA("ColorCorrectionEffect") then
@@ -2975,9 +2942,9 @@ local function ensureStormLightingEffects()
         colorCorrection.Enabled = false
         colorCorrection.Parent = Lighting
     end
-    stormState.colorCorrection = colorCorrection
+    stormColorCorrection = colorCorrection
 
-    local depthEffect = stormState.depthOfField
+    local depthEffect = stormDepthOfField
     if not depthEffect then
         local existingDepth = Lighting:FindFirstChild("StormDepthOfField")
         if existingDepth and existingDepth:IsA("DepthOfFieldEffect") then
@@ -2994,11 +2961,11 @@ local function ensureStormLightingEffects()
         depthEffect.Enabled = false
         depthEffect.Parent = Lighting
     end
-    stormState.depthOfField = depthEffect
+    stormDepthOfField = depthEffect
 end
 
 local function ensureStormAudioEffects()
-    local equalizer = stormState.equalizer
+    local equalizer = stormEqualizer
     if not equalizer then
         local existingEqualizer = SoundService:FindFirstChild("StormEqualizer")
         if existingEqualizer and existingEqualizer:IsA("EqualizerSoundEffect") then
@@ -3017,9 +2984,9 @@ local function ensureStormAudioEffects()
     else
         equalizer.Parent = SoundService
     end
-    stormState.equalizer = equalizer
+    stormEqualizer = equalizer
 
-    local pitchShift = stormState.pitchShift
+    local pitchShift = stormPitchShift
     if not pitchShift then
         local existingPitch = SoundService:FindFirstChild("StormPitchShift")
         if existingPitch and existingPitch:IsA("PitchShiftSoundEffect") then
@@ -3036,17 +3003,17 @@ local function ensureStormAudioEffects()
     else
         pitchShift.Parent = SoundService
     end
-    stormState.pitchShift = pitchShift
+    stormPitchShift = pitchShift
 end
 
 local function startStormOverlayAnimation()
-    if stormState.animationConn then
+    if stormOverlayAnimationConn then
         return
     end
 
-    stormState.animationConn = RunService.RenderStepped:Connect(function(dt)
-        local gradient = stormState.gradient
-        local gradientFrame = stormState.gradientFrame
+    stormOverlayAnimationConn = RunService.RenderStepped:Connect(function(dt)
+        local gradient = stormGradient
+        local gradientFrame = stormGradientFrame
         if gradient and gradientFrame then
             local now = os.clock()
             gradient.Rotation = (gradient.Rotation + dt * 45) % 360
@@ -3054,21 +3021,21 @@ local function startStormOverlayAnimation()
             gradientFrame.Rotation = (gradientFrame.Rotation + dt * 15) % 360
         end
 
-        local scanLine = stormState.scanLine
+        local scanLine = stormScanLine
         if scanLine then
-            stormState.scanProgress += dt * 0.4
-            if stormState.scanProgress > 1 then
-                stormState.scanProgress -= 1
+            stormScanProgress += dt * 0.4
+            if stormScanProgress > 1 then
+                stormScanProgress -= 1
             end
-            scanLine.Position = UDim2.new(0, 0, stormState.scanProgress, 0)
+            scanLine.Position = UDim2.new(0, 0, stormScanProgress, 0)
         end
     end)
 end
 
 local function stopStormOverlayAnimation()
-    if stormState.animationConn then
-        stormState.animationConn:Disconnect()
-        stormState.animationConn = nil
+    if stormOverlayAnimationConn then
+        stormOverlayAnimationConn:Disconnect()
+        stormOverlayAnimationConn = nil
     end
 end
 
@@ -3077,56 +3044,56 @@ local function enableStormEffects()
     ensureStormLightingEffects()
     ensureStormAudioEffects()
 
-    if stormState.overlayGui then
-        stormState.overlayGui.Enabled = true
+    if stormOverlayGui then
+        stormOverlayGui.Enabled = true
     end
-    if stormState.colorCorrection then
-        stormState.colorCorrection.Enabled = true
+    if stormColorCorrection then
+        stormColorCorrection.Enabled = true
     end
-    if stormState.depthOfField then
-        stormState.depthOfField.Enabled = true
+    if stormDepthOfField then
+        stormDepthOfField.Enabled = true
     end
-    if stormState.equalizer then
-        stormState.equalizer.Enabled = true
+    if stormEqualizer then
+        stormEqualizer.Enabled = true
     end
-    if stormState.pitchShift then
-        stormState.pitchShift.Enabled = true
+    if stormPitchShift then
+        stormPitchShift.Enabled = true
     end
 
     startStormOverlayAnimation()
 end
 
 local function disableStormEffects()
-    if stormState.overlayGui then
-        stormState.overlayGui.Enabled = false
+    if stormOverlayGui then
+        stormOverlayGui.Enabled = false
     end
-    if stormState.colorCorrection then
-        stormState.colorCorrection.Enabled = false
+    if stormColorCorrection then
+        stormColorCorrection.Enabled = false
     end
-    if stormState.depthOfField then
-        stormState.depthOfField.Enabled = false
+    if stormDepthOfField then
+        stormDepthOfField.Enabled = false
     end
-    if stormState.equalizer then
-        stormState.equalizer.Enabled = false
+    if stormEqualizer then
+        stormEqualizer.Enabled = false
     end
-    if stormState.pitchShift then
-        stormState.pitchShift.Enabled = false
+    if stormPitchShift then
+        stormPitchShift.Enabled = false
     end
 
     stopStormOverlayAnimation()
-    stormState.scanProgress = 0
-    local scanLine = stormState.scanLine
+    stormScanProgress = 0
+    local scanLine = stormScanLine
     if scanLine then
         scanLine.Position = UDim2.new(0, 0, 0, 0)
     end
 end
 
 local function updateStormExposure(isActive: boolean)
-    if isActive == stormState.exposureActive then
+    if isActive == stormExposureActive then
         return
     end
 
-    stormState.exposureActive = isActive
+    stormExposureActive = isActive
 
     if isActive then
         enableStormEffects()
@@ -3138,9 +3105,9 @@ end
 local function refreshStormPartReference()
     local existing = Workspace:FindFirstChild("StormPart", true)
     if existing and existing:IsA("BasePart") then
-        stormState.trackedPart = existing
+        trackedStormPart = existing
     else
-        stormState.trackedPart = nil
+        trackedStormPart = nil
         updateStormExposure(false)
     end
 end
@@ -3149,22 +3116,22 @@ refreshStormPartReference()
 
 Workspace.DescendantAdded:Connect(function(descendant)
     if descendant:IsA("BasePart") and descendant.Name == "StormPart" then
-        stormState.trackedPart = descendant
+        trackedStormPart = descendant
     end
 end)
 
 Workspace.DescendantRemoving:Connect(function(descendant)
-    if descendant == stormState.trackedPart then
-        stormState.trackedPart = nil
+    if descendant == trackedStormPart then
+        trackedStormPart = nil
         updateStormExposure(false)
     end
 end)
 
 RunService.Heartbeat:Connect(function()
-    local storm = stormState.trackedPart
+    local storm = trackedStormPart
     if not storm or not storm.Parent then
         if storm and not storm.Parent then
-            stormState.trackedPart = nil
+            trackedStormPart = nil
         end
         updateStormExposure(false)
         return
