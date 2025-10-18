@@ -418,10 +418,13 @@ local energySpacing = if isTouchDevice then 3 else 4
 local sprintContainerHeight = energyTopPadding + energyLabelHeight + energySpacing + energyBarHeight + energyBottomPadding
 local energyTextWidth = if isTouchDevice then 80 else 92
 
+local estimatedInventoryHeight = if USE_CUSTOM_INVENTORY_UI then inventoryHeight elseif isTouchDevice then math.max(48, math.floor(slotSize * 1.15)) else 0
+local sprintBottomOffset = inventoryBottomMargin + estimatedInventoryHeight + energyContainerGap
+
 local sprintContainer = Instance.new("Frame")
 sprintContainer.Name = "SprintEnergyContainer"
 sprintContainer.Size = UDim2.fromOffset(inventoryWidth, sprintContainerHeight)
-sprintContainer.Position = UDim2.new(0.5, 0, 1, -(inventoryBottomMargin + inventoryHeight + energyContainerGap))
+sprintContainer.Position = UDim2.new(0.5, 0, 1, -sprintBottomOffset)
 sprintContainer.AnchorPoint = Vector2.new(0.5, 1)
 sprintContainer.BackgroundTransparency = 1
 sprintContainer.ZIndex = 5
@@ -2416,7 +2419,7 @@ local function sprintAction(_: string, inputState: Enum.UserInputState, inputObj
             toggleKeyboardSprintIntent()
         end
         return Enum.ContextActionResult.Sink
-    elseif keyCode == Enum.KeyCode.ButtonL3 then
+    elseif keyCode == Enum.KeyCode.ButtonL3 or keyCode == Enum.KeyCode.ButtonR3 then
         if inputState == Enum.UserInputState.Begin then
             sprintState.keyboardIntent = true
             recomputeSprintIntent()
@@ -2444,7 +2447,15 @@ local function sprintAction(_: string, inputState: Enum.UserInputState, inputObj
     return Enum.ContextActionResult.Pass
 end
 
-ContextActionService:BindAction("SprintAction", sprintAction, true, Enum.KeyCode.LeftControl, Enum.KeyCode.RightControl, Enum.KeyCode.ButtonL3)
+ContextActionService:BindAction(
+    "SprintAction",
+    sprintAction,
+    true,
+    Enum.KeyCode.LeftControl,
+    Enum.KeyCode.RightControl,
+    Enum.KeyCode.ButtonL3,
+    Enum.KeyCode.ButtonR3
+)
 sprintActionBound = true
 ContextActionService:SetTitle("SprintAction", "Sprint")
 ContextActionService:SetImage("SprintAction", GEAR_CURSOR_IMAGE_ASSET)
