@@ -1093,7 +1093,8 @@ do
                 rocket.Anchored = false
 
                 local launchOrigin = ball.Position + (ball.CFrame.LookVector * 2)
-                local toTarget = targetHRP.Position - launchOrigin
+                local targetPosition = targetHRP.Position
+                local toTarget = targetPosition - launchOrigin
                 if toTarget.Magnitude == 0 then
                     toTarget = ball.CFrame.LookVector
                 end
@@ -1104,17 +1105,12 @@ do
                 rocket:SetNetworkOwner(nil)
 
                 local detonated = false
-                local stepConn: RBXScriptConnection? = nil
                 local touchedConn: RBXScriptConnection? = nil
                 local destroyingConn: RBXScriptConnection? = nil
 
                 rocket.AssemblyLinearVelocity = targetDirection * ROCKET_SPEED
 
                 local function disconnectAll()
-                    if stepConn then
-                        stepConn:Disconnect()
-                        stepConn = nil
-                    end
                     if touchedConn then
                         touchedConn:Disconnect()
                         touchedConn = nil
@@ -1157,15 +1153,6 @@ do
                     end
 
                     explode()
-                end)
-
-                stepConn = RunService.Heartbeat:Connect(function()
-                    if detonated then
-                        return
-                    end
-
-                    rocket.CFrame = CFrame.lookAt(rocket.Position, rocket.Position + targetDirection)
-                    rocket.AssemblyLinearVelocity = targetDirection * ROCKET_SPEED
                 end)
 
                 destroyingConn = rocket.Destroying:Connect(function()
@@ -1561,6 +1548,9 @@ do
                 for _, descendant in character:GetDescendants() do
                     if descendant:IsA("BasePart") then
                         local basePart = descendant
+                        if not basePart.CanTouch then
+                            basePart.CanTouch = true
+                        end
                         hotState.connections[#hotState.connections + 1] = basePart.Touched:Connect(function(hit)
                             if not hotState.running or context.roundId ~= currentRoundId then
                                 return
@@ -1570,7 +1560,11 @@ do
                                 return
                             end
 
-                            local otherCharacter = hit.Parent
+                            if not hit or not hit.Parent then
+                                return
+                            end
+
+                            local otherCharacter = hit:FindFirstAncestorOfClass("Model")
                             if not otherCharacter then
                                 return
                             end
