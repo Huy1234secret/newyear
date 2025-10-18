@@ -772,7 +772,7 @@ do
                     end)
 
                     Debris:AddItem(bomb, 15)
-                    task.wait(rng:NextNumber(0.75, 1.5))
+                    task.wait(0.5)
                 end
             end)
         end,
@@ -828,14 +828,14 @@ do
             local origin = cf.Position
             local killBotRandom = Random.new()
 
-            local SCAN_RADIUS = 180
-            local FIRE_RANGE = 140
+            local SCAN_RADIUS = math.huge
+            local FIRE_RANGE = math.huge
             local FIRE_COOLDOWN = 2.25
             local HOVER_HEIGHT = 8
             local MOVE_FORCE = 6000
             local MAX_SPEED = 70
             local SEEK_STRENGTH = 0.55
-            local LOS_CHECK = true
+            local LOS_CHECK = false
 
             local ROCKET_SPEED = 90
             local ROCKET_LIFETIME = 6
@@ -1100,11 +1100,6 @@ do
                 rocket.Parent = Workspace
                 rocket:SetNetworkOwner(nil)
 
-                local targetValue = Instance.new("ObjectValue")
-                targetValue.Name = "Target"
-                targetValue.Value = targetHRP
-                targetValue.Parent = rocket
-
                 local detonated = false
                 local stepConn: RBXScriptConnection? = nil
                 local touchedConn: RBXScriptConnection? = nil
@@ -1159,26 +1154,24 @@ do
                     explode()
                 end)
 
+                local initialDirection = targetHRP.Position - rocket.Position
+                if initialDirection.Magnitude < 1 then
+                    initialDirection = ball.CFrame.LookVector
+                end
+                if initialDirection.Magnitude <= 0 then
+                    initialDirection = Vector3.new(0, 0, -1)
+                end
+                local flightDirection = initialDirection.Unit
+                rocket.CFrame = CFrame.lookAt(rocket.Position, rocket.Position + flightDirection)
+                rocket.AssemblyLinearVelocity = flightDirection * ROCKET_SPEED
+
                 stepConn = RunService.Heartbeat:Connect(function()
                     if detonated then
                         return
                     end
 
-                    local target = targetValue.Value
-                    if target and target.Parent then
-                        local toTarget = target.Position - rocket.Position
-                        if toTarget.Magnitude < 1 then
-                            explode()
-                            return
-                        end
-
-                        local direction = toTarget.Unit
-                        rocket.CFrame = CFrame.lookAt(rocket.Position, rocket.Position + direction)
-                        rocket.AssemblyLinearVelocity = direction * ROCKET_SPEED
-                    else
-                        local forward = rocket.CFrame.LookVector
-                        rocket.AssemblyLinearVelocity = forward * ROCKET_SPEED
-                    end
+                    rocket.CFrame = CFrame.lookAt(rocket.Position, rocket.Position + flightDirection)
+                    rocket.AssemblyLinearVelocity = flightDirection * ROCKET_SPEED
                 end)
 
                 destroyingConn = rocket.Destroying:Connect(function()
