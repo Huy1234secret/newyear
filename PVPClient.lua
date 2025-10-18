@@ -160,18 +160,20 @@ local function getPlayerControls()
 end
 
 local GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
-local DEFAULT_CURSOR_IMAGE_ASSET = GEAR_CURSOR_IMAGE_ASSET
-local currentCursorImageAsset = DEFAULT_CURSOR_IMAGE_ASSET
+local currentCursorImageAsset = GEAR_CURSOR_IMAGE_ASSET
 local DEFAULT_WALK_SPEED = 16
 
-local INVENTORY_BASE_ZINDEX = 60
-local SLOT_CONTENT_BASE_ZINDEX = INVENTORY_BASE_ZINDEX + 1
-local SLOT_ICON_ZINDEX = SLOT_CONTENT_BASE_ZINDEX + 1
-local SLOT_TEXT_ZINDEX = SLOT_CONTENT_BASE_ZINDEX + 2
-local SLOT_BUTTON_ZINDEX = SLOT_CONTENT_BASE_ZINDEX + 4
-local SPRINT_CONTAINER_ZINDEX = SLOT_BUTTON_ZINDEX + 10
-local SPRINT_TEXT_ZINDEX = SPRINT_CONTAINER_ZINDEX + 2
-local SPRINT_BAR_ZINDEX = SPRINT_CONTAINER_ZINDEX + 1
+local Z_INDEX = {
+    INVENTORY_BASE = 60,
+}
+
+Z_INDEX.SLOT_CONTENT_BASE = Z_INDEX.INVENTORY_BASE + 1
+Z_INDEX.SLOT_ICON = Z_INDEX.SLOT_CONTENT_BASE + 1
+Z_INDEX.SLOT_TEXT = Z_INDEX.SLOT_CONTENT_BASE + 2
+Z_INDEX.SLOT_BUTTON = Z_INDEX.SLOT_CONTENT_BASE + 4
+Z_INDEX.SPRINT_CONTAINER = Z_INDEX.SLOT_BUTTON + 10
+Z_INDEX.SPRINT_BAR = Z_INDEX.SPRINT_CONTAINER + 1
+Z_INDEX.SPRINT_TEXT = Z_INDEX.SPRINT_CONTAINER + 2
 
 type UiRefs = {
     energyBarFill: Frame?,
@@ -693,7 +695,7 @@ local function createSprintUI(parent: ScreenGui, refs: UiRefs, isTouch: boolean,
         Position = UDim2.new(0.5, 0, 1, -layout.sprintBottomOffset),
         AnchorPoint = Vector2.new(0.5, 1),
         BackgroundTransparency = 1,
-        ZIndex = SPRINT_CONTAINER_ZINDEX,
+        ZIndex = Z_INDEX.SPRINT_CONTAINER,
         Parent = parent,
     })
 
@@ -716,7 +718,7 @@ local function createSprintUI(parent: ScreenGui, refs: UiRefs, isTouch: boolean,
         TextSize = isTouch and 14 or 16,
         TextScaled = false,
         Text = "Sprint OFF",
-        ZIndex = SPRINT_TEXT_ZINDEX,
+        ZIndex = Z_INDEX.SPRINT_TEXT,
         Parent = container,
     })
 
@@ -727,7 +729,7 @@ local function createSprintUI(parent: ScreenGui, refs: UiRefs, isTouch: boolean,
         AnchorPoint = Vector2.new(0.5, 0),
         BackgroundColor3 = Color3.fromRGB(34, 52, 82),
         BackgroundTransparency = 0.15,
-        ZIndex = SPRINT_BAR_ZINDEX,
+        ZIndex = Z_INDEX.SPRINT_BAR,
         Parent = container,
     })
 
@@ -750,7 +752,7 @@ local function createSprintUI(parent: ScreenGui, refs: UiRefs, isTouch: boolean,
         Size = UDim2.new(1, -(layout.energyTextWidth + 20), 1, 0),
         BackgroundTransparency = 1,
         ClipsDescendants = true,
-        ZIndex = SPRINT_BAR_ZINDEX,
+        ZIndex = Z_INDEX.SPRINT_BAR,
         Parent = background,
     })
 
@@ -759,7 +761,7 @@ local function createSprintUI(parent: ScreenGui, refs: UiRefs, isTouch: boolean,
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundColor3 = Color3.fromRGB(52, 80, 130),
         BackgroundTransparency = 0.3,
-        ZIndex = SPRINT_BAR_ZINDEX,
+        ZIndex = Z_INDEX.SPRINT_BAR,
         Parent = energyFillContainer,
     })
 
@@ -774,7 +776,7 @@ local function createSprintUI(parent: ScreenGui, refs: UiRefs, isTouch: boolean,
         Position = UDim2.new(0, 0, 0.5, 0),
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundColor3 = Color3.fromRGB(80, 190, 255),
-        ZIndex = SPRINT_BAR_ZINDEX + 1,
+        ZIndex = Z_INDEX.SPRINT_BAR + 1,
         Parent = energyFillBackground,
     })
 
@@ -804,7 +806,7 @@ local function createSprintUI(parent: ScreenGui, refs: UiRefs, isTouch: boolean,
         TextXAlignment = Enum.TextXAlignment.Right,
         TextYAlignment = Enum.TextYAlignment.Center,
         Text = "Energy 100%",
-        ZIndex = SPRINT_TEXT_ZINDEX,
+        ZIndex = Z_INDEX.SPRINT_TEXT,
         Parent = background,
     })
 
@@ -855,7 +857,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
             Size = UDim2.fromOffset(layout.inventoryWidth, layout.inventoryHeight),
             Position = UDim2.new(0.5, 0, 1, -layout.inventoryBottomMargin),
             BackgroundTransparency = 1,
-            ZIndex = INVENTORY_BASE_ZINDEX,
+            ZIndex = Z_INDEX.INVENTORY_BASE,
             Parent = parent,
         })
 
@@ -944,7 +946,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
                 Size = UDim2.fromOffset(layout.slotSize, layout.slotSize),
                 BackgroundColor3 = Color3.fromRGB(24, 28, 40),
                 BackgroundTransparency = 0.2,
-                ZIndex = SLOT_CONTENT_BASE_ZINDEX,
+                ZIndex = Z_INDEX.SLOT_CONTENT_BASE,
                 LayoutOrder = slotIndex,
                 Parent = slotContainer,
             })
@@ -976,7 +978,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
                 TextXAlignment = Enum.TextXAlignment.Left,
                 TextYAlignment = Enum.TextYAlignment.Top,
                 Text = slotIndex == 10 and "0" or tostring(slotIndex),
-                ZIndex = SLOT_TEXT_ZINDEX,
+                ZIndex = Z_INDEX.SLOT_TEXT,
                 Parent = slotUI.frame,
             })
 
@@ -988,7 +990,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
                 AnchorPoint = Vector2.new(0.5, 0),
                 Image = "",
                 ScaleType = Enum.ScaleType.Fit,
-                ZIndex = SLOT_ICON_ZINDEX,
+                ZIndex = Z_INDEX.SLOT_ICON,
                 Parent = slotUI.frame,
             })
 
@@ -1005,7 +1007,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
                 TextScaled = false,
                 TextWrapped = true,
                 TextTruncate = Enum.TextTruncate.AtEnd,
-                ZIndex = SLOT_TEXT_ZINDEX,
+                ZIndex = Z_INDEX.SLOT_TEXT,
                 Parent = slotUI.frame,
             })
 
@@ -1017,7 +1019,7 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
                 ImageTransparency = 1,
                 Active = true,
                 Selectable = false,
-                ZIndex = SLOT_BUTTON_ZINDEX,
+                ZIndex = Z_INDEX.SLOT_BUTTON,
                 Parent = slotUI.frame,
             })
 
