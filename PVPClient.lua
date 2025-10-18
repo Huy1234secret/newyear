@@ -908,6 +908,7 @@ local pendingInvisiblePulseUpdate = false
 
 local invertedControlState = {
     active = false,
+    requested = false,
     keyboard = {
         forward = false,
         back = false,
@@ -958,7 +959,7 @@ local MAX_SPRINT_ENERGY = 100
 local SPRINT_DRAIN_RATE = 10
 local SPRINT_RECHARGE_RATE = 20
 local SPRINT_RECHARGE_DELAY = 2
-local SPRINT_SPEED = 28
+local BASE_SPRINT_SPEED = 28
 local SPRINT_TWEEN_TIME = 1
 local SPRINT_FOV_OFFSET = 8
 
@@ -979,6 +980,24 @@ local sprintState: SprintState = {
 
 local currentHumanoid: Humanoid? = nil
 local humanoidSpeedChangedConn: RBXScriptConnection? = nil
+local humanoidSprintBonusConn: RBXScriptConnection? = nil
+
+local function getHumanoidSprintBonus(humanoid: Humanoid?): number
+    if not humanoid then
+        return 0
+    end
+
+    local bonus = humanoid:GetAttribute("SprintSpeedBonus")
+    if typeof(bonus) == "number" then
+        return bonus
+    end
+
+    return 0
+end
+
+local function getSprintTargetSpeed(): number
+    return BASE_SPRINT_SPEED + getHumanoidSprintBonus(currentHumanoid)
+end
 
 local mouse = if UserInputService.TouchEnabled then nil else localPlayer:GetMouse()
 local applyingMouseIcon = false
@@ -1395,7 +1414,7 @@ local function clearInvisibleHighlight(character: Model)
     end
 end
 
-local function applyCharacterInvisibility(character: Model, enabled: boolean)
+local function applyCharacterInvisibility(character: Model, enabled: boolean, owner: Player?)
     for _, descendant in character:GetDescendants() do
         if descendant:IsA("BasePart") then
             local belongsToTool = false
@@ -1409,7 +1428,16 @@ local function applyCharacterInvisibility(character: Model, enabled: boolean)
             end
 
             if not belongsToTool then
-                descendant.LocalTransparencyModifier = enabled and 0.5 or 0
+                local targetTransparency = 0
+                if enabled then
+                    if owner == localPlayer then
+                        targetTransparency = 0.5
+                    else
+                        targetTransparency = 1
+                    end
+                end
+
+                descendant.LocalTransparencyModifier = targetTransparency
             end
         end
     end
@@ -1422,7 +1450,7 @@ local function updateInvisibilityForPlayer(player: Player)
     end
 
     local shouldBeInvisible = invisibilityState.enabled and player.Neutral
-    applyCharacterInvisibility(character, shouldBeInvisible)
+    applyCharacterInvisibility(character, shouldBeInvisible, player)
 
     if not shouldBeInvisible then
         clearInvisibleHighlight(character)
@@ -1440,7 +1468,7 @@ local function clearInvisibilityTracking()
 
     for _, player in Players:GetPlayers() do
         if player.Character then
-            applyCharacterInvisibility(player.Character, false)
+            applyCharacterInvisibility(player.Character, false, player)
             clearInvisibleHighlight(player.Character)
         end
     end
@@ -1496,7 +1524,7 @@ local function updateInvisiblePulseState()
                     local character = player.Character
                     if character then
                         local highlight = ensureInvisibleHighlight(character)
-                        highlight.FillTransparency = 0.1
+                        highlight.FillTransparency = 0.5
                         highlight.OutlineTransparency = 0
                     end
                 end
@@ -1629,97 +1657,115 @@ local function updateInvertedMovement()
     humanoid:Move(moveVector, true)
 end
 
-local function setInvertedControlsEnabled(enabled: boolean)
-    if invertedControlState.active == enabled then
+local function disableInvertedControls()
+    for _, connection in invertedControlState.connections do
+        connection:Disconnect()
+    end
+    table.clear(invertedControlState.connections)
+
+    if invertedControlState.heartbeatConn then
+        invertedControlState.heartbeatConn:Disconnect()
+        invertedControlState.heartbeatConn = nil
+    end
+
+    resetInvertedMovement()
+
+    local controls = getPlayerControls()
+    if controls and controls.Enable then
+        local ok, err = pcall(function()
+            controls:Enable()
+        end)
+        if not ok then
+            warn("Failed to re-enable default controls after inverted event:", err)
+        end
+    end
+
+    invertedControlState.active = false
+end
+
+local function enableInvertedControls()
+    if invertedControlState.active then
         return
     end
 
-    invertedControlState.active = enabled
-
-    if enabled then
-        local controls = getPlayerControls()
-        if controls and controls.Enable then
-            local ok, err = pcall(function()
-                controls:Disable()
-            end)
-            if not ok then
-                warn("Failed to disable default controls for inverted event:", err)
-            end
-        end
-
-        resetInvertedMovement()
-
-        local function onInputBegan(input: InputObject, processed: boolean)
-            if processed then
-                return
-            end
-
-            local key = input.KeyCode
-            if key == Enum.KeyCode.W or key == Enum.KeyCode.Up then
-                invertedControlState.keyboard.forward = true
-            elseif key == Enum.KeyCode.S or key == Enum.KeyCode.Down then
-                invertedControlState.keyboard.back = true
-            elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left then
-                invertedControlState.keyboard.left = true
-            elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
-                invertedControlState.keyboard.right = true
-            end
-        end
-
-        local function onInputEnded(input: InputObject)
-            local key = input.KeyCode
-            if key == Enum.KeyCode.W or key == Enum.KeyCode.Up then
-                invertedControlState.keyboard.forward = false
-            elseif key == Enum.KeyCode.S or key == Enum.KeyCode.Down then
-                invertedControlState.keyboard.back = false
-            elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left then
-                invertedControlState.keyboard.left = false
-            elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
-                invertedControlState.keyboard.right = false
-            elseif key == Enum.KeyCode.Thumbstick1 then
-                invertedControlState.thumbstick = Vector2.new(0, 0)
-            end
-        end
-
-        local function onInputChanged(input: InputObject)
-            if input.KeyCode == Enum.KeyCode.Thumbstick1 then
-                invertedControlState.thumbstick = Vector2.new(input.Position.X, input.Position.Y)
-            end
-        end
-
-        invertedControlState.connections = {
-            UserInputService.InputBegan:Connect(onInputBegan),
-            UserInputService.InputEnded:Connect(onInputEnded),
-            UserInputService.InputChanged:Connect(onInputChanged),
-        }
-
-        if invertedControlState.heartbeatConn then
-            invertedControlState.heartbeatConn:Disconnect()
-        end
-        invertedControlState.heartbeatConn = RunService.Heartbeat:Connect(updateInvertedMovement)
-    else
-        for _, connection in invertedControlState.connections do
-            connection:Disconnect()
-        end
-        table.clear(invertedControlState.connections)
-
-        if invertedControlState.heartbeatConn then
-            invertedControlState.heartbeatConn:Disconnect()
-            invertedControlState.heartbeatConn = nil
-        end
-
-        resetInvertedMovement()
-
-        local controls = getPlayerControls()
-        if controls and controls.Enable then
-            local ok, err = pcall(function()
-                controls:Enable()
-            end)
-            if not ok then
-                warn("Failed to re-enable default controls after inverted event:", err)
-            end
+    local controls = getPlayerControls()
+    if controls and controls.Enable then
+        local ok, err = pcall(function()
+            controls:Disable()
+        end)
+        if not ok then
+            warn("Failed to disable default controls for inverted event:", err)
         end
     end
+
+    resetInvertedMovement()
+
+    local function onInputBegan(input: InputObject, processed: boolean)
+        if processed then
+            return
+        end
+
+        local key = input.KeyCode
+        if key == Enum.KeyCode.W or key == Enum.KeyCode.Up then
+            invertedControlState.keyboard.forward = true
+        elseif key == Enum.KeyCode.S or key == Enum.KeyCode.Down then
+            invertedControlState.keyboard.back = true
+        elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left then
+            invertedControlState.keyboard.left = true
+        elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
+            invertedControlState.keyboard.right = true
+        end
+    end
+
+    local function onInputEnded(input: InputObject)
+        local key = input.KeyCode
+        if key == Enum.KeyCode.W or key == Enum.KeyCode.Up then
+            invertedControlState.keyboard.forward = false
+        elseif key == Enum.KeyCode.S or key == Enum.KeyCode.Down then
+            invertedControlState.keyboard.back = false
+        elseif key == Enum.KeyCode.A or key == Enum.KeyCode.Left then
+            invertedControlState.keyboard.left = false
+        elseif key == Enum.KeyCode.D or key == Enum.KeyCode.Right then
+            invertedControlState.keyboard.right = false
+        elseif key == Enum.KeyCode.Thumbstick1 then
+            invertedControlState.thumbstick = Vector2.new(0, 0)
+        end
+    end
+
+    local function onInputChanged(input: InputObject)
+        if input.KeyCode == Enum.KeyCode.Thumbstick1 then
+            invertedControlState.thumbstick = Vector2.new(input.Position.X, input.Position.Y)
+        end
+    end
+
+    invertedControlState.connections = {
+        UserInputService.InputBegan:Connect(onInputBegan),
+        UserInputService.InputEnded:Connect(onInputEnded),
+        UserInputService.InputChanged:Connect(onInputChanged),
+    }
+
+    if invertedControlState.heartbeatConn then
+        invertedControlState.heartbeatConn:Disconnect()
+    end
+    invertedControlState.heartbeatConn = RunService.Heartbeat:Connect(updateInvertedMovement)
+
+    invertedControlState.active = true
+end
+
+local function applyInvertedControlState()
+    local shouldEnable = invertedControlState.requested and localPlayer.Neutral
+    if shouldEnable then
+        enableInvertedControls()
+    else
+        if invertedControlState.active then
+            disableInvertedControls()
+        end
+    end
+end
+
+local function setInvertedControlsEnabled(enabled: boolean)
+    invertedControlState.requested = enabled
+    applyInvertedControlState()
 end
 
 local function getSprintActionButton(): ImageButton?
@@ -1779,13 +1825,14 @@ local function recomputeSprintIntent()
 end
 
 local function setSprintEventDisabled(disabled: boolean)
-    if sprintState.eventDisabled == disabled then
+    local shouldDisable = disabled and localPlayer.Neutral
+    if sprintState.eventDisabled == shouldDisable then
         return
     end
 
-    sprintState.eventDisabled = disabled
+    sprintState.eventDisabled = shouldDisable
 
-    if disabled then
+    if shouldDisable then
         if sprintState.isSprinting then
             stopSprinting(true)
         end
@@ -1975,7 +2022,9 @@ local function startSprinting()
         baselineSpeed = humanoid.WalkSpeed
     end
 
-    if math.abs(baselineSpeed - SPRINT_SPEED) < 0.001 then
+    local sprintTarget = getSprintTargetSpeed()
+
+    if math.abs(baselineSpeed - sprintTarget) < 0.001 then
         baselineSpeed = DEFAULT_WALK_SPEED
     elseif baselineSpeed <= 0 then
         baselineSpeed = DEFAULT_WALK_SPEED
@@ -1983,7 +2032,7 @@ local function startSprinting()
 
     sprintState.originalWalkSpeed = baselineSpeed
 
-    tweenHumanoidSpeed(SPRINT_SPEED, false)
+    tweenHumanoidSpeed(sprintTarget, false)
 
     local camera = Workspace.CurrentCamera
     if camera then
@@ -2377,10 +2426,14 @@ end
 
 localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
     updateHighlightActivation()
+    setSprintEventDisabled(specialEventState.effects.sprintDisabled)
+    applyInvertedControlState()
 end)
 
 localPlayer:GetPropertyChangedSignal("Neutral"):Connect(function()
     updateHighlightActivation()
+    setSprintEventDisabled(specialEventState.effects.sprintDisabled)
+    applyInvertedControlState()
 end)
 
 initializeBackpackTracking()
@@ -2422,15 +2475,26 @@ local function onHumanoidAdded(humanoid: Humanoid)
     end
 
     currentHumanoid = humanoid
+    if humanoidSprintBonusConn then
+        humanoidSprintBonusConn:Disconnect()
+        humanoidSprintBonusConn = nil
+    end
     if humanoid.WalkSpeed <= 0 then
         humanoid.WalkSpeed = DEFAULT_WALK_SPEED
     end
 
     local currentSpeed = humanoid.WalkSpeed
-    if math.abs(currentSpeed - SPRINT_SPEED) < 0.001 then
+    local sprintTarget = getSprintTargetSpeed()
+    if math.abs(currentSpeed - sprintTarget) < 0.001 then
         currentSpeed = DEFAULT_WALK_SPEED
     end
     sprintState.originalWalkSpeed = currentSpeed
+
+    humanoidSprintBonusConn = humanoid:GetAttributeChangedSignal("SprintSpeedBonus"):Connect(function()
+        if sprintState.isSprinting then
+            tweenHumanoidSpeed(getSprintTargetSpeed(), true)
+        end
+    end)
 
     humanoidSpeedChangedConn = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
         if sprintState.isSprinting then
@@ -2442,9 +2506,10 @@ local function onHumanoidAdded(humanoid: Humanoid)
         end
 
         local newSpeed = humanoid.WalkSpeed
+        local target = getSprintTargetSpeed()
         if newSpeed <= 0 then
             newSpeed = DEFAULT_WALK_SPEED
-        elseif math.abs(newSpeed - SPRINT_SPEED) < 0.001 then
+        elseif math.abs(newSpeed - target) < 0.001 then
             newSpeed = DEFAULT_WALK_SPEED
         end
 
@@ -2491,6 +2556,10 @@ localPlayer.CharacterRemoving:Connect(function()
     if humanoidSpeedChangedConn then
         humanoidSpeedChangedConn:Disconnect()
         humanoidSpeedChangedConn = nil
+    end
+    if humanoidSprintBonusConn then
+        humanoidSprintBonusConn:Disconnect()
+        humanoidSprintBonusConn = nil
     end
     currentHumanoid = nil
     if characterGearConn then
@@ -3350,6 +3419,15 @@ statusRemote.OnClientEvent:Connect(function(payload)
         else
             stopFlash()
         end
+    elseif action == "MatchMessage" then
+        stopFlash()
+        stopShake()
+        statusUI.frame.Visible = true
+        resetFrameVisual()
+        statusUI.label.TextColor3 = matchColor
+        statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
+        statusUI.label.Text = if typeof(payload.text) == "string" then payload.text else ""
+        statusUI.labelStroke.Transparency = 0.2
     elseif action == "DeathMatchTransition" then
         stopFlash()
         stopShake()
