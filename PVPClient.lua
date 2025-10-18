@@ -265,6 +265,43 @@ local inventoryVisible = true
 local inventoryAutoOpened = false
 local setInventoryVisibility: (boolean) -> ()
 
+local hotTouchActive = false
+local currentHotTouchHolderId: number? = nil
+
+local function refreshHotTouchStatusVisibility()
+    local label = uiRefs.hotTouchStatusLabel
+    if not label then
+        return
+    end
+
+    local statusFrame = uiRefs.statusFrame
+    if statusFrame and not statusFrame.Visible then
+        label.Visible = false
+        return
+    end
+
+    if not hotTouchActive or label.Text == "" then
+        label.Visible = false
+    else
+        label.Visible = true
+    end
+end
+
+local function setHotTouchStatusText(text: string?)
+    local label = uiRefs.hotTouchStatusLabel
+    if not label then
+        return
+    end
+
+    if text and text ~= "" then
+        label.Text = text
+    else
+        label.Text = ""
+    end
+
+    refreshHotTouchStatusVisibility()
+end
+
 local sprintInteraction = {
     noSprintPart = nil :: BasePart?,
     actionBound = false,
@@ -1206,9 +1243,6 @@ local pendingInvisiblePulseUpdate = false
 
 type HighlightTweenBundle = {tween: Tween, conn: RBXScriptConnection?}
 local invisibleHighlightTweens: {[Highlight]: HighlightTweenBundle} = {}
-
-local hotTouchActive = false
-local currentHotTouchHolderId: number? = nil
 
 local invertedControlState = {
     active = false,
@@ -3389,40 +3423,6 @@ local function updateMapLabel(mapId: string?)
     end
 end
 
-local function refreshHotTouchStatusVisibility()
-    local label = uiRefs.hotTouchStatusLabel
-    if not label then
-        return
-    end
-
-    local statusFrame = uiRefs.statusFrame
-    if statusFrame and not statusFrame.Visible then
-        label.Visible = false
-        return
-    end
-
-    if not hotTouchActive or label.Text == "" then
-        label.Visible = false
-    else
-        label.Visible = true
-    end
-end
-
-local function setHotTouchStatusText(text: string?)
-    local label = uiRefs.hotTouchStatusLabel
-    if not label then
-        return
-    end
-
-    if text and text ~= "" then
-        label.Text = text
-    else
-        label.Text = ""
-    end
-
-    refreshHotTouchStatusVisibility()
-end
-
 local function formatCountdown(seconds: number): string
     if seconds <= 0 then
         return "Match starting..."
@@ -3788,6 +3788,11 @@ local StormEffects = (function()
         end
     end
 
+    local function isPositionInsideStormXZ(stormPart: BasePart, halfSize: Vector3, position: Vector3): boolean
+        local relative = stormPart.CFrame:PointToObjectSpace(position)
+        return math.abs(relative.X) <= halfSize.X and math.abs(relative.Z) <= halfSize.Z
+    end
+
     local function onHeartbeat()
         local storm = state.trackedPart
         if not storm or not storm.Parent then
@@ -3822,22 +3827,15 @@ local StormEffects = (function()
             return
         end
 
-        local relative = storm.CFrame:PointToObjectSpace(rootPart.Position)
-        local outsideX = math.abs(relative.X) > halfSize.X
-        local outsideZ = math.abs(relative.Z) > halfSize.Z
-        local characterOutside = outsideX or outsideZ
+        local characterInStorm = isPositionInsideStormXZ(storm, halfSize, rootPart.Position)
 
         local camera = Workspace.CurrentCamera
-        local cameraOutside = false
+        local cameraInStorm = false
         if camera then
-            local cameraPosition = camera.CFrame.Position
-            local cameraRelative = storm.CFrame:PointToObjectSpace(cameraPosition)
-            if math.abs(cameraRelative.X) > halfSize.X or math.abs(cameraRelative.Z) > halfSize.Z then
-                cameraOutside = true
-            end
+            cameraInStorm = isPositionInsideStormXZ(storm, halfSize, camera.CFrame.Position)
         end
 
-        updateExposure(characterOutside, characterOutside or cameraOutside)
+        updateExposure(characterInStorm, characterInStorm or cameraInStorm)
     end
 
     refreshPartReference()
