@@ -772,7 +772,7 @@ do
                     end)
 
                     Debris:AddItem(bomb, 15)
-                    task.wait(rng:NextNumber(0.75, 1.5))
+                    task.wait(0.5)
                 end
             end)
         end,
@@ -828,8 +828,7 @@ do
             local origin = cf.Position
             local killBotRandom = Random.new()
 
-            local SCAN_RADIUS = 180
-            local FIRE_RANGE = 140
+            local SCAN_RADIUS = math.huge
             local FIRE_COOLDOWN = 2.25
             local HOVER_HEIGHT = 8
             local MOVE_FORCE = 6000
@@ -1066,17 +1065,13 @@ do
                 end
             end
 
-            local function createRocket(botState, targetHRP: BasePart, distance: number?)
+            local function createRocket(botState, targetHRP: BasePart)
                 if not targetHRP or not targetHRP.Parent then
                     return
                 end
 
                 local ball = botState.ball
                 if not ball or not ball.Parent then
-                    return
-                end
-
-                if distance and distance > FIRE_RANGE then
                     return
                 end
 
@@ -1096,19 +1091,24 @@ do
                 rocket.CanQuery = false
                 rocket.CanTouch = true
                 rocket.Anchored = false
-                rocket.CFrame = CFrame.lookAt(ball.Position + (ball.CFrame.LookVector * 2), targetHRP.Position)
+
+                local launchOrigin = ball.Position + (ball.CFrame.LookVector * 2)
+                local toTarget = targetHRP.Position - launchOrigin
+                if toTarget.Magnitude == 0 then
+                    toTarget = ball.CFrame.LookVector
+                end
+                local targetDirection = toTarget.Unit
+
+                rocket.CFrame = CFrame.lookAt(launchOrigin, launchOrigin + targetDirection)
                 rocket.Parent = Workspace
                 rocket:SetNetworkOwner(nil)
-
-                local targetValue = Instance.new("ObjectValue")
-                targetValue.Name = "Target"
-                targetValue.Value = targetHRP
-                targetValue.Parent = rocket
 
                 local detonated = false
                 local stepConn: RBXScriptConnection? = nil
                 local touchedConn: RBXScriptConnection? = nil
                 local destroyingConn: RBXScriptConnection? = nil
+
+                rocket.AssemblyLinearVelocity = targetDirection * ROCKET_SPEED
 
                 local function disconnectAll()
                     if stepConn then
@@ -1164,21 +1164,8 @@ do
                         return
                     end
 
-                    local target = targetValue.Value
-                    if target and target.Parent then
-                        local toTarget = target.Position - rocket.Position
-                        if toTarget.Magnitude < 1 then
-                            explode()
-                            return
-                        end
-
-                        local direction = toTarget.Unit
-                        rocket.CFrame = CFrame.lookAt(rocket.Position, rocket.Position + direction)
-                        rocket.AssemblyLinearVelocity = direction * ROCKET_SPEED
-                    else
-                        local forward = rocket.CFrame.LookVector
-                        rocket.AssemblyLinearVelocity = forward * ROCKET_SPEED
-                    end
+                    rocket.CFrame = CFrame.lookAt(rocket.Position, rocket.Position + targetDirection)
+                    rocket.AssemblyLinearVelocity = targetDirection * ROCKET_SPEED
                 end)
 
                 destroyingConn = rocket.Destroying:Connect(function()
@@ -1276,10 +1263,10 @@ do
                         continue
                     end
 
-                    local targetHRP, distance = selectBotTarget(botState, dt)
+                    local targetHRP = selectBotTarget(botState, dt)
                     stepBot(botState, dt, targetHRP)
                     if targetHRP then
-                        createRocket(botState, targetHRP, distance)
+                        createRocket(botState, targetHRP)
                     end
                 end
             end)
