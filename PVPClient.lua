@@ -2189,6 +2189,11 @@ end
 local function setInvertedControlsEnabled(enabled: boolean)
     invertedControlState.requested = enabled
     applyInvertedControlState()
+
+    if not enabled then
+        resetInvertedMovement()
+        enableDefaultControlsIfDisabled()
+    end
 end
 
 local function getSprintActionButton(): ImageButton?
@@ -3150,12 +3155,14 @@ RunService.Heartbeat:Connect(function(deltaTime)
         startSprinting()
     end
 
+    local standingStill = not isMoving
+
     if sprintState.isSprinting then
         if isMoving then
             sprintState.energy = math.max(0, sprintState.energy - dt * SPRINT_DRAIN_RATE)
             sprintState.rechargeBlockedUntil = now + SPRINT_RECHARGE_DELAY
         else
-            sprintState.rechargeBlockedUntil = math.max(sprintState.rechargeBlockedUntil, now + SPRINT_RECHARGE_DELAY)
+            sprintState.rechargeBlockedUntil = math.min(sprintState.rechargeBlockedUntil, now)
         end
 
         if sprintState.energy <= 0 then
@@ -3169,7 +3176,17 @@ RunService.Heartbeat:Connect(function(deltaTime)
             recomputeSprintIntent()
             stopSprinting(false)
         end
-    elseif sprintState.energy < MAX_SPRINT_ENERGY and now >= sprintState.rechargeBlockedUntil then
+    else
+        if standingStill then
+            sprintState.rechargeBlockedUntil = math.min(sprintState.rechargeBlockedUntil, now)
+        end
+    end
+
+    local canRecharge = sprintState.energy < MAX_SPRINT_ENERGY
+        and now >= sprintState.rechargeBlockedUntil
+        and (not sprintState.isSprinting or standingStill)
+
+    if canRecharge then
         sprintState.energy = math.min(MAX_SPRINT_ENERGY, sprintState.energy + dt * SPRINT_RECHARGE_RATE)
     end
 
