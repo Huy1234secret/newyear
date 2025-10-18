@@ -848,6 +848,7 @@ do
 			local cf, _ = getActiveMapBounds()
 			local arenaCenter = cf.Position
 			local killBotRandom = Random.new()
+			local killBotRandom = Random.new()
 -- Movement bounds: use current storm size for X/Z, and clamp Y within ±100 around arena center
 			local function currentBounds()
 				local stormSize = getStormHorizontalSize() -- Vector2 (X, Z)
@@ -874,11 +875,15 @@ do
 -- Tunables (feel free to tweak)
 			local BOT_COUNT = 3
 			local HOVER_HEIGHT = 10
-			local TRAVEL_MAX_SPEED = 80
-			local TRAVEL_FORCE = 8000
+			local TRAVEL_MAX_SPEED = 85
+			local TRAVEL_ACCEL_GAIN = 75
 			local ARRIVE_EPS = 4
 
-			local FIRE_COOLDOWN = 2.25 -- seconds between shots while stationary
+			-- Patrol/hold pattern
+			local HOLD_TIME_RANGE = Vector2.new(0.7, 2.0) -- seconds to pause & shoot
+			local FIRE_INTERVAL = 0.65 -- seconds between shots while holding
+			local WAYPOINT_TIMEOUT = 6.0 -- if it can't reach in time, pick a new target
+local FIRE_COOLDOWN = 2.25 -- seconds between shots while stationary
 			local HOLD_TIME_BEFORE_FIRST_SHOT = 0.6
 
 			-- Rocket
@@ -1048,6 +1053,29 @@ local function randomXZInArena_DEPRECATED()
 			end
 
 			local function spawnBot(index: number)
+			local function pickNewWaypoint()
+				-- 1/3 chance to bias toward a random player's HRP position
+				local usePlayer = (killBotRandom:NextInteger(1,3) == 1)
+				if usePlayer then
+					local candidates = getNeutralParticipantRecords()
+					if #candidates > 0 then
+						local pick = candidates[killBotRandom:NextInteger(1, #candidates)]
+						local character = pick.player and pick.player.Character
+						if character then
+							local hrp = character:FindFirstChild("HumanoidRootPart")
+							if hrp then
+								return clampToBounds(hrp.Position + Vector3.new(
+									killBotRandom:NextNumber(-12,12),
+									killBotRandom:NextNumber(-6,6),
+									killBotRandom:NextNumber(-12,12)
+								))
+							end
+						end
+					end
+				end
+				return randomPointInBounds()
+			end
+
 				local model = Instance.new("Model")
 				model.Name = "KillBot_" .. tostring(index)
 
@@ -1085,20 +1113,24 @@ local function randomXZInArena_DEPRECATED()
 				align.Parent = ball
 
 				model.Parent = Workspace
+				model.Parent = Workspace
 				ball:SetNetworkOwner(nil)
 
-				local targetPos = randomPointInBounds()
+				local targetPos = pickNewWaypoint()
 				local botState = {
 					model = model,
 					ball = ball,
 					attachment = attachment,
 					vectorForce = vectorForce,
 					align = align,
-					phase = "travel", -- travel -> hold
+					phase = "travel", -- travel -> hold -> travel
 					targetPos = targetPos,
-					fireTimer = HOLD_TIME_BEFORE_FIRST_SHOT,
 					fireCooldown = 0,
+					nextFire = 0,
+					holdTimer = 0,
+					waypointTimer = 0,
 				}
+
 
 				model.Destroying:Connect(function()
 					botState.ball = nil
@@ -1122,55 +1154,61 @@ local function randomXZInArena_DEPRECATED()
 						continue
 					end
 
-					if bot.phase == "travel" then
-						-- Seek the one-time random target position
-						bot.targetPos = clampToBounds(bot.targetPos)
-					local offset = bot.targetPos - ball.Position
-						local dir = offset.Magnitude > 0 and offset.Unit or Vector3.zero
-						local needStop = offset.Magnitude <= ARRIVE_EPS
+					-- Clamp/update target if storm shrinks
+					bot.targetPos = clampToBounds(bot.targetPos)
 
-						if needStop then
-							-- Stop movement
-							bot.vectorForce.Force = Vector3.zero
+					if bot.phase == "travel" then
+						-- Seek the current waypoint with a gentle bob
+						bot.waypointTimer = (bot.waypointTimer or 0) + dt
+						local offset = bot.targetPos - ball.Position
+						local arrived = offset.Magnitude <= ARRIVE_EPS or (bot.waypointTimer > WAYPOINT_TIMEOUT)
+
+						if arrived then
+							-- Stop & enter hold phase
+							bot.vectorForce.Force = Vector3.new(0, Workspace.Gravity * ball.AssemblyMass, 0)
 							bot.phase = "hold"
-							bot.fireTimer = HOLD_TIME_BEFORE_FIRST_SHOT
+							bot.holdTimer = killBotRandom:NextNumber(HOLD_TIME_RANGE.X, HOLD_TIME_RANGE.Y)
+							bot.nextFire = 0
+							bot.waypointTimer = 0
 						else
-							-- Apply force toward target with a proportional control
-							local desiredVel = dir * TRAVEL_MAX_SPEED
-							local accel = (desiredVel - ball.AssemblyLinearVelocity) * 75
-							-- Include gravity cancel
+							local dir = offset.Unit
+							-- bobbing on Y for that classic hover feel
+							local bob = math.sin(os.clock() * 4 + (ball:GetDebugId():byte() % 10)) * 2.0
+							local desiredVel = Vector3.new(dir.X, dir.Y, dir.Z) * TRAVEL_MAX_SPEED + Vector3.new(0, bob, 0)
+							local accel = (desiredVel - ball.AssemblyLinearVelocity) * TRAVEL_ACCEL_GAIN
+							-- include gravity cancel
 							accel += Vector3.new(0, Workspace.Gravity, 0)
-							bot.vectorForce.Force = Vector3.new(accel.X, accel.Y, accel.Z) * ball.AssemblyMass
+							bot.vectorForce.Force = accel * ball.AssemblyMass
 						end
+
 					else -- hold
-						-- stay hovering – minimal damping
+						-- Stay hovering at current spot
 						bot.vectorForce.Force = Vector3.new(0, Workspace.Gravity * ball.AssemblyMass, 0)
 
-						-- Keep bot inside the storm bounds; if out, move back inside
-						local clamped = clampToBounds(ball.Position)
-						if (ball.Position - clamped).Magnitude > 2 then
-							bot.targetPos = randomPointInBounds()
-							bot.phase = "travel"
-						end
-
-						-- Firing logic (pick ANY player in neutral records, regardless of distance/LOS)
-						bot.fireCooldown = math.max((bot.fireCooldown or 0) - dt, 0)
-						bot.fireTimer = math.max((bot.fireTimer or 0) - dt, 0)
-
-						if bot.fireTimer <= 0 and bot.fireCooldown <= 0 then
+						-- Fire bursts at interval
+						bot.holdTimer = math.max((bot.holdTimer or 0) - dt, 0)
+						bot.nextFire = math.max((bot.nextFire or 0) - dt, 0)
+						if bot.nextFire <= 0 then
 							local candidates = getNeutralParticipantRecords()
 							if #candidates > 0 then
 								local pick = candidates[killBotRandom:NextInteger(1, #candidates)]
-								local character = pick.player.Character
+								local character = pick.player and pick.player.Character
 								if character then
-                                    local hrp = character:FindFirstChild("HumanoidRootPart")
+									local hrp = character:FindFirstChild("HumanoidRootPart")
 									local humanoid = pick.humanoid or character:FindFirstChildOfClass("Humanoid")
 									if hrp and humanoid and humanoid.Health > 0 then
 										createRocket(bot, hrp)
-										bot.fireCooldown = FIRE_COOLDOWN
+										bot.nextFire = FIRE_INTERVAL
 									end
 								end
 							end
+						end
+
+						-- Time to move again?
+						if bot.holdTimer <= 0 then
+							bot.phase = "travel"
+							bot.targetPos = pickNewWaypoint()
+							bot.waypointTimer = 0
 						end
 					end
 				end
