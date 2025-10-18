@@ -37,53 +37,53 @@ function StormEffects.update(...) end
 --!strict
 -- Movement reset helper to stop stuck-forward after respawn
 local function resetMovementState(humanoid: Humanoid?)
-	if not humanoid then return end
-	local state = humanoid:GetState()
-	if state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.RunningNoPhysics then
-		humanoid:ChangeState(Enum.HumanoidStateType.Landed)
-end
+        if not humanoid then return end
+        local state = humanoid:GetState()
+        if state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.RunningNoPhysics then
+                humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+        end
 
-local Players = game:GetService("Players")
-local CAS = game:GetService("ContextActionService")
+        local Players = game:GetService("Players")
+        local CAS = game:GetService("ContextActionService")
 
--- Unbind any custom actions that may block default controls
-pcall(function()
-	CAS:UnbindAction("DisableMovement")
-	CAS:UnbindAction("Inverted_Move")
-	CAS:UnbindAction("Inverted_Look")
-end)
+        -- Unbind any custom actions that may block default controls
+        pcall(function()
+                CAS:UnbindAction("DisableMovement")
+                CAS:UnbindAction("Inverted_Move")
+                CAS:UnbindAction("Inverted_Look")
+        end)
 
--- Soft reset PlayerModule controls
-local okPM, controls = pcall(function()
-	local player = Players.LocalPlayer
-	local ps = player and player:FindFirstChildOfClass("PlayerScripts")
-	local pm = ps and ps:FindFirstChild("PlayerModule")
-	if not pm then return nil end
-	local PM = require(pm)
-	return PM:GetControls()
-end)
-if okPM and controls then
-	pcall(function() controls:Disable() end)
-end
+        -- Soft reset PlayerModule controls
+        local okPM, controls = pcall(function()
+                local player = Players.LocalPlayer
+                local ps = player and player:FindFirstChildOfClass("PlayerScripts")
+                local pm = ps and ps:FindFirstChild("PlayerModule")
+                if not pm then return nil end
+                local PM = require(pm)
+                return PM:GetControls()
+        end)
+        if okPM and controls then
+                pcall(function() controls:Disable() end)
+        end
 
--- Nudge humanoid state & clear movement intents
-if humanoid and humanoid.Parent then
-	pcall(function()
-		-- Zero the movement vector and suppress jump for a tick
-		humanoid:Move(Vector3.new(0,0,0), true)
-		humanoid.Jump = false
-		-- Sometimes RunningNoPhysics -> Running helps clear residual velocity intents
-		humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
-		task.wait(0.02)
-		humanoid:ChangeState(Enum.HumanoidStateType.Running)
-	end)
-end
+        -- Nudge humanoid state & clear movement intents
+        if humanoid and humanoid.Parent then
+                pcall(function()
+                        -- Zero the movement vector and suppress jump for a tick
+                        humanoid:Move(Vector3.new(0,0,0), true)
+                        humanoid.Jump = false
+                        -- Sometimes RunningNoPhysics -> Running helps clear residual velocity intents
+                        humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+                        task.wait(0.02)
+                        humanoid:ChangeState(Enum.HumanoidStateType.Running)
+                end)
+        end
 
--- Re-enable controls after a tiny delay so PlayerModule rebinds default actions
-task.wait(0.03)
-if okPM and controls then
-	pcall(function() controls:Enable() end)
-end
+        -- Re-enable controls after a tiny delay so PlayerModule rebinds default actions
+        task.wait(0.03)
+        if okPM and controls then
+                pcall(function() controls:Enable() end)
+        end
 end
 
 -- Place this LocalScript in StarterPlayerScripts so each player can see match updates.
@@ -109,28 +109,28 @@ local function hardEnableDefaultControls()
 		game:GetService("ContextActionService"):UnbindAction("Inverted_Look")
 	end)
 end
-Players = game:GetService("Players")
-StarterGui = game:GetService("StarterGui")
-ReplicatedStorage = game:GetService("ReplicatedStorage")
-RunService = game:GetService("RunService")
-TweenService = game:GetService("TweenService")
-Workspace = game:GetService("Workspace")
-ContextActionService = game:GetService("ContextActionService")
-UserInputService = game:GetService("UserInputService")
-Lighting = game:GetService("Lighting")
-SoundService = game:GetService("SoundService")
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local ContextActionService = game:GetService("ContextActionService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local SoundService = game:GetService("SoundService")
 
-localPlayer = Players.LocalPlayer
+local localPlayer = Players.LocalPlayer
 if not localPlayer then
 	return
 end
 
-remotesFolder = ReplicatedStorage:WaitForChild("PVPRemotes", 10)
+local remotesFolder = ReplicatedStorage:WaitForChild("PVPRemotes", 10)
 if not remotesFolder or not remotesFolder:IsA("Folder") then
 	return
 end
 
-statusRemote = remotesFolder:WaitForChild("StatusUpdate", 10)
+local statusRemote = remotesFolder:WaitForChild("StatusUpdate", 10)
 if not statusRemote or not statusRemote:IsA("RemoteEvent") then
 	return
 end
@@ -143,11 +143,11 @@ local function setToggleInventoryRemote(candidate: Instance?)
 	end
 end
 
-existingToggleRemote = remotesFolder:FindFirstChild("ToggleInventorySlot")
+local existingToggleRemote = remotesFolder:FindFirstChild("ToggleInventorySlot")
 if existingToggleRemote and existingToggleRemote:IsA("RemoteEvent") then
 	toggleInventorySlotRemote = existingToggleRemote
 else
-	foundToggle = remotesFolder:WaitForChild("ToggleInventorySlot", 5)
+        local foundToggle = remotesFolder:WaitForChild("ToggleInventorySlot", 5)
 	setToggleInventoryRemote(foundToggle)
 end
 
@@ -161,15 +161,15 @@ remotesFolder.ChildRemoved:Connect(function(child)
 	end
 end)
 
-playerGui = localPlayer:WaitForChild("PlayerGui")
+local playerGui = localPlayer:WaitForChild("PlayerGui")
 
-isTouchDevice = UserInputService.TouchEnabled
+local isTouchDevice = UserInputService.TouchEnabled
 
 if isTouchDevice then
 	StarterGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
 end
 
-UI_CONFIG = {
+local UI_CONFIG = {
 	DEFAULT_BACKGROUND_COLOR = Color3.fromRGB(28, 32, 45),
 	DEFAULT_BACKGROUND_TRANSPARENCY = 0.15,
 	DEFAULT_TEXT_SIZE = if isTouchDevice then 22 else 26,
@@ -179,7 +179,7 @@ UI_CONFIG = {
 	MAP_LABEL_PADDING = if isTouchDevice then 18 else 24,
 }
 
-mapDisplayNames = {
+local mapDisplayNames = {
 	Crossroad = "Crossroad",
 	SFOTH = "SFOTH",
 	ChaosCanyon = "Chaos Canyon",
@@ -198,8 +198,8 @@ local function createInstance(className: string, props: {[string]: any})
 	return instance
 end
 
-playerModule: any = nil
-playerControls: any = nil
+local playerModule: any = nil
+local playerControls: any = nil
 
 local function setBackpackCoreGuiEnabled(enabled: boolean)
 	local success, result = pcall(function()
@@ -357,7 +357,7 @@ type LayoutConfig = {
 	sprintBottomOffset: number,
 }
 
-uiRefs: UiRefs = {
+local uiRefs: UiRefs = {
 	energyBarFill = nil,
 	energyTextLabel = nil,
 	sprintStatusLabel = nil,
@@ -371,12 +371,12 @@ uiRefs: UiRefs = {
 	sprintActionButton = nil,
 }
 
-inventoryVisible = true
-inventoryAutoOpened = false
-setInventoryVisibility: (boolean) -> ()
+local inventoryVisible = true
+local inventoryAutoOpened = false
+local setInventoryVisibility: (boolean) -> ()
 
-hotTouchActive = false
-currentHotTouchHolderId: number? = nil
+local hotTouchActive = false
+local currentHotTouchHolderId: number? = nil
 
 local function refreshHotTouchStatusVisibility()
 	local label = uiRefs.hotTouchStatusLabel
@@ -476,8 +476,8 @@ type InventorySlotUI = {
 	button: GuiButton,
 }
 
-inventorySlots: {InventorySlotUI} = {}
-slotToolMapping: {Tool?} = {}
+local inventorySlots: {InventorySlotUI} = {}
+local slotToolMapping: {Tool?} = {}
 
 existingGui = playerGui:FindFirstChild("PVPStatusGui")
 if existingGui then
