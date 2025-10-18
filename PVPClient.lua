@@ -201,21 +201,6 @@ local sprintInteraction = {
     actionBound = false,
 }
 
-local stormVisualState = {
-    overlayGui = nil :: ScreenGui?,
-    gradientFrame = nil :: Frame?,
-    gradient = nil :: UIGradient?,
-    scanLine = nil :: Frame?,
-    animationConn = nil :: RBXScriptConnection?,
-    scanProgress = 0,
-    colorCorrection = nil :: ColorCorrectionEffect?,
-    depthOfField = nil :: DepthOfFieldEffect?,
-    equalizer = nil :: EqualizerSoundEffect?,
-    pitchShift = nil :: PitchShiftSoundEffect?,
-    trackedPart = nil :: BasePart?,
-    exposureActive = false,
-}
-
 local function updateNoSprintPartReference()
     local found = Workspace:FindFirstChild("NoSprintPart", true)
     if found and found:IsA("BasePart") then
@@ -2881,368 +2866,394 @@ local function formatTimer(seconds: number): string
     return string.format("%d:%02d", minutes, remainingSeconds)
 end
 
-local function ensureStormOverlay()
-    local state = stormVisualState
-    local existingGui = state.overlayGui
-    if existingGui and not existingGui.Parent then
-        state.overlayGui = nil
-        state.gradientFrame = nil
-        state.gradient = nil
-        state.scanLine = nil
+local StormEffects = (function()
+    local state = {
+        overlayGui = nil :: ScreenGui?,
+        gradientFrame = nil :: Frame?,
+        gradient = nil :: UIGradient?,
+        scanLine = nil :: Frame?,
+        animationConn = nil :: RBXScriptConnection?,
+        scanProgress = 0,
+        colorCorrection = nil :: ColorCorrectionEffect?,
+        depthOfField = nil :: DepthOfFieldEffect?,
+        equalizer = nil :: EqualizerSoundEffect?,
+        pitchShift = nil :: PitchShiftSoundEffect?,
+        trackedPart = nil :: BasePart?,
+        exposureActive = false,
+    }
+
+    local function ensureOverlay()
+        local existingGui = state.overlayGui
+        if existingGui and not existingGui.Parent then
+            state.overlayGui = nil
+            state.gradientFrame = nil
+            state.gradient = nil
+            state.scanLine = nil
+            if state.animationConn then
+                state.animationConn:Disconnect()
+                state.animationConn = nil
+            end
+            existingGui = nil
+        end
+
+        if not existingGui then
+            local foundGui = playerGui:FindFirstChild("StormExposureOverlay")
+            if foundGui and foundGui:IsA("ScreenGui") then
+                state.overlayGui = foundGui
+                existingGui = foundGui
+
+                local container = foundGui:FindFirstChild("Container")
+                if container and container:IsA("Frame") then
+                    local gradientFrame = container:FindFirstChild("Gradient")
+                    if gradientFrame and gradientFrame:IsA("Frame") then
+                        state.gradientFrame = gradientFrame
+                        local gradient = gradientFrame:FindFirstChildWhichIsA("UIGradient")
+                        state.gradient = gradient
+                    end
+
+                    local scanLineFrame = container:FindFirstChild("ScanLine")
+                    if scanLineFrame and scanLineFrame:IsA("Frame") then
+                        state.scanLine = scanLineFrame
+                    end
+                end
+            end
+        end
+
+        if existingGui then
+            if existingGui.Parent ~= playerGui then
+                existingGui.Parent = playerGui
+            end
+            return
+        end
+
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "StormExposureOverlay"
+        gui.ResetOnSpawn = false
+        gui.IgnoreGuiInset = true
+        gui.DisplayOrder = 90
+        gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+        gui.Enabled = false
+        gui.Parent = playerGui
+        state.overlayGui = gui
+
+        local container = Instance.new("Frame")
+        container.Name = "Container"
+        container.Size = UDim2.fromScale(1, 1)
+        container.BackgroundTransparency = 1
+        container.ClipsDescendants = true
+        container.Parent = gui
+
+        local gradientFrame = Instance.new("Frame")
+        gradientFrame.Name = "Gradient"
+        gradientFrame.Size = UDim2.fromScale(1.4, 1.4)
+        gradientFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+        gradientFrame.Position = UDim2.fromScale(0.5, 0.5)
+        gradientFrame.BackgroundColor3 = Color3.fromRGB(180, 70, 255)
+        gradientFrame.BackgroundTransparency = 0.38
+        gradientFrame.Parent = container
+        state.gradientFrame = gradientFrame
+
+        local gradient = Instance.new("UIGradient")
+        gradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 0, 80)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(150, 50, 190)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 0, 70)),
+        })
+        gradient.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.15),
+            NumberSequenceKeypoint.new(1, 0.65),
+        })
+        gradient.GradientType = Enum.GradientType.Radial
+        gradient.Parent = gradientFrame
+        state.gradient = gradient
+
+        local gradientStroke = Instance.new("UIStroke")
+        gradientStroke.Thickness = 2
+        gradientStroke.Transparency = 0.4
+        gradientStroke.Color = Color3.fromRGB(255, 120, 255)
+        gradientStroke.Parent = gradientFrame
+
+        local veil = Instance.new("Frame")
+        veil.Name = "Veil"
+        veil.Size = UDim2.fromScale(1, 1)
+        veil.BackgroundColor3 = Color3.fromRGB(12, 0, 28)
+        veil.BackgroundTransparency = 0.58
+        veil.Parent = container
+
+        local scanLine = Instance.new("Frame")
+        scanLine.Name = "ScanLine"
+        scanLine.Size = UDim2.new(1, 0, 0, if isTouchDevice then 8 else 6)
+        scanLine.BackgroundColor3 = Color3.fromRGB(220, 120, 255)
+        scanLine.BackgroundTransparency = 0.35
+        scanLine.Position = UDim2.new(0, 0, 0, 0)
+        scanLine.Parent = container
+        state.scanLine = scanLine
+        state.scanProgress = 0
+    end
+
+    local function ensureLightingEffects()
+        local colorCorrection = state.colorCorrection
+        if not colorCorrection then
+            local existingEffect = Lighting:FindFirstChild("StormColorCorrection")
+            if existingEffect and existingEffect:IsA("ColorCorrectionEffect") then
+                colorCorrection = existingEffect
+            end
+        end
+        if not colorCorrection or not colorCorrection.Parent then
+            colorCorrection = Instance.new("ColorCorrectionEffect")
+            colorCorrection.Name = "StormColorCorrection"
+            colorCorrection.Brightness = -0.15
+            colorCorrection.Contrast = -0.25
+            colorCorrection.Saturation = -0.5
+            colorCorrection.TintColor = Color3.fromRGB(90, 140, 255)
+            colorCorrection.Enabled = false
+            colorCorrection.Parent = Lighting
+        end
+        state.colorCorrection = colorCorrection
+
+        local depthEffect = state.depthOfField
+        if not depthEffect then
+            local existingDepth = Lighting:FindFirstChild("StormDepthOfField")
+            if existingDepth and existingDepth:IsA("DepthOfFieldEffect") then
+                depthEffect = existingDepth
+            end
+        end
+        if not depthEffect or not depthEffect.Parent then
+            depthEffect = Instance.new("DepthOfFieldEffect")
+            depthEffect.Name = "StormDepthOfField"
+            depthEffect.InFocusRadius = 18
+            depthEffect.FocusDistance = 45
+            depthEffect.NearIntensity = 0.3
+            depthEffect.FarIntensity = 0.65
+            depthEffect.Enabled = false
+            depthEffect.Parent = Lighting
+        end
+        state.depthOfField = depthEffect
+    end
+
+    local function ensureAudioEffects()
+        local equalizer = state.equalizer
+        if not equalizer then
+            local existingEqualizer = SoundService:FindFirstChild("StormEqualizer")
+            if existingEqualizer and existingEqualizer:IsA("EqualizerSoundEffect") then
+                equalizer = existingEqualizer
+            end
+        end
+        if not equalizer or not equalizer.Parent then
+            equalizer = Instance.new("EqualizerSoundEffect")
+            equalizer.Name = "StormEqualizer"
+            equalizer.LowGain = 6
+            equalizer.MidGain = -3
+            equalizer.HighGain = -12
+            equalizer.Priority = 5
+            equalizer.Enabled = false
+            equalizer.Parent = SoundService
+        else
+            equalizer.Parent = SoundService
+        end
+        state.equalizer = equalizer
+
+        local pitchShift = state.pitchShift
+        if not pitchShift then
+            local existingPitch = SoundService:FindFirstChild("StormPitchShift")
+            if existingPitch and existingPitch:IsA("PitchShiftSoundEffect") then
+                pitchShift = existingPitch
+            end
+        end
+        if not pitchShift or not pitchShift.Parent then
+            pitchShift = Instance.new("PitchShiftSoundEffect")
+            pitchShift.Name = "StormPitchShift"
+            pitchShift.Octave = 0.88
+            pitchShift.Priority = 5
+            pitchShift.Enabled = false
+            pitchShift.Parent = SoundService
+        else
+            pitchShift.Parent = SoundService
+        end
+        state.pitchShift = pitchShift
+    end
+
+    local function startOverlayAnimation()
+        if state.animationConn then
+            return
+        end
+
+        state.animationConn = RunService.RenderStepped:Connect(function(dt)
+            local gradient = state.gradient
+            local gradientFrame = state.gradientFrame
+            if gradient and gradientFrame then
+                local now = os.clock()
+                gradient.Rotation = (gradient.Rotation + dt * 45) % 360
+                gradient.Offset = Vector2.new(math.sin(now * 0.6) * 0.35, math.cos(now * 0.7) * 0.35)
+                gradientFrame.Rotation = (gradientFrame.Rotation + dt * 15) % 360
+            end
+
+            local scanLine = state.scanLine
+            if scanLine then
+                state.scanProgress += dt * 0.4
+                if state.scanProgress > 1 then
+                    state.scanProgress -= 1
+                end
+                scanLine.Position = UDim2.new(0, 0, state.scanProgress, 0)
+            end
+        end)
+    end
+
+    local function stopOverlayAnimation()
         if state.animationConn then
             state.animationConn:Disconnect()
             state.animationConn = nil
         end
-        existingGui = nil
     end
 
-    if not existingGui then
-        local foundGui = playerGui:FindFirstChild("StormExposureOverlay")
-        if foundGui and foundGui:IsA("ScreenGui") then
-            state.overlayGui = foundGui
-            existingGui = foundGui
+    local function enableEffects()
+        ensureOverlay()
+        ensureLightingEffects()
+        ensureAudioEffects()
 
-            local container = foundGui:FindFirstChild("Container")
-            if container and container:IsA("Frame") then
-                local gradientFrame = container:FindFirstChild("Gradient")
-                if gradientFrame and gradientFrame:IsA("Frame") then
-                    state.gradientFrame = gradientFrame
-                    local gradient = gradientFrame:FindFirstChildWhichIsA("UIGradient")
-                    state.gradient = gradient
-                end
-
-                local scanLineFrame = container:FindFirstChild("ScanLine")
-                if scanLineFrame and scanLineFrame:IsA("Frame") then
-                    state.scanLine = scanLineFrame
-                end
-            end
+        local overlayGui = state.overlayGui
+        if overlayGui then
+            overlayGui.Enabled = true
         end
-    end
-
-    if existingGui then
-        if existingGui.Parent ~= playerGui then
-            existingGui.Parent = playerGui
+        local colorCorrection = state.colorCorrection
+        if colorCorrection then
+            colorCorrection.Enabled = true
         end
-        return
-    end
-
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "StormExposureOverlay"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.DisplayOrder = 90
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-    gui.Enabled = false
-    gui.Parent = playerGui
-    state.overlayGui = gui
-
-    local container = Instance.new("Frame")
-    container.Name = "Container"
-    container.Size = UDim2.fromScale(1, 1)
-    container.BackgroundTransparency = 1
-    container.ClipsDescendants = true
-    container.Parent = gui
-
-    local gradientFrame = Instance.new("Frame")
-    gradientFrame.Name = "Gradient"
-    gradientFrame.Size = UDim2.fromScale(1.4, 1.4)
-    gradientFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-    gradientFrame.Position = UDim2.fromScale(0.5, 0.5)
-    gradientFrame.BackgroundColor3 = Color3.fromRGB(180, 70, 255)
-    gradientFrame.BackgroundTransparency = 0.38
-    gradientFrame.Parent = container
-    state.gradientFrame = gradientFrame
-
-    local gradient = Instance.new("UIGradient")
-    gradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 0, 80)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(150, 50, 190)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 0, 70)),
-    })
-    gradient.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.15),
-        NumberSequenceKeypoint.new(1, 0.65),
-    })
-    gradient.GradientType = Enum.GradientType.Radial
-    gradient.Parent = gradientFrame
-    state.gradient = gradient
-
-    local gradientStroke = Instance.new("UIStroke")
-    gradientStroke.Thickness = 2
-    gradientStroke.Transparency = 0.4
-    gradientStroke.Color = Color3.fromRGB(255, 120, 255)
-    gradientStroke.Parent = gradientFrame
-
-    local veil = Instance.new("Frame")
-    veil.Name = "Veil"
-    veil.Size = UDim2.fromScale(1, 1)
-    veil.BackgroundColor3 = Color3.fromRGB(12, 0, 28)
-    veil.BackgroundTransparency = 0.58
-    veil.Parent = container
-
-    local scanLine = Instance.new("Frame")
-    scanLine.Name = "ScanLine"
-    scanLine.Size = UDim2.new(1, 0, 0, if isTouchDevice then 8 else 6)
-    scanLine.BackgroundColor3 = Color3.fromRGB(220, 120, 255)
-    scanLine.BackgroundTransparency = 0.35
-    scanLine.Position = UDim2.new(0, 0, 0, 0)
-    scanLine.Parent = container
-    state.scanLine = scanLine
-    state.scanProgress = 0
-end
-
-local function ensureStormLightingEffects()
-    local state = stormVisualState
-
-    local colorCorrection = state.colorCorrection
-    if not colorCorrection then
-        local existingEffect = Lighting:FindFirstChild("StormColorCorrection")
-        if existingEffect and existingEffect:IsA("ColorCorrectionEffect") then
-            colorCorrection = existingEffect
+        local depthOfField = state.depthOfField
+        if depthOfField then
+            depthOfField.Enabled = true
         end
-    end
-    if not colorCorrection or not colorCorrection.Parent then
-        colorCorrection = Instance.new("ColorCorrectionEffect")
-        colorCorrection.Name = "StormColorCorrection"
-        colorCorrection.Brightness = -0.15
-        colorCorrection.Contrast = -0.25
-        colorCorrection.Saturation = -0.5
-        colorCorrection.TintColor = Color3.fromRGB(90, 140, 255)
-        colorCorrection.Enabled = false
-        colorCorrection.Parent = Lighting
-    end
-    state.colorCorrection = colorCorrection
-
-    local depthEffect = state.depthOfField
-    if not depthEffect then
-        local existingDepth = Lighting:FindFirstChild("StormDepthOfField")
-        if existingDepth and existingDepth:IsA("DepthOfFieldEffect") then
-            depthEffect = existingDepth
+        local equalizer = state.equalizer
+        if equalizer then
+            equalizer.Enabled = true
         end
-    end
-    if not depthEffect or not depthEffect.Parent then
-        depthEffect = Instance.new("DepthOfFieldEffect")
-        depthEffect.Name = "StormDepthOfField"
-        depthEffect.InFocusRadius = 18
-        depthEffect.FocusDistance = 45
-        depthEffect.NearIntensity = 0.3
-        depthEffect.FarIntensity = 0.65
-        depthEffect.Enabled = false
-        depthEffect.Parent = Lighting
-    end
-    state.depthOfField = depthEffect
-end
-
-local function ensureStormAudioEffects()
-    local state = stormVisualState
-    local equalizer = state.equalizer
-    if not equalizer then
-        local existingEqualizer = SoundService:FindFirstChild("StormEqualizer")
-        if existingEqualizer and existingEqualizer:IsA("EqualizerSoundEffect") then
-            equalizer = existingEqualizer
-        end
-    end
-    if not equalizer or not equalizer.Parent then
-        equalizer = Instance.new("EqualizerSoundEffect")
-        equalizer.Name = "StormEqualizer"
-        equalizer.LowGain = 6
-        equalizer.MidGain = -3
-        equalizer.HighGain = -12
-        equalizer.Priority = 5
-        equalizer.Enabled = false
-        equalizer.Parent = SoundService
-    else
-        equalizer.Parent = SoundService
-    end
-    state.equalizer = equalizer
-
-    local pitchShift = state.pitchShift
-    if not pitchShift then
-        local existingPitch = SoundService:FindFirstChild("StormPitchShift")
-        if existingPitch and existingPitch:IsA("PitchShiftSoundEffect") then
-            pitchShift = existingPitch
-        end
-    end
-    if not pitchShift or not pitchShift.Parent then
-        pitchShift = Instance.new("PitchShiftSoundEffect")
-        pitchShift.Name = "StormPitchShift"
-        pitchShift.Octave = 0.88
-        pitchShift.Priority = 5
-        pitchShift.Enabled = false
-        pitchShift.Parent = SoundService
-    else
-        pitchShift.Parent = SoundService
-    end
-    state.pitchShift = pitchShift
-end
-
-local function startStormOverlayAnimation()
-    local state = stormVisualState
-    if state.animationConn then
-        return
-    end
-
-    state.animationConn = RunService.RenderStepped:Connect(function(dt)
-        local gradient = state.gradient
-        local gradientFrame = state.gradientFrame
-        if gradient and gradientFrame then
-            local now = os.clock()
-            gradient.Rotation = (gradient.Rotation + dt * 45) % 360
-            gradient.Offset = Vector2.new(math.sin(now * 0.6) * 0.35, math.cos(now * 0.7) * 0.35)
-            gradientFrame.Rotation = (gradientFrame.Rotation + dt * 15) % 360
+        local pitchShift = state.pitchShift
+        if pitchShift then
+            pitchShift.Enabled = true
         end
 
+        startOverlayAnimation()
+    end
+
+    local function disableEffects()
+        local overlayGui = state.overlayGui
+        if overlayGui then
+            overlayGui.Enabled = false
+        end
+        local colorCorrection = state.colorCorrection
+        if colorCorrection then
+            colorCorrection.Enabled = false
+        end
+        local depthOfField = state.depthOfField
+        if depthOfField then
+            depthOfField.Enabled = false
+        end
+        local equalizer = state.equalizer
+        if equalizer then
+            equalizer.Enabled = false
+        end
+        local pitchShift = state.pitchShift
+        if pitchShift then
+            pitchShift.Enabled = false
+        end
+
+        stopOverlayAnimation()
+        state.scanProgress = 0
         local scanLine = state.scanLine
         if scanLine then
-            state.scanProgress += dt * 0.4
-            if state.scanProgress > 1 then
-                state.scanProgress -= 1
+            scanLine.Position = UDim2.new(0, 0, 0, 0)
+        end
+    end
+
+    local function updateExposure(isActive: boolean)
+        if isActive == state.exposureActive then
+            return
+        end
+
+        state.exposureActive = isActive
+
+        if isActive then
+            enableEffects()
+        else
+            disableEffects()
+        end
+    end
+
+    local function refreshPartReference()
+        local existing = Workspace:FindFirstChild("StormPart", true)
+        if existing and existing:IsA("BasePart") then
+            state.trackedPart = existing
+        else
+            state.trackedPart = nil
+            updateExposure(false)
+        end
+    end
+
+    local function onDescendantAdded(descendant: Instance)
+        if descendant:IsA("BasePart") and descendant.Name == "StormPart" then
+            state.trackedPart = descendant
+        end
+    end
+
+    local function onDescendantRemoving(descendant: Instance)
+        if descendant == state.trackedPart then
+            state.trackedPart = nil
+            updateExposure(false)
+        end
+    end
+
+    local function onHeartbeat()
+        local storm = state.trackedPart
+        if not storm or not storm.Parent then
+            if storm and not storm.Parent then
+                state.trackedPart = nil
             end
-            scanLine.Position = UDim2.new(0, 0, state.scanProgress, 0)
+            updateExposure(false)
+            return
         end
-    end)
-end
 
-local function stopStormOverlayAnimation()
-    local state = stormVisualState
-    if state.animationConn then
-        state.animationConn:Disconnect()
-        state.animationConn = nil
-    end
-end
-
-local function enableStormEffects()
-    ensureStormOverlay()
-    ensureStormLightingEffects()
-    ensureStormAudioEffects()
-
-    local state = stormVisualState
-
-    if state.overlayGui then
-        state.overlayGui.Enabled = true
-    end
-    if state.colorCorrection then
-        state.colorCorrection.Enabled = true
-    end
-    if state.depthOfField then
-        state.depthOfField.Enabled = true
-    end
-    if state.equalizer then
-        state.equalizer.Enabled = true
-    end
-    if state.pitchShift then
-        state.pitchShift.Enabled = true
-    end
-
-    startStormOverlayAnimation()
-end
-
-local function disableStormEffects()
-    local state = stormVisualState
-
-    if state.overlayGui then
-        state.overlayGui.Enabled = false
-    end
-    if state.colorCorrection then
-        state.colorCorrection.Enabled = false
-    end
-    if state.depthOfField then
-        state.depthOfField.Enabled = false
-    end
-    if state.equalizer then
-        state.equalizer.Enabled = false
-    end
-    if state.pitchShift then
-        state.pitchShift.Enabled = false
-    end
-
-    stopStormOverlayAnimation()
-    state.scanProgress = 0
-    local scanLine = state.scanLine
-    if scanLine then
-        scanLine.Position = UDim2.new(0, 0, 0, 0)
-    end
-end
-
-local function updateStormExposure(isActive: boolean)
-    if isActive == stormVisualState.exposureActive then
-        return
-    end
-
-    stormVisualState.exposureActive = isActive
-
-    if isActive then
-        enableStormEffects()
-    else
-        disableStormEffects()
-    end
-end
-
-local function refreshStormPartReference()
-    local existing = Workspace:FindFirstChild("StormPart", true)
-    if existing and existing:IsA("BasePart") then
-        stormVisualState.trackedPart = existing
-    else
-        stormVisualState.trackedPart = nil
-        updateStormExposure(false)
-    end
-end
-
-refreshStormPartReference()
-
-Workspace.DescendantAdded:Connect(function(descendant)
-    if descendant:IsA("BasePart") and descendant.Name == "StormPart" then
-        stormVisualState.trackedPart = descendant
-    end
-end)
-
-Workspace.DescendantRemoving:Connect(function(descendant)
-    if descendant == stormVisualState.trackedPart then
-        stormVisualState.trackedPart = nil
-        updateStormExposure(false)
-    end
-end)
-
-RunService.Heartbeat:Connect(function()
-    local storm = stormVisualState.trackedPart
-    if not storm or not storm.Parent then
-        if storm and not storm.Parent then
-            stormVisualState.trackedPart = nil
+        local character = localPlayer.Character
+        if not character then
+            updateExposure(false)
+            return
         end
-        updateStormExposure(false)
-        return
+
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            updateExposure(false)
+            return
+        end
+
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if not rootPart or not rootPart:IsA("BasePart") then
+            updateExposure(false)
+            return
+        end
+
+        local halfSize = storm.Size * 0.5
+        if halfSize.X <= 0 or halfSize.Z <= 0 then
+            updateExposure(false)
+            return
+        end
+
+        local relative = storm.CFrame:PointToObjectSpace(rootPart.Position)
+        local outsideX = math.abs(relative.X) > halfSize.X
+        local outsideZ = math.abs(relative.Z) > halfSize.Z
+
+        updateExposure(outsideX or outsideZ)
     end
 
-    local character = localPlayer.Character
-    if not character then
-        updateStormExposure(false)
-        return
-    end
+    refreshPartReference()
 
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then
-        updateStormExposure(false)
-        return
-    end
+    Workspace.DescendantAdded:Connect(onDescendantAdded)
+    Workspace.DescendantRemoving:Connect(onDescendantRemoving)
+    RunService.Heartbeat:Connect(onHeartbeat)
 
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart or not rootPart:IsA("BasePart") then
-        updateStormExposure(false)
-        return
-    end
-
-    local halfSize = storm.Size * 0.5
-    if halfSize.X <= 0 or halfSize.Z <= 0 then
-        updateStormExposure(false)
-        return
-    end
-
-    local relative = storm.CFrame:PointToObjectSpace(rootPart.Position)
-    local outsideX = math.abs(relative.X) > halfSize.X
-    local outsideZ = math.abs(relative.Z) > halfSize.Z
-
-    updateStormExposure(outsideX or outsideZ)
-end)
+    return {
+        updateExposure = updateExposure,
+        refreshPartReference = refreshPartReference,
+    }
+end)()
 
 statusRemote.OnClientEvent:Connect(function(payload)
     if typeof(payload) ~= "table" then
