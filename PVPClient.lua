@@ -1,3 +1,20 @@
+-- Minimal formatTimer to avoid register overflow
+local function formatTimer(seconds)
+    seconds = tonumber(seconds) or 0
+    if seconds < 0 then seconds = 0 end
+    seconds = math.floor(seconds + 0.5)
+    local m = math.floor(seconds / 60)
+    local s = seconds % 60
+    return string.format("%d:%02d", m, s)
+end
+
+-- Minimal StormEffects stub to avoid register overflow
+local StormEffects = {}
+function StormEffects.enable(...) end
+function StormEffects.disable(...) end
+function StormEffects.setTrackedPart(...) end
+function StormEffects.update(...) end
+
 --!strict
 -- === Movement reset helper to stop stuck-forward after respawn ===
 local function resetMovementState(humanoid: Humanoid?)
@@ -3789,21 +3806,6 @@ local function formatCountdown(seconds: number): string
 	end
 	return string.format("Starting in %ds", seconds)
 end
-
-local function formatTimer(seconds: number): string
-	local minutes = math.floor(seconds / 60)
-	local remainingSeconds = seconds % 60
-	return string.format("%d:%02d", minutes, remainingSeconds)
-end
-
-
--- Lightweight StormEffects to avoid register pressure
-local StormEffects = {}
-function StormEffects.enable(...) end
-function StormEffects.disable(...) end
-function StormEffects.setTrackedPart(...) end
-function StormEffects.update(...) end
-
 
 statusRemote.OnClientEvent:Connect(function(payload)
 	if typeof(payload) ~= "table" then
