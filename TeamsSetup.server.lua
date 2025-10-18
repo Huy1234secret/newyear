@@ -211,6 +211,71 @@ local mapConfigurations: {[string]: MapConfig} = {
     },
 }
 
+type ParticipantRecord = {
+    player: Player,
+    roundId: number,
+    spawnPart: BasePart?,
+    characterConn: RBXScriptConnection?,
+    deathConn: RBXScriptConnection?,
+    healConn: RBXScriptConnection?,
+    humanoid: Humanoid?,
+    originalWalkSpeed: number?,
+    originalJumpPower: number?,
+    countdownComplete: boolean?,
+    freezeToken: number?,
+    eventData: {},
+}
+
+type SpecialEventContext = {
+    definition: SpecialEventDefinition,
+    roundId: number,
+    state: {},
+}
+
+type SpecialEventDefinition = {
+    id: string,
+    displayName: string,
+    description: string?,
+    ignoreDefaultGear: boolean?,
+    onRoundPrepared: ((context: SpecialEventContext, config: MapConfig, mapModel: Model) -> ())?,
+    onParticipantCharacter: ((context: SpecialEventContext, record: ParticipantRecord, character: Model, humanoid: Humanoid) -> ())?,
+    onCountdownComplete: ((context: SpecialEventContext) -> ())?,
+    onParticipantCleanup: ((context: SpecialEventContext, record: ParticipantRecord) -> ())?,
+    onParticipantEliminated: ((context: SpecialEventContext, record: ParticipantRecord) -> ())?,
+    onRoundEnded: ((context: SpecialEventContext) -> ())?,
+    provideGear: ((context: SpecialEventContext, record: ParticipantRecord) -> ())?,
+}
+
+local participantRecords: {[Player]: ParticipantRecord} = {}
+local roundInProgress = false
+local currentRoundId = 0
+local activeMapModel: Model? = nil
+local activeMapConfig: MapConfig? = nil
+local activeSkybox: Instance? = nil
+local storedNormalSky: Instance? = nil
+local storedNormalSkyParent: Instance? = nil
+local currentStormPart: BasePart? = nil
+local deathMatchActive = false
+local managedAtmosphere: Atmosphere? = nil
+local createdManagedAtmosphere = false
+local storedAtmosphereProps: {Density: number, Offset: number, Color: Color3, Decay: Color3, Glare: number, Haze: number}? = nil
+local activeAtmosphereTween: Tween? = nil
+local selectedSpecialEventId: string? = nil
+local activeSpecialEvent: SpecialEventContext? = nil
+
+local function performDeathMatchTransition(roundId: number)
+    -- Forward declaration; defined later.
+end
+
+local function endRound(roundId: number)
+end
+
+local function checkRoundCompletion(roundId: number)
+end
+
+local function handleElimination(player: Player, roundId: number)
+end
+
 local specialEventDefinitions: {[string]: SpecialEventDefinition} = {}
 local specialEventList: {SpecialEventDefinition} = {}
 
@@ -1652,71 +1717,6 @@ ReplicatedStorage.DescendantRemoving:Connect(function(descendant)
         task.defer(updateStormTemplate)
     end
 end)
-
-type ParticipantRecord = {
-    player: Player,
-    roundId: number,
-    spawnPart: BasePart?,
-    characterConn: RBXScriptConnection?,
-    deathConn: RBXScriptConnection?,
-    healConn: RBXScriptConnection?,
-    humanoid: Humanoid?,
-    originalWalkSpeed: number?,
-    originalJumpPower: number?,
-    countdownComplete: boolean?,
-    freezeToken: number?,
-    eventData: {},
-}
-
-type SpecialEventContext = {
-    definition: SpecialEventDefinition,
-    roundId: number,
-    state: {},
-}
-
-type SpecialEventDefinition = {
-    id: string,
-    displayName: string,
-    description: string?,
-    ignoreDefaultGear: boolean?,
-    onRoundPrepared: ((context: SpecialEventContext, config: MapConfig, mapModel: Model) -> ())?,
-    onParticipantCharacter: ((context: SpecialEventContext, record: ParticipantRecord, character: Model, humanoid: Humanoid) -> ())?,
-    onCountdownComplete: ((context: SpecialEventContext) -> ())?,
-    onParticipantCleanup: ((context: SpecialEventContext, record: ParticipantRecord) -> ())?,
-    onParticipantEliminated: ((context: SpecialEventContext, record: ParticipantRecord) -> ())?,
-    onRoundEnded: ((context: SpecialEventContext) -> ())?,
-    provideGear: ((context: SpecialEventContext, record: ParticipantRecord) -> ())?,
-}
-
-local participantRecords: {[Player]: ParticipantRecord} = {}
-local roundInProgress = false
-local currentRoundId = 0
-local activeMapModel: Model? = nil
-local activeMapConfig: MapConfig? = nil
-local activeSkybox: Instance? = nil
-local storedNormalSky: Instance? = nil
-local storedNormalSkyParent: Instance? = nil
-local currentStormPart: BasePart? = nil
-local deathMatchActive = false
-local managedAtmosphere: Atmosphere? = nil
-local createdManagedAtmosphere = false
-local storedAtmosphereProps: {Density: number, Offset: number, Color: Color3, Decay: Color3, Glare: number, Haze: number}? = nil
-local activeAtmosphereTween: Tween? = nil
-local selectedSpecialEventId: string? = nil
-local activeSpecialEvent: SpecialEventContext? = nil
-
-local function performDeathMatchTransition(roundId: number)
-    -- Forward declaration; defined later.
-end
-
-local function endRound(roundId: number)
-end
-
-local function checkRoundCompletion(roundId: number)
-end
-
-local function handleElimination(player: Player, roundId: number)
-end
 
 local function sendRoundState(state: string, extra: {}?)
     local payload = if type(extra) == "table" then table.clone(extra :: {}) else {}
