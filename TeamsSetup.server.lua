@@ -1043,6 +1043,7 @@ do
 				align.PrimaryAxisOnly = false
 				align.Parent = ball
 
+				model.Parent = Workspace
 				ball:SetNetworkOwner(nil)
 
 				local targetPos = randomXZInArena()
@@ -1057,8 +1058,6 @@ do
 					fireTimer = HOLD_TIME_BEFORE_FIRST_SHOT,
 					fireCooldown = 0,
 				}
-
-				model.Parent = Workspace
 
 				model.Destroying:Connect(function()
 					botState.ball = nil
