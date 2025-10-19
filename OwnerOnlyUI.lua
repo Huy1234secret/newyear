@@ -470,6 +470,34 @@ local difficultyButtons: {[number]: TextButton} = {}
 local selectedDifficulty: number? = nil
 local difficultyStatusLabel: TextLabel? = nil
 
+local function applySelectionVisual(button: TextButton, isSelected: boolean)
+        button.BackgroundColor3 = isSelected and mapButtonSelectedColor or mapButtonDefaultColor
+        button.TextColor3 = mapButtonTextColor
+        button.AutoButtonColor = not isSelected
+
+        local stroke = button:FindFirstChildOfClass("UIStroke")
+        if stroke then
+                stroke.Color = isSelected and Color3.fromRGB(185, 255, 205) or Color3.fromRGB(120, 40, 40)
+                stroke.Transparency = isSelected and 0 or 0.2
+        end
+
+        local gradient = button:FindFirstChild("SelectionGradient")
+        if gradient and gradient:IsA("UIGradient") then
+                gradient.Color = isSelected and mapButtonSelectedGradient or mapButtonDefaultGradient
+        end
+
+        local icon = button:FindFirstChild("SelectionIcon")
+        if icon and icon:IsA("ImageLabel") then
+                icon.Visible = isSelected
+                icon.ImageTransparency = isSelected and 0 or 0.35
+        end
+
+        local scale = button:FindFirstChild("SelectionScale")
+        if scale and scale:IsA("UIScale") then
+                TweenService:Create(scale, selectionTweenInfo, {Scale = isSelected and 1.05 or 1}):Play()
+        end
+end
+
 local function updateDifficultyButtonVisual(button: TextButton, isSelected: boolean)
         applySelectionVisual(button, isSelected)
 end
@@ -761,36 +789,8 @@ local function showMessage(text: string, color: Color3?)
 	end)
 end
 
-local function applySelectionVisual(button: TextButton, isSelected: boolean)
-	button.BackgroundColor3 = isSelected and mapButtonSelectedColor or mapButtonDefaultColor
-	button.TextColor3 = mapButtonTextColor
-	button.AutoButtonColor = not isSelected
-
-	local stroke = button:FindFirstChildOfClass("UIStroke")
-	if stroke then
-		stroke.Color = isSelected and Color3.fromRGB(185, 255, 205) or Color3.fromRGB(120, 40, 40)
-		stroke.Transparency = isSelected and 0 or 0.2
-	end
-
-	local gradient = button:FindFirstChild("SelectionGradient")
-	if gradient and gradient:IsA("UIGradient") then
-		gradient.Color = isSelected and mapButtonSelectedGradient or mapButtonDefaultGradient
-	end
-
-	local icon = button:FindFirstChild("SelectionIcon")
-	if icon and icon:IsA("ImageLabel") then
-		icon.Visible = isSelected
-		icon.ImageTransparency = isSelected and 0 or 0.35
-	end
-
-	local scale = button:FindFirstChild("SelectionScale")
-	if scale and scale:IsA("UIScale") then
-		TweenService:Create(scale, selectionTweenInfo, {Scale = isSelected and 1.05 or 1}):Play()
-	end
-end
-
 local function updateMapButtonVisual(button: TextButton, isSelected: boolean)
-	applySelectionVisual(button, isSelected)
+        applySelectionVisual(button, isSelected)
 end
 
 local function selectMap(mapId: string)
