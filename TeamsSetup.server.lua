@@ -2424,28 +2424,6 @@ local function restoreAtmosphere()
 	end
 end
 
-local function tweenAtmosphereForDeathMatch(config: MapConfig?)
-        local atmosphere = ensureManagedAtmosphere()
-        if not atmosphere then
-                return
-        end
-
-        cancelAtmosphereTween()
-
-        local tweenInfo = TweenInfo.new(DEATHMATCH_TRANSITION_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
-        local goal = getDeathMatchAtmosphereGoal(config)
-
-        activeAtmosphereTween = TweenService:Create(atmosphere, tweenInfo, goal)
-        local thisTween = activeAtmosphereTween
-        thisTween:Play()
-
-	task.delay(DEATHMATCH_TRANSITION_DURATION, function()
-		if activeAtmosphereTween == thisTween then
-			activeAtmosphereTween = nil
-		end
-	end)
-end
-
 local function getDeathMatchAtmosphereGoal(config: MapConfig?): { [string]: any }
         local goal = {
                 Density = 0.5,
@@ -2483,6 +2461,28 @@ local function getDeathMatchAtmosphereGoal(config: MapConfig?): { [string]: any 
         end
 
         return goal
+end
+
+local function tweenAtmosphereForDeathMatch(config: MapConfig?)
+        local atmosphere = ensureManagedAtmosphere()
+        if not atmosphere then
+                return
+        end
+
+        cancelAtmosphereTween()
+
+        local tweenInfo = TweenInfo.new(DEATHMATCH_TRANSITION_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+        local goal = getDeathMatchAtmosphereGoal(config)
+
+        activeAtmosphereTween = TweenService:Create(atmosphere, tweenInfo, goal)
+        local thisTween = activeAtmosphereTween
+        thisTween:Play()
+
+        task.delay(DEATHMATCH_TRANSITION_DURATION, function()
+                if activeAtmosphereTween == thisTween then
+                        activeAtmosphereTween = nil
+                end
+        end)
 end
 
 local function applyDeathMatchAtmosphere(config: MapConfig?)
