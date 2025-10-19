@@ -3283,7 +3283,7 @@ local function sprintAction(_: string, inputState: Enum.UserInputState, inputObj
 			end
 			return Enum.ContextActionResult.Sink
 		end
-	elseif keyCode == Enum.KeyCode.ButtonX then
+	elseif keyCode == Enum.KeyCode.ButtonX or keyCode == Enum.KeyCode.ButtonY then
 		if inputState == Enum.UserInputState.Begin then
 			toggleKeyboardSprintIntent()
 			return Enum.ContextActionResult.Sink
@@ -3310,7 +3310,8 @@ ContextActionService:BindAction(
 	Enum.KeyCode.RightControl,
 	Enum.KeyCode.ButtonL3,
 	Enum.KeyCode.ButtonR3,
-	Enum.KeyCode.ButtonX
+	Enum.KeyCode.ButtonX,
+	Enum.KeyCode.ButtonY
 )
 sprintInteraction.actionBound = true
 ContextActionService:SetTitle("SprintAction", "Sprint")
