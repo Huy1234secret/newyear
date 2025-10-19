@@ -61,9 +61,9 @@ local MAP_ANCHOR_DURATION = 5
 local HOT_TOUCH_TAG_SOUND_ID = "rbxassetid://2866718318"
 
 local SPECIAL_EVENT_MUSIC_IDS = {
-	HotTouch = "101070309888602",
-	Retro = "1837768352",
-	KillBot = "1836075187",
+        HotTouch = "84359090886294",
+        Retro = "1837768352",
+        KillBot = "1836075187",
 }
 
 local remotesFolder = ReplicatedStorage:FindFirstChild("PVPRemotes")
@@ -154,16 +154,24 @@ local function ensureRigIsR6(player: Player, character: Model)
 end
 
 type MapConfig = {
-	id: string,
-	displayName: string,
-	modelName: string,
-	spawnContainer: string,
-	skyboxName: string,
-	musicId: string?,
-	deathMatchMusicId: string?,
-	deathMatchMusicStartTime: number?,
-	deathMatchStormSize: Vector2?,
-	deathMatchShrinkDuration: number?,
+        id: string,
+        displayName: string,
+        modelName: string,
+        spawnContainer: string,
+        skyboxName: string,
+        musicId: string?,
+        deathMatchMusicId: string?,
+        deathMatchMusicStartTime: number?,
+        deathMatchStormSize: Vector2?,
+        deathMatchShrinkDuration: number?,
+        lightningBrightness: number?,
+        deathMatchStormColor: Color3?,
+        deathMatchAtmosphereDensity: number?,
+        deathMatchAtmosphereOffset: number?,
+        deathMatchAtmosphereColor: Color3?,
+        deathMatchAtmosphereDecay: Color3?,
+        deathMatchAtmosphereGlare: number?,
+        deathMatchAtmosphereHaze: number?,
 }
 
 local mapConfigurations: {[string]: MapConfig} = {
@@ -209,6 +217,89 @@ local mapConfigurations: {[string]: MapConfig} = {
 		deathMatchStormSize = Vector2.new(400, 400),
 		deathMatchShrinkDuration = 100,
 	},
+	GlassHouses = {
+		id = "GlassHouses",
+		displayName = "Glass Houses",
+		modelName = "GlassHouses",
+		spawnContainer = "GlassHouseSpawns",
+		skyboxName = "",
+		musicId = "126261663857384",
+		deathMatchMusicId = "81120877995774",
+		deathMatchStormSize = Vector2.new(400, 400),
+		deathMatchShrinkDuration = 100,
+	},
+	RobloxHQ = {
+		id = "RobloxHQ",
+		displayName = "Roblox HQ",
+		modelName = "RobloxHQ",
+		spawnContainer = "HQSpawns",
+		skyboxName = "",
+		musicId = "93577082200195",
+		deathMatchMusicId = "1837863050",
+		deathMatchStormSize = Vector2.new(500, 500),
+		deathMatchShrinkDuration = 100,
+	},
+	RocketArena = {
+		id = "RocketArena",
+		displayName = "Rocket Arena",
+		modelName = "RocketArena",
+		spawnContainer = "RocketArenaSpawns",
+		skyboxName = "RocketSky",
+		musicId = "78606778500481",
+		deathMatchMusicId = "80286513161881",
+		deathMatchMusicStartTime = 7,
+		deathMatchStormSize = Vector2.new(400, 400),
+		deathMatchShrinkDuration = 100,
+	},
+	HauntedMansion = {
+		id = "HauntedMansion",
+		displayName = "Haunted Mansion",
+		modelName = "HauntedMansion",
+		spawnContainer = "HauntedSpawns",
+		skyboxName = "ScarySky",
+		musicId = "",
+		deathMatchMusicId = "9041745502",
+		deathMatchStormSize = Vector2.new(400, 400),
+		deathMatchShrinkDuration = 100,
+		lightningBrightness = 0.25,
+		deathMatchStormColor = Color3.fromRGB(0, 0, 0),
+		deathMatchAtmosphereColor = Color3.fromRGB(0, 0, 0),
+		deathMatchAtmosphereDecay = Color3.fromRGB(0, 0, 0),
+	},
+	BowlingAlley = {
+		id = "BowlingAlley",
+		displayName = "Bowling Alley",
+		modelName = "BowlingAlley",
+		spawnContainer = "BowlingSpawns",
+		skyboxName = "",
+		musicId = "114905649764615",
+		deathMatchMusicId = "78847441253467",
+		deathMatchStormSize = Vector2.new(325, 325),
+		deathMatchShrinkDuration = 100,
+	},
+	HappyHomeOfRobloxia = {
+		id = "HappyHomeOfRobloxia",
+		displayName = "Happy Home of Robloxia",
+		modelName = "HappyHomeOfRobloxia",
+		spawnContainer = "HappySpawns",
+		skyboxName = "",
+		musicId = "71576296239106",
+		deathMatchMusicId = "123764887251796",
+		deathMatchStormSize = Vector2.new(500, 500),
+		deathMatchShrinkDuration = 100,
+	},
+	RavenRock = {
+		id = "RavenRock",
+		displayName = "Raven Rock",
+		modelName = "RavenRock",
+		spawnContainer = "RavenSpawns",
+		skyboxName = "",
+		musicId = "1837755509",
+		deathMatchMusicId = "113109916386013",
+		deathMatchStormSize = Vector2.new(400, 400),
+		deathMatchShrinkDuration = 100,
+	},
+
 }
 
 type ParticipantRecord = {
@@ -262,6 +353,8 @@ local storedAtmosphereProps: {Density: number, Offset: number, Color: Color3, De
 local activeAtmosphereTween: Tween? = nil
 local selectedSpecialEventId: string? = nil
 local activeSpecialEvent: SpecialEventContext? = nil
+local storedLightingBrightness: number? = nil
+local lightingOverrideActive = false
 
 local function performDeathMatchTransition(roundId: number)
 	-- Forward declaration; defined later.
@@ -2331,27 +2424,20 @@ local function restoreAtmosphere()
 	end
 end
 
-local function tweenAtmosphereForDeathMatch()
-	local atmosphere = ensureManagedAtmosphere()
-	if not atmosphere then
-		return
-	end
+local function tweenAtmosphereForDeathMatch(config: MapConfig?)
+        local atmosphere = ensureManagedAtmosphere()
+        if not atmosphere then
+                return
+        end
 
-	cancelAtmosphereTween()
+        cancelAtmosphereTween()
 
-	local tweenInfo = TweenInfo.new(DEATHMATCH_TRANSITION_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
-	local goal = {
-		Density = 0.5,
-		Offset = 1,
-		Color = Color3.fromRGB(255, 0, 0),
-		Decay = Color3.fromRGB(255, 0, 0),
-		Glare = 0.5,
-		Haze = 5,
-	}
+        local tweenInfo = TweenInfo.new(DEATHMATCH_TRANSITION_DURATION, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+        local goal = getDeathMatchAtmosphereGoal(config)
 
-	activeAtmosphereTween = TweenService:Create(atmosphere, tweenInfo, goal)
-	local thisTween = activeAtmosphereTween
-	thisTween:Play()
+        activeAtmosphereTween = TweenService:Create(atmosphere, tweenInfo, goal)
+        local thisTween = activeAtmosphereTween
+        thisTween:Play()
 
 	task.delay(DEATHMATCH_TRANSITION_DURATION, function()
 		if activeAtmosphereTween == thisTween then
@@ -2360,20 +2446,60 @@ local function tweenAtmosphereForDeathMatch()
 	end)
 end
 
-local function applyDeathMatchAtmosphere()
-	local atmosphere = ensureManagedAtmosphere()
-	if not atmosphere then
-		return
-	end
+local function getDeathMatchAtmosphereGoal(config: MapConfig?): { [string]: any }
+        local goal = {
+                Density = 0.5,
+                Offset = 1,
+                Color = Color3.fromRGB(255, 0, 0),
+                Decay = Color3.fromRGB(255, 0, 0),
+                Glare = 0.5,
+                Haze = 5,
+        }
 
-	cancelAtmosphereTween()
+        if config then
+                if typeof(config.deathMatchAtmosphereDensity) == "number" then
+                        goal.Density = config.deathMatchAtmosphereDensity
+                end
 
-	atmosphere.Density = 0.5
-	atmosphere.Offset = 1
-	atmosphere.Color = Color3.fromRGB(255, 0, 0)
-	atmosphere.Decay = Color3.fromRGB(255, 0, 0)
-	atmosphere.Glare = 0.5
-	atmosphere.Haze = 5
+                if typeof(config.deathMatchAtmosphereOffset) == "number" then
+                        goal.Offset = config.deathMatchAtmosphereOffset
+                end
+
+                if config.deathMatchAtmosphereColor then
+                        goal.Color = config.deathMatchAtmosphereColor
+                end
+
+                if config.deathMatchAtmosphereDecay then
+                        goal.Decay = config.deathMatchAtmosphereDecay
+                end
+
+                if typeof(config.deathMatchAtmosphereGlare) == "number" then
+                        goal.Glare = config.deathMatchAtmosphereGlare
+                end
+
+                if typeof(config.deathMatchAtmosphereHaze) == "number" then
+                        goal.Haze = config.deathMatchAtmosphereHaze
+                end
+        end
+
+        return goal
+end
+
+local function applyDeathMatchAtmosphere(config: MapConfig?)
+        local atmosphere = ensureManagedAtmosphere()
+        if not atmosphere then
+                return
+        end
+
+        cancelAtmosphereTween()
+
+        local goal = getDeathMatchAtmosphereGoal(config)
+        atmosphere.Density = goal.Density
+        atmosphere.Offset = goal.Offset
+        atmosphere.Color = goal.Color
+        atmosphere.Decay = goal.Decay
+        atmosphere.Glare = goal.Glare
+        atmosphere.Haze = goal.Haze
 end
 
 local function clearStorm()
@@ -2386,22 +2512,49 @@ local function clearStorm()
 end
 
 local function restoreSkybox()
-	if activeSkybox then
-		activeSkybox:Destroy()
-		activeSkybox = nil
-	end
+        if activeSkybox then
+                activeSkybox:Destroy()
+                activeSkybox = nil
+        end
 
-	if storedNormalSky then
-		storedNormalSky.Parent = storedNormalSkyParent or Lighting
-		storedNormalSky = nil
-		storedNormalSkyParent = nil
-	end
+        if storedNormalSky then
+                storedNormalSky.Parent = storedNormalSkyParent or Lighting
+                storedNormalSky = nil
+                storedNormalSkyParent = nil
+        end
+end
+
+local function restoreLighting()
+        if not lightingOverrideActive then
+                return
+        end
+
+        if storedLightingBrightness ~= nil then
+                Lighting.Brightness = storedLightingBrightness
+        end
+
+        storedLightingBrightness = nil
+        lightingOverrideActive = false
+end
+
+local function applyMapLighting(config: MapConfig)
+        local brightnessOverride = config.lightningBrightness
+        if typeof(brightnessOverride) == "number" then
+                if not lightingOverrideActive then
+                        storedLightingBrightness = Lighting.Brightness
+                end
+
+                Lighting.Brightness = brightnessOverride
+                lightingOverrideActive = true
+        else
+                restoreLighting()
+        end
 end
 
 local function applySkybox(config: MapConfig)
-	if not skyboxFolder then
-		return
-	end
+        if not skyboxFolder then
+                return
+        end
 
 	local skyboxName = config.skyboxName
 	if config.id == "ChaosCanyon" then
@@ -2819,14 +2972,15 @@ endRound = function(roundId: number)
 	roundInProgress = false
 	activeMapConfig = nil
 
-	local wasDeathMatch = deathMatchActive
+        local wasDeathMatch = deathMatchActive
 
-	clearStorm()
-	restoreSkybox()
+        clearStorm()
+        restoreSkybox()
+        restoreLighting()
 
-	if activeMapModel then
-		activeMapModel:Destroy()
-		activeMapModel = nil
+        if activeMapModel then
+                activeMapModel:Destroy()
+                activeMapModel = nil
 	end
 
 	for player, record in participantRecords do
@@ -2862,17 +3016,17 @@ local function beginDeathMatch(roundId: number)
 		return
 	end
 
-	deathMatchActive = true
+        deathMatchActive = true
 
-	local config = activeMapConfig
-	playDeathMatchMusic(config)
+        local config = activeMapConfig
+        playDeathMatchMusic(config)
 
 	sendStatusUpdate({
 		action = "DeathMatch",
 		active = true,
 	})
 
-	applyDeathMatchAtmosphere()
+        applyDeathMatchAtmosphere(config)
 
 	local stormPart: BasePart
 	local usedTemplate = false
@@ -2892,16 +3046,20 @@ local function beginDeathMatch(roundId: number)
 	stormPart.Anchored = true
 	stormPart.CastShadow = false
 
-	if not usedTemplate then
-		stormPart.Transparency = 0.5
-		stormPart.Color = Color3.fromRGB(255, 0, 0)
-		stormPart.Material = Enum.Material.Neon
-		stormPart.Size = Vector3.new(600, 1000, 600)
-	end
+        if not usedTemplate then
+                stormPart.Transparency = 0.5
+                stormPart.Color = Color3.fromRGB(255, 0, 0)
+                stormPart.Material = Enum.Material.Neon
+                stormPart.Size = Vector3.new(600, 1000, 600)
+        end
 
-	if config and config.deathMatchStormSize then
-		local override = config.deathMatchStormSize
-		local currentSize = stormPart.Size
+        if config and config.deathMatchStormColor then
+                stormPart.Color = config.deathMatchStormColor
+        end
+
+        if config and config.deathMatchStormSize then
+                local override = config.deathMatchStormSize
+                local currentSize = stormPart.Size
 		local overrideX = math.max(override.X, STORM_MIN_HORIZONTAL_SIZE)
 		local overrideZ = math.max(override.Y, STORM_MIN_HORIZONTAL_SIZE)
 		stormPart.Size = Vector3.new(overrideX, currentSize.Y, overrideZ)
@@ -2994,14 +3152,15 @@ performDeathMatchTransition = function(roundId: number)
 		return
 	end
 
-	sendStatusUpdate({
-		action = "DeathMatchTransition",
-		duration = DEATHMATCH_TRANSITION_DURATION,
-	})
+        sendStatusUpdate({
+                action = "DeathMatchTransition",
+                duration = DEATHMATCH_TRANSITION_DURATION,
+        })
 
-	tweenAtmosphereForDeathMatch()
+        local config = activeMapConfig
+        tweenAtmosphereForDeathMatch(config)
 
-	local tweens: {Tween} = {}
+        local tweens: {Tween} = {}
 
 	local activeMusic = currentMusic
 	if activeMusic then
@@ -3237,9 +3396,10 @@ local function startRound(player: Player, mapId: string, requestedEventId: strin
 		end
 	end)
 
-	applySkybox(config)
+        applySkybox(config)
+        applyMapLighting(config)
 
-	local spawnContainer = mapClone:FindFirstChild(config.spawnContainer)
+        local spawnContainer = mapClone:FindFirstChild(config.spawnContainer)
 	if not spawnContainer or not spawnContainer:IsA("Model") then
 		sendRoundState("Error", {
 			message = string.format("Spawn container '%s' is missing.", config.spawnContainer),

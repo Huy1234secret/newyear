@@ -76,6 +76,14 @@ local mapDisplayNames = {
 	SFOTH = "SFOTH",
 	ChaosCanyon = "Chaos Canyon",
 	Doomspire = "Doomspire",
+	GlassHouses = "Glass Houses",
+	RobloxHQ = "Roblox HQ",
+	RocketArena = "Rocket Arena",
+	HauntedMansion = "Haunted Mansion",
+	BowlingAlley = "Bowling Alley",
+	HappyHomeOfRobloxia = "Happy Home of Robloxia",
+	RavenRock = "Raven Rock",
+
 }
 
 local function createInstance(className: string, props: {[string]: any})
