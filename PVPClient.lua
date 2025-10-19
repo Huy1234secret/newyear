@@ -1278,7 +1278,15 @@ local DIFFICULTY_EVENT_IDS = {
         RainingBomb = true,
 }
 
-local DIFFICULTY_NUMBERS = {1, 2, 3, 4, 5}
+local DIFFICULTY_NUMBERS = {1, 2, 3, 4, 5, 6}
+local DIFFICULTY_CRITICAL_LEVEL = 6
+local DEFAULT_DIFFICULTY_ROLL_COLOR = Color3.fromRGB(215, 225, 255)
+local DEFAULT_DIFFICULTY_ROLL_TRANSPARENCY = 0.1
+local CRITICAL_DIFFICULTY_FLASH_STYLES = {
+        {color = Color3.fromRGB(255, 80, 80), transparency = 0.05},
+        {color = Color3.fromRGB(255, 200, 200), transparency = 0.2},
+}
+local difficultyFlashState = {token = 0}
 
 local invisibilityState = {
 	enabled = false,
@@ -1817,7 +1825,45 @@ local function updateHighlightActivation()
 	end
 end
 
+local function setDifficultyFlashState(enabled: boolean)
+        difficultyFlashState.token += 1
+        local token = difficultyFlashState.token
+
+        local label = specialEventUI.rollLabel
+        if not label then
+                return
+        end
+
+        if not enabled then
+                label.TextColor3 = DEFAULT_DIFFICULTY_ROLL_COLOR
+                label.TextTransparency = DEFAULT_DIFFICULTY_ROLL_TRANSPARENCY
+                return
+        end
+
+        task.spawn(function()
+                local index = 1
+                while difficultyFlashState.token == token and label.Parent do
+                        local style = CRITICAL_DIFFICULTY_FLASH_STYLES[index]
+                        if style then
+                                label.TextColor3 = style.color
+                                label.TextTransparency = style.transparency
+                        end
+                        index = (index % #CRITICAL_DIFFICULTY_FLASH_STYLES) + 1
+                        task.wait(0.22)
+                end
+
+                if label.Parent then
+                        label.TextColor3 = DEFAULT_DIFFICULTY_ROLL_COLOR
+                        label.TextTransparency = DEFAULT_DIFFICULTY_ROLL_TRANSPARENCY
+                end
+        end)
+end
+
 local function setSpecialEventRollText(text: string?)
+        if not text or text == "" then
+                setDifficultyFlashState(false)
+        end
+
         if specialEventUI.rollLabel then
                 specialEventUI.rollLabel.Text = text or ""
                 specialEventUI.rollLabel.Visible = text ~= nil and text ~= ""
@@ -1940,7 +1986,7 @@ local function completeSpecialEventRandomization(finalName: string)
         showSpecialEvent(finalName, 3)
 end
 
-local function showSpecialEventDifficulty(eventId: string, eventName: string, difficulty: number, rollDuration: number?, displaySeconds: number?)
+local function showSpecialEventDifficulty(eventId: string, eventName: string, difficulty: number, rollDuration: number?, displaySeconds: number?, flashCritical: boolean?)
         if not DIFFICULTY_EVENT_IDS[eventId] then
                 return
         end
@@ -1966,6 +2012,7 @@ local function showSpecialEventDifficulty(eventId: string, eventName: string, di
         end
 
         showSpecialEvent(baseName, nil, true)
+        setDifficultyFlashState(false)
         setSpecialEventRollText("Difficulty ?")
         local hideToken = specialEventState.hideToken
 
@@ -1991,6 +2038,13 @@ local function showSpecialEventDifficulty(eventId: string, eventName: string, di
                 end
 
                 setSpecialEventRollText(string.format("Difficulty %d", clampedDifficulty))
+
+                local shouldFlash = flashCritical and clampedDifficulty >= DIFFICULTY_CRITICAL_LEVEL
+                if shouldFlash then
+                        setDifficultyFlashState(true)
+                else
+                        setDifficultyFlashState(false)
+                end
 
                 if holdTime and holdTime > 0 then
                         task.delay(holdTime, function()
@@ -4449,7 +4503,16 @@ statusRemote.OnClientEvent:Connect(function(payload)
                                 local eventName = if typeof(payload.name) == "string" then payload.name else specialEventState.displayName or eventId
                                 local rollDuration = tonumber(payload.rollDuration)
                                 local displaySeconds = tonumber(payload.displaySeconds)
-                                showSpecialEventDifficulty(eventId, eventName, difficultyValue, rollDuration, displaySeconds)
+                                local flashValue = payload.flashCritical
+                                local flashCritical = false
+                                if typeof(flashValue) == "boolean" then
+                                        flashCritical = flashValue
+                                elseif typeof(flashValue) == "number" then
+                                        flashCritical = flashValue ~= 0
+                                elseif typeof(flashValue) == "string" then
+                                        flashCritical = string.lower(flashValue) == "true"
+                                end
+                                showSpecialEventDifficulty(eventId, eventName, difficultyValue, rollDuration, displaySeconds, flashCritical)
                         end
                 end
         elseif action == "SpecialEventEffect" then

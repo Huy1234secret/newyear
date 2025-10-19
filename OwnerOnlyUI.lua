@@ -339,7 +339,7 @@ glow.Parent = toggleButton
 
 local pvpFrame = Instance.new("Frame")
 pvpFrame.Name = "PVPPanel"
-pvpFrame.Size = UDim2.fromOffset(480, 520)
+pvpFrame.Size = UDim2.fromOffset(480, 560)
 pvpFrame.Position = UDim2.fromScale(0.5, 0.5)
 pvpFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 pvpFrame.BackgroundColor3 = Color3.fromRGB(25, 28, 40)
@@ -448,12 +448,12 @@ local function createRowSection(
 end
 
 local mapSection, mapList = createRowSection("MapSection", "🗺️ Map Selection", 60, 160, 120)
-local eventSection, eventList = createRowSection("EventSection", "🎲 Special Events", 240, 180, 140)
+local eventSection, eventList = createRowSection("EventSection", "🎲 Special Events", 240, 260, 120)
 
 local eventDescriptionLabel = Instance.new("TextLabel")
 eventDescriptionLabel.Name = "EventDescription"
 eventDescriptionLabel.Size = UDim2.new(1, 0, 0, 40)
-eventDescriptionLabel.Position = UDim2.new(0, 0, 0, 140)
+eventDescriptionLabel.Position = UDim2.new(0, 0, 0, 160)
 eventDescriptionLabel.BackgroundTransparency = 1
 eventDescriptionLabel.Font = Enum.Font.Gotham
 eventDescriptionLabel.Text = DEFAULT_EVENT_DESCRIPTION
@@ -465,6 +465,166 @@ eventDescriptionLabel.TextYAlignment = Enum.TextYAlignment.Top
 eventDescriptionLabel.TextTransparency = 0
 eventDescriptionLabel.ZIndex = 6
 eventDescriptionLabel.Parent = eventSection
+
+local difficultyButtons: {[number]: TextButton} = {}
+local selectedDifficulty: number? = nil
+local difficultyStatusLabel: TextLabel? = nil
+
+local function updateDifficultyButtonVisual(button: TextButton, isSelected: boolean)
+        applySelectionVisual(button, isSelected)
+end
+
+local function refreshDifficultyStatusLabel()
+        if difficultyStatusLabel then
+                if selectedDifficulty then
+                        difficultyStatusLabel.Text = string.format("Locked to %d", selectedDifficulty)
+                        difficultyStatusLabel.TextColor3 = Color3.fromRGB(255, 235, 160)
+                else
+                        difficultyStatusLabel.Text = "Random"
+                        difficultyStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+                end
+        end
+end
+
+local function setSelectedDifficulty(level: number?)
+        selectedDifficulty = level
+        for value, button in difficultyButtons do
+                updateDifficultyButtonVisual(button, value == selectedDifficulty)
+        end
+        refreshDifficultyStatusLabel()
+end
+
+local difficultyContainer = Instance.new("Frame")
+difficultyContainer.Name = "DifficultyContainer"
+difficultyContainer.Size = UDim2.new(1, 0, 0, 60)
+difficultyContainer.Position = UDim2.new(0, 0, 0, 200)
+difficultyContainer.BackgroundTransparency = 1
+difficultyContainer.ZIndex = 6
+difficultyContainer.Parent = eventSection
+
+local difficultyHeader = Instance.new("TextLabel")
+difficultyHeader.Name = "DifficultyHeader"
+difficultyHeader.Size = UDim2.new(0.5, -10, 0, 20)
+difficultyHeader.Position = UDim2.new(0, 0, 0, 0)
+difficultyHeader.BackgroundTransparency = 1
+difficultyHeader.Font = Enum.Font.GothamBold
+difficultyHeader.Text = "🎚️ Difficulty Override"
+difficultyHeader.TextColor3 = Color3.fromRGB(245, 245, 255)
+difficultyHeader.TextSize = 16
+difficultyHeader.TextXAlignment = Enum.TextXAlignment.Left
+difficultyHeader.ZIndex = 6
+difficultyHeader.Parent = difficultyContainer
+
+difficultyStatusLabel = Instance.new("TextLabel")
+difficultyStatusLabel.Name = "DifficultyStatus"
+difficultyStatusLabel.Size = UDim2.new(0.5, -10, 0, 20)
+difficultyStatusLabel.Position = UDim2.new(0.5, 10, 0, 0)
+difficultyStatusLabel.BackgroundTransparency = 1
+difficultyStatusLabel.Font = Enum.Font.GothamSemibold
+difficultyStatusLabel.Text = ""
+difficultyStatusLabel.TextSize = 14
+difficultyStatusLabel.TextXAlignment = Enum.TextXAlignment.Right
+difficultyStatusLabel.TextTransparency = 0
+difficultyStatusLabel.ZIndex = 6
+difficultyStatusLabel.Parent = difficultyContainer
+
+local difficultyButtonFrame = Instance.new("Frame")
+difficultyButtonFrame.Name = "DifficultyButtons"
+difficultyButtonFrame.Size = UDim2.new(1, 0, 0, 36)
+difficultyButtonFrame.Position = UDim2.new(0, 0, 0, 24)
+difficultyButtonFrame.BackgroundTransparency = 1
+difficultyButtonFrame.ZIndex = 6
+difficultyButtonFrame.Parent = difficultyContainer
+
+local difficultyLayout = Instance.new("UIGridLayout")
+difficultyLayout.FillDirection = Enum.FillDirection.Horizontal
+difficultyLayout.SortOrder = Enum.SortOrder.LayoutOrder
+difficultyLayout.CellPadding = UDim2.fromOffset(8, 6)
+difficultyLayout.CellSize = UDim2.new(0.333, -8, 1, 0)
+difficultyLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+difficultyLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+difficultyLayout.Parent = difficultyButtonFrame
+
+local function createDifficultyButton(level: number, layoutOrder: number)
+        local button = Instance.new("TextButton")
+        button.Name = string.format("Difficulty%d", level)
+        button.LayoutOrder = layoutOrder
+        button.Size = UDim2.new(0, 0, 1, 0)
+        button.BackgroundColor3 = mapButtonDefaultColor
+        button.AutoButtonColor = false
+        button.Font = Enum.Font.GothamBold
+        button.Text = string.format("%d", level)
+        button.TextColor3 = mapButtonTextColor
+        button.TextSize = 16
+        button.ZIndex = 6
+        button.Parent = difficultyButtonFrame
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = button
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness = 1.5
+        stroke.Color = Color3.fromRGB(150, 160, 210)
+        stroke.Transparency = 0.3
+        stroke.Parent = button
+
+        local gradient = Instance.new("UIGradient")
+        gradient.Name = "SelectionGradient"
+        gradient.Color = mapButtonDefaultGradient
+        gradient.Rotation = 90
+        gradient.Parent = button
+
+        local scale = Instance.new("UIScale")
+        scale.Name = "SelectionScale"
+        scale.Parent = button
+
+        difficultyButtons[level] = button
+        updateDifficultyButtonVisual(button, false)
+
+        button.Activated:Connect(function()
+                if selectedDifficulty == level then
+                        setSelectedDifficulty(nil)
+                else
+                        setSelectedDifficulty(level)
+                end
+        end)
+
+        return button
+end
+
+for index = 1, 6 do
+        createDifficultyButton(index, index)
+end
+
+local randomDifficultyButton = Instance.new("TextButton")
+randomDifficultyButton.Name = "DifficultyRandom"
+randomDifficultyButton.LayoutOrder = 99
+randomDifficultyButton.Size = UDim2.new(0, 0, 1, 0)
+randomDifficultyButton.BackgroundColor3 = Color3.fromRGB(74, 87, 120)
+randomDifficultyButton.AutoButtonColor = false
+randomDifficultyButton.Font = Enum.Font.GothamSemibold
+randomDifficultyButton.Text = "🎲 Random"
+randomDifficultyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+randomDifficultyButton.TextSize = 15
+randomDifficultyButton.ZIndex = 6
+randomDifficultyButton.Parent = difficultyButtonFrame
+
+local randomCorner = Instance.new("UICorner")
+randomCorner.CornerRadius = UDim.new(0, 8)
+randomCorner.Parent = randomDifficultyButton
+
+local randomStroke = Instance.new("UIStroke")
+randomStroke.Thickness = 1.5
+randomStroke.Color = Color3.fromRGB(120, 135, 200)
+randomStroke.Transparency = 0.35
+randomStroke.Parent = randomDifficultyButton
+
+randomDifficultyButton.Activated:Connect(function()
+        setSelectedDifficulty(nil)
+end)
+
+setSelectedDifficulty(nil)
 
 local actionContainer = Instance.new("Frame")
 actionContainer.Name = "ActionContainer"
@@ -837,6 +997,10 @@ startButton.Activated:Connect(function()
 
 	if selectedEventId and selectedEventId ~= "" then
 		payload.eventId = selectedEventId
+	end
+
+	if selectedDifficulty then
+		payload.difficulty = selectedDifficulty
 	end
 
 	startRoundRemote:FireServer(payload)

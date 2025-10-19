@@ -339,9 +339,10 @@ type ParticipantRecord = {
 }
 
 type SpecialEventContext = {
-	definition: SpecialEventDefinition,
-	roundId: number,
-	state: {},
+        definition: SpecialEventDefinition,
+        roundId: number,
+        state: {},
+        ownerDifficultyOverride: number?,
 }
 
 type SpecialEventDefinition = {
@@ -413,12 +414,12 @@ local function callSpecialEventCallback(context: SpecialEventContext?, methodNam
 	end
 end
 
-local function setActiveSpecialEvent(eventId: string?, roundId: number): SpecialEventContext?
-	selectedSpecialEventId = eventId
+local function setActiveSpecialEvent(eventId: string?, roundId: number, difficultyOverride: number?): SpecialEventContext?
+        selectedSpecialEventId = eventId
 
-	if not eventId then
-		activeSpecialEvent = nil
-		return nil
+        if not eventId then
+                activeSpecialEvent = nil
+                return nil
 	end
 
 	local definition = specialEventDefinitions[eventId]
@@ -429,14 +430,23 @@ local function setActiveSpecialEvent(eventId: string?, roundId: number): Special
 		return nil
 	end
 
-	local context: SpecialEventContext = {
-		definition = definition,
-		roundId = roundId,
-		state = {},
-	}
+        local normalizedDifficulty: number? = nil
+        if typeof(difficultyOverride) == "number" then
+                local floored = math.floor(difficultyOverride)
+                if floored >= 1 and floored < math.huge then
+                        normalizedDifficulty = floored
+                end
+        end
 
-	activeSpecialEvent = context
-	return context
+        local context: SpecialEventContext = {
+                definition = definition,
+                roundId = roundId,
+                state = {},
+                ownerDifficultyOverride = normalizedDifficulty,
+        }
+
+        activeSpecialEvent = context
+        return context
 end
 
 local function clearActiveSpecialEvent()
@@ -445,14 +455,36 @@ local function clearActiveSpecialEvent()
 end
 
 local function getRandomSpecialEventId(): string?
-	if #specialEventList == 0 then
-		return nil
-	end
+        if #specialEventList == 0 then
+                return nil
+        end
 
 	local rng = Random.new()
 	local index = rng:NextInteger(1, #specialEventList)
 	local definition = specialEventList[index]
 	return if definition then definition.id else nil
+end
+
+local function getOwnerDifficultyOverride(context: SpecialEventContext?, maxValue: number): number?
+        if not context then
+                return nil
+        end
+
+        local override = context.ownerDifficultyOverride
+        if typeof(override) ~= "number" then
+                return nil
+        end
+
+        local floored = math.floor(override)
+        if floored < 1 then
+                return nil
+        end
+
+        if floored > maxValue then
+                floored = maxValue
+        end
+
+        return floored
 end
 
 local function forEachActiveParticipant(callback: (Player, ParticipantRecord) -> ())
@@ -777,15 +809,24 @@ do
                         end
 
                         local difficultySettings = {
-                                {spawnInterval = 1, blastRadius = 8, countdownTime = 3},
-                                {spawnInterval = 0.75, blastRadius = 10, countdownTime = 3},
-                                {spawnInterval = 0.5, blastRadius = 12, countdownTime = 2.25},
-                                {spawnInterval = 0.4, blastRadius = 13, countdownTime = 2.25},
-                                {spawnInterval = 0.3, blastRadius = 15, countdownTime = 1.75},
+                                {spawnInterval = 1, blastRadius = 10, countdownTime = 3},
+                                {spawnInterval = 0.6, blastRadius = 10, countdownTime = 2.5},
+                                {spawnInterval = 0.45, blastRadius = 12, countdownTime = 2},
+                                {spawnInterval = 0.3, blastRadius = 12, countdownTime = 1.5},
+                                {spawnInterval = 0.1, blastRadius = 15, countdownTime = 1},
+                                {spawnInterval = 0.25, blastRadius = 20, countdownTime = 0, explodeOnImpact = true},
                         }
 
                         local difficultyRng = Random.new()
-                        local difficultyIndex = difficultyRng:NextInteger(1, #difficultySettings)
+                        local overrideIndex = getOwnerDifficultyOverride(context, #difficultySettings)
+                        local maxRandomDifficulty = math.min(#difficultySettings, 5)
+                        local difficultyIndex
+                        if overrideIndex then
+                                difficultyIndex = overrideIndex
+                        else
+                                difficultyIndex = difficultyRng:NextInteger(1, math.max(1, maxRandomDifficulty))
+                        end
+
                         local config = difficultySettings[difficultyIndex] or difficultySettings[1]
 
                         sendStatusUpdate({
@@ -795,6 +836,7 @@ do
                                 difficulty = difficultyIndex,
                                 rollDuration = 2.4,
                                 displaySeconds = 3,
+                                flashCritical = difficultyIndex == 6,
                         })
 
                         local running = true
@@ -902,10 +944,15 @@ do
 						createExplosion(bomb)
 					end
 
-					local function startCountdown()
-						if countdownStarted or exploded then
-							return
-						end
+                                        local function startCountdown()
+                                                if countdownStarted or exploded then
+                                                        return
+                                                end
+
+                                                if config.explodeOnImpact then
+                                                        explode()
+                                                        return
+                                                end
 
                                                 countdownStarted = true
                                                 bomb.Anchored = false
@@ -957,11 +1004,15 @@ do
 						end)
 					end
 
-					bomb.Touched:Connect(function(hit)
-						if not hit or not hit:IsA("BasePart") then
-							return
-						end
-						startCountdown()
+                                        bomb.Touched:Connect(function(hit)
+                                                if not hit or not hit:IsA("BasePart") then
+                                                        return
+                                                end
+                                                if config.explodeOnImpact then
+                                                        explode()
+                                                        return
+                                                end
+                                                startCountdown()
                                         end)
 
                                         Debris:AddItem(bomb, 15)
@@ -1005,14 +1056,23 @@ do
                         local killBotRandom = Random.new()
 
                         local difficultySettings = {
-                                {botCount = 2, rocketsPerVolley = 1, missileSpeed = 65, maxActiveRockets = 1},
-                                {botCount = 3, rocketsPerVolley = 1, missileSpeed = 75, maxActiveRockets = 1},
-                                {botCount = 4, rocketsPerVolley = 2, missileSpeed = 90, maxActiveRockets = 2},
+                                {botCount = 2, rocketsPerVolley = 1, missileSpeed = 50, maxActiveRockets = 1},
+                                {botCount = 3, rocketsPerVolley = 1, missileSpeed = 65, maxActiveRockets = 1},
+                                {botCount = 4, rocketsPerVolley = 2, missileSpeed = 80, maxActiveRockets = 2},
                                 {botCount = 5, rocketsPerVolley = 2, missileSpeed = 100, maxActiveRockets = 2},
-                                {botCount = 6, rocketsPerVolley = 3, missileSpeed = 120, maxActiveRockets = 3},
+                                {botCount = 6, rocketsPerVolley = 3, missileSpeed = 125, maxActiveRockets = 3},
+                                {botCount = 10, rocketsPerVolley = 3, missileSpeed = 100, maxActiveRockets = 4},
                         }
 
-                        local difficultyIndex = killBotRandom:NextInteger(1, #difficultySettings)
+                        local overrideIndex = getOwnerDifficultyOverride(context, #difficultySettings)
+                        local randomMax = math.min(#difficultySettings, 5)
+                        local difficultyIndex
+                        if overrideIndex then
+                                difficultyIndex = overrideIndex
+                        else
+                                difficultyIndex = killBotRandom:NextInteger(1, math.max(1, randomMax))
+                        end
+
                         local difficultyConfig = difficultySettings[difficultyIndex] or difficultySettings[1]
                         state.difficulty = difficultyIndex
                         state.config = difficultyConfig
@@ -1024,6 +1084,7 @@ do
                                 difficulty = difficultyIndex,
                                 rollDuration = 2.4,
                                 displaySeconds = 3,
+                                flashCritical = difficultyIndex == 6,
                         })
 
                         -- Original Roblox KillBot settings
@@ -1856,10 +1917,19 @@ do
                                 {initialTimer = 40, speedBonus = 4},
                                 {initialTimer = 30, speedBonus = 7},
                                 {initialTimer = 20, speedBonus = 10},
+                                {initialTimer = 30, speedBonus = 15},
                         }
 
                         local rng = Random.new()
-                        local difficultyIndex = rng:NextInteger(1, #difficultySettings)
+                        local overrideIndex = getOwnerDifficultyOverride(context, #difficultySettings)
+                        local randomMax = math.min(#difficultySettings, 5)
+                        local difficultyIndex
+                        if overrideIndex then
+                                difficultyIndex = overrideIndex
+                        else
+                                difficultyIndex = rng:NextInteger(1, math.max(1, randomMax))
+                        end
+
                         local difficultyConfig = difficultySettings[difficultyIndex] or difficultySettings[1]
 
                         sendStatusUpdate({
@@ -1869,6 +1939,7 @@ do
                                 difficulty = difficultyIndex,
                                 rollDuration = 2.4,
                                 displaySeconds = 3,
+                                flashCritical = difficultyIndex == 6,
                         })
 
                         local initialTimer = math.max(difficultyConfig.initialTimer or 30, 5)
@@ -3423,7 +3494,7 @@ performDeathMatchTransition = function(roundId: number)
 	beginDeathMatch(roundId)
 end
 
-local function startRound(player: Player, mapId: string, requestedEventId: string?)
+local function startRound(player: Player, mapId: string, requestedEventId: string?, requestedDifficulty: number?)
 	if roundInProgress then
 		sendRoundState("Error", {
 			message = "A round is already running.",
@@ -3537,7 +3608,7 @@ local function startRound(player: Player, mapId: string, requestedEventId: strin
 	mapClone.Parent = Workspace
 	activeMapModel = mapClone
 
-	local eventContext = setActiveSpecialEvent(resolvedEventId, roundId)
+        local eventContext = setActiveSpecialEvent(resolvedEventId, roundId, requestedDifficulty)
 
 	local randomRevealDuration = 3
 
@@ -3932,29 +4003,39 @@ for _, player in Players:GetPlayers() do
 end
 
 startRoundRemote.OnServerEvent:Connect(function(player, payload)
-	if not isGameOwner(player) then
-		return
-	end
+        if not isGameOwner(player) then
+                return
+        end
 
-	local mapId: string? = nil
-	local eventId: string? = nil
+        local mapId: string? = nil
+        local eventId: string? = nil
+        local difficultyOverride: number? = nil
 
-	if typeof(payload) == "table" then
-		mapId = payload.mapId or payload.modelName or payload.id
-		local eventValue = payload.eventId or payload.event
-		if typeof(eventValue) == "string" then
-			eventId = eventValue
-		end
-	elseif typeof(payload) == "string" then
-		mapId = payload
-	end
+        if typeof(payload) == "table" then
+                mapId = payload.mapId or payload.modelName or payload.id
+                local eventValue = payload.eventId or payload.event
+                if typeof(eventValue) == "string" then
+                        eventId = eventValue
+                end
 
-	if typeof(mapId) ~= "string" then
-		sendRoundState("Error", {
-			message = "Select a map before starting the round.",
-		})
-		return
-	end
+                local difficultyValue = payload.difficulty or payload.difficultyOverride
+                local numericDifficulty = tonumber(difficultyValue)
+                if numericDifficulty then
+                        local floored = math.floor(numericDifficulty)
+                        if floored >= 1 then
+                                difficultyOverride = floored
+                        end
+                end
+        elseif typeof(payload) == "string" then
+                mapId = payload
+        end
 
-	startRound(player, mapId, eventId)
+        if typeof(mapId) ~= "string" then
+                sendRoundState("Error", {
+                        message = "Select a map before starting the round.",
+                })
+                return
+        end
+
+        startRound(player, mapId, eventId, difficultyOverride)
 end)
