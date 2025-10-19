@@ -210,12 +210,13 @@ type StatusUI = {
 }
 
 type SpecialEventUI = {
-	frame: Frame,
-	stroke: UIStroke,
-	gradient: UIGradient,
-	header: TextLabel,
-	title: TextLabel,
-	scale: UIScale,
+        frame: Frame,
+        stroke: UIStroke,
+        gradient: UIGradient,
+        header: TextLabel,
+        title: TextLabel,
+        rollLabel: TextLabel,
+        scale: UIScale,
 }
 
 type SprintDefaults = {
@@ -673,34 +674,54 @@ local function createSpecialEventUI(parent: ScreenGui, isTouch: boolean): Specia
 		Parent = frame,
 	})
 
-	local title = createInstance("TextLabel", {
-		Name = "Title",
-		Size = UDim2.new(1, -60, 0, 60),
-		Position = UDim2.new(0, 30, 0, 70),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBlack,
-		Text = "",
-		TextScaled = true,
-		TextWrapped = true,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		ZIndex = frame.ZIndex + 1,
-		Parent = frame,
-	})
+        local title = createInstance("TextLabel", {
+                Name = "Title",
+                Size = UDim2.new(1, -60, 0, 64),
+                Position = UDim2.new(0, 30, 0, 66),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamBlack,
+                Text = "",
+                TextScaled = true,
+                TextWrapped = true,
+                TextColor3 = Color3.fromRGB(255, 255, 255),
+                ZIndex = frame.ZIndex + 1,
+                Parent = frame,
+        })
 
-	local scale = createInstance("UIScale", {
-		Name = "Scale",
-		Scale = 1,
-		Parent = frame,
+        local rollLabel = createInstance("TextLabel", {
+                Name = "RollText",
+                Size = UDim2.new(1, -60, 0, 26),
+                Position = UDim2.new(0, 30, 0, 128),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamSemibold,
+                Text = "",
+                TextScaled = false,
+                TextSize = if isTouch then 18 else 16,
+                TextColor3 = Color3.fromRGB(215, 225, 255),
+                TextTransparency = 0.1,
+                TextWrapped = true,
+                TextXAlignment = Enum.TextXAlignment.Center,
+                TextYAlignment = Enum.TextYAlignment.Top,
+                Visible = false,
+                ZIndex = frame.ZIndex + 1,
+                Parent = frame,
+        })
+
+        local scale = createInstance("UIScale", {
+                Name = "Scale",
+                Scale = 1,
+                Parent = frame,
 	})
 
 	return {
 		frame = frame,
-		stroke = stroke,
-		gradient = gradient,
-		header = header,
-		title = title,
-		scale = scale,
-	}
+                stroke = stroke,
+                gradient = gradient,
+                header = header,
+                title = title,
+                rollLabel = rollLabel,
+                scale = scale,
+        }
 end
 
 local function createSprintUI(parent: ScreenGui, refs: UiRefs, isTouch: boolean, layout: LayoutConfig): SprintUI
@@ -1796,18 +1817,27 @@ local function updateHighlightActivation()
 	end
 end
 
+local function setSpecialEventRollText(text: string?)
+        if specialEventUI.rollLabel then
+                specialEventUI.rollLabel.Text = text or ""
+                specialEventUI.rollLabel.Visible = text ~= nil and text ~= ""
+        end
+end
+
 local function hideSpecialEvent(immediate: boolean?)
-	specialEventState.hideToken += 1
-	local token = specialEventState.hideToken
+        specialEventState.hideToken += 1
+        local token = specialEventState.hideToken
 
-	if not specialEventUI.frame then
-		return
-	end
+        if not specialEventUI.frame then
+                return
+        end
 
-	if immediate then
-		specialEventUI.frame.Visible = false
-		return
-	end
+        setSpecialEventRollText(nil)
+
+        if immediate then
+                specialEventUI.frame.Visible = false
+                return
+        end
 
 	local fadeTween = TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		BackgroundTransparency = 1,
@@ -1828,11 +1858,12 @@ local function hideSpecialEvent(immediate: boolean?)
 end
 
 local function showSpecialEvent(titleText: string, keepSeconds: number?)
-	specialEventState.hideToken += 1
-	local token = specialEventState.hideToken
+        specialEventState.hideToken += 1
+        local token = specialEventState.hideToken
 
-	specialEventUI.title.Text = titleText
-	specialEventUI.frame.Visible = true
+        specialEventUI.title.Text = titleText
+        setSpecialEventRollText(nil)
+        specialEventUI.frame.Visible = true
 	specialEventUI.frame.BackgroundTransparency = 1
 	specialEventUI.scale.Scale = 0.2
 
@@ -1894,11 +1925,13 @@ end
 local function completeSpecialEventRandomization(finalName: string)
         if not specialEventState.randomized then
                 showSpecialEvent(finalName, 3)
+                setSpecialEventRollText(nil)
                 return
         end
 
         specialEventState.randomized = false
         specialEventUI.title.Text = finalName
+        setSpecialEventRollText(nil)
         showSpecialEvent(finalName, 3)
 end
 
@@ -1927,7 +1960,8 @@ local function showSpecialEventDifficulty(eventId: string, eventName: string, di
                 holdTime = 3
         end
 
-        showSpecialEvent(string.format("%s\nDifficulty ?", baseName), nil)
+        showSpecialEvent(baseName, nil)
+        setSpecialEventRollText("Difficulty ?")
         local hideToken = specialEventState.hideToken
 
         specialEventState.difficultyToken += 1
@@ -1941,7 +1975,7 @@ local function showSpecialEventDifficulty(eventId: string, eventName: string, di
 
                 while specialEventState.difficultyToken == token and os.clock() - startTime < rollTime do
                         local rollValue = DIFFICULTY_NUMBERS[((index - 1) % totalNumbers) + 1]
-                        specialEventUI.title.Text = string.format("%s\nDifficulty %d", baseName, rollValue)
+                        setSpecialEventRollText(string.format("Difficulty %d", rollValue))
                         index += 1
                         task.wait(step)
                         step = math.min(0.22, step + 0.01)
@@ -1951,7 +1985,7 @@ local function showSpecialEventDifficulty(eventId: string, eventName: string, di
                         return
                 end
 
-                specialEventUI.title.Text = string.format("%s\nDifficulty %d", baseName, clampedDifficulty)
+                setSpecialEventRollText(string.format("Difficulty %d", clampedDifficulty))
 
                 if holdTime and holdTime > 0 then
                         task.delay(holdTime, function()
