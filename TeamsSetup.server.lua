@@ -926,17 +926,17 @@ do
 				return nearestPlayer
 			end
 
-			local function getRandomPosition(): Vector3
-				local stormSize = getStormHorizontalSize()
-				local radiusX = stormSize.X / 2
-				local radiusZ = stormSize.Y / 2
-				
-				return Vector3.new(
-					killBotRandom:NextNumber(-radiusX, radiusX),
-					killBotRandom:NextNumber(100, 200),
-					killBotRandom:NextNumber(-radiusZ, radiusZ)
-				)
-			end
+                        local function getRandomPosition(): Vector3
+                                local stormSize = getStormHorizontalSize()
+                                local radiusX = stormSize.X / 2
+                                local radiusZ = stormSize.Y / 2
+
+                                return Vector3.new(
+                                        killBotRandom:NextNumber(-radiusX, radiusX),
+                                        killBotRandom:NextNumber(50, 100),
+                                        killBotRandom:NextNumber(-radiusZ, radiusZ)
+                                )
+                        end
 
 			local function damageInRadius(center: Vector3, radius: number)
 				local params = OverlapParams.new()
@@ -971,89 +971,99 @@ do
 					return false
 				end
 
-				local rocket = Instance.new("Part")
-				rocket.Name = "KillBotRocket"
-				rocket.Shape = Enum.PartType.Block
-				rocket.Size = Vector3.new(3, 1, 1)
-				rocket.Material = Enum.Material.Neon
-				rocket.Color = Color3.fromRGB(255, 100, 100)
-				rocket.CanCollide = false
-				rocket.CanQuery = false
-				rocket.CanTouch = true
-				rocket.Anchored = false
-				rocket.Massless = true
+                                local rocket = Instance.new("Part")
+                                rocket.Name = "KillBotRocket"
+                                rocket.Shape = Enum.PartType.Block
+                                rocket.Size = Vector3.new(3, 1, 1)
+                                rocket.Material = Enum.Material.Neon
+                                rocket.Color = Color3.fromRGB(255, 100, 100)
+                                rocket.CanCollide = false
+                                rocket.CanQuery = false
+                                rocket.CanTouch = true
+                                rocket.Anchored = false
+                                rocket.Massless = true
 
 				local launchOrigin = botPart.Position
 				local toTarget = targetPosition - launchOrigin
 				local targetDirection = toTarget.Unit
 				local spawnPosition = launchOrigin + targetDirection * 3
 
-				rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + targetDirection)
-				rocket.Parent = Workspace
-				rocket:SetNetworkOwner(nil)
+                                rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + targetDirection)
+                                rocket.Parent = Workspace
+                                rocket:SetNetworkOwner(nil)
 
-				-- Calculate trajectory with gravity compensation
-				local distance = toTarget.Magnitude
-				local timeToTarget = distance / MISSILE_SPEED
-				local gravityCompensation = Vector3.new(0, Workspace.Gravity * timeToTarget * 0.5, 0)
-				
-				rocket.AssemblyLinearVelocity = (targetDirection * MISSILE_SPEED) + gravityCompensation
+                                -- Calculate trajectory with gravity compensation
+                                local distance = toTarget.Magnitude
+                                local timeToTarget = distance / MISSILE_SPEED
+                                local gravityCompensation = Vector3.new(0, Workspace.Gravity * timeToTarget * 0.5, 0)
+                                local initialVelocity = (targetDirection * MISSILE_SPEED) + gravityCompensation
 
-				local detonated = false
-				local function explode()
-					if detonated then
-						return
-					end
+                                rocket.AssemblyLinearVelocity = initialVelocity
+                                if initialVelocity.Magnitude > 0 then
+                                        rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + initialVelocity.Unit)
+                                end
 
-					detonated = true
+                                local flightSound = Instance.new("Sound")
+                                flightSound.Name = "KillBotRocketFlight"
+                                flightSound.SoundId = "http://www.roblox.com/asset/?id=12222095"
+                                flightSound.Volume = 0.6
+                                flightSound.Looped = true
+                                flightSound.RollOffMaxDistance = 120
+                                flightSound.PlayOnRemove = false
+                                flightSound.Parent = rocket
+                                flightSound:Play()
 
-					local explosion = Instance.new("Explosion")
-					explosion.BlastRadius = MISSILE_BLAST_RADIUS
-					explosion.BlastPressure = 0
-					explosion.DestroyJointRadiusPercent = 0
-					explosion.Position = rocket.Position
-					explosion.Parent = Workspace
+                                local detonated = false
+                                local function explode()
+                                        if detonated then
+                                                return
+                                        end
 
-					damageInRadius(rocket.Position, MISSILE_BLAST_RADIUS)
+                                        detonated = true
 
-					if rocket.Parent then
-						rocket:Destroy()
-					end
-				end
+                                        flightSound:Stop()
 
-				rocket.Touched:Connect(function(hit)
-					if detonated then
-						return
-					end
+                                        local explosion = Instance.new("Explosion")
+                                        explosion.BlastRadius = MISSILE_BLAST_RADIUS
+                                        explosion.BlastPressure = 0
+                                        explosion.DestroyJointRadiusPercent = 0
+                                        explosion.Position = rocket.Position
+                                        explosion.Parent = Workspace
 
-					-- Don't collide with other KillBots or rockets
-					if hit and hit.Parent then
-						local parent = hit.Parent
-						if parent:IsA("Model") then
-							-- Check if it's a KillBot
-							if parent.Name:find("KillBot") then
-								return
-							end
-							-- Check if it's a rocket
-							if hit.Name == "KillBotRocket" then
-								return
-							end
-							
-							local humanoid = parent:FindFirstChildOfClass("Humanoid")
-							if humanoid and humanoid.Health > 0 then
-								explode()
-							end
-						elseif hit.Name == "KillBotRocket" then
-							return
-						else
-							-- Hit any other part (walls, ground, etc.)
-							explode()
-						end
-					else
-						-- Hit something without a parent
-						explode()
-					end
-				end)
+                                        damageInRadius(rocket.Position, MISSILE_BLAST_RADIUS)
+
+                                        local soundAnchor = Instance.new("Part")
+                                        soundAnchor.Anchored = true
+                                        soundAnchor.CanCollide = false
+                                        soundAnchor.CanQuery = false
+                                        soundAnchor.CanTouch = false
+                                        soundAnchor.Transparency = 1
+                                        soundAnchor.Size = Vector3.new(0.1, 0.1, 0.1)
+                                        soundAnchor.CFrame = CFrame.new(rocket.Position)
+                                        soundAnchor.Parent = Workspace
+
+                                        local impactSound = Instance.new("Sound")
+                                        impactSound.Name = "KillBotRocketImpact"
+                                        impactSound.SoundId = "rbxasset://sounds/collide.wav"
+                                        impactSound.Volume = 1
+                                        impactSound.RollOffMaxDistance = 120
+                                        impactSound.Parent = soundAnchor
+                                        impactSound:Play()
+
+                                        Debris:AddItem(soundAnchor, math.max(impactSound.TimeLength, 2))
+
+                                        if rocket.Parent then
+                                                rocket:Destroy()
+                                        end
+                                end
+
+                                rocket.Touched:Connect(function(hit)
+                                        if detonated then
+                                                return
+                                        end
+
+                                        explode()
+                                end)
 
 				-- Add a BodyVelocity to maintain trajectory
 				local bodyVelocity = Instance.new("BodyVelocity")
@@ -1070,20 +1080,25 @@ do
 					end
 
 					-- Recalculate target direction
-					local currentPos = rocket.Position
-					local newTargetPos = targetPosition
-					local newDirection = (newTargetPos - currentPos).Unit
-					
-					-- Update velocity to track target
-					bodyVelocity.Velocity = newDirection * MISSILE_SPEED
-				end)
+                                        local currentPos = rocket.Position
+                                        local newTargetPos = targetPosition
+                                        local toNewTarget = newTargetPos - currentPos
+                                        if toNewTarget.Magnitude > 0 then
+                                                local newDirection = toNewTarget.Unit
+                                                bodyVelocity.Velocity = newDirection * MISSILE_SPEED
+                                                rocket.CFrame = CFrame.lookAt(currentPos, currentPos + newDirection)
+                                        end
+                                end)
 
-				rocket.Destroying:Connect(function()
-					detonated = true
-					if connection then
-						connection:Disconnect()
-					end
-				end)
+                                rocket.Destroying:Connect(function()
+                                        detonated = true
+                                        if flightSound.IsPlaying then
+                                                flightSound:Stop()
+                                        end
+                                        if connection then
+                                                connection:Disconnect()
+                                        end
+                                end)
 
 				-- Auto-explode after 8 seconds
 				task.delay(8, function()
