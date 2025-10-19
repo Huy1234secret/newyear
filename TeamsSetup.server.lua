@@ -965,7 +965,7 @@ do
 				end
 			end
 
-			local function createRocket(botState, targetPosition: Vector3)
+                        local function createRocket(botState, _targetPosition: Vector3)
 				local botPart = botState.part
 				if not botPart or not botPart.Parent then
 					return false
@@ -983,20 +983,20 @@ do
                                 rocket.Anchored = false
                                 rocket.Massless = true
 
-				local launchOrigin = botPart.Position
-				local toTarget = targetPosition - launchOrigin
-				local targetDirection = toTarget.Unit
-				local spawnPosition = launchOrigin + targetDirection * 3
+                                local launchOrigin = botPart.Position
+                                local launchDirection = botPart.CFrame.UpVector
+                                if launchDirection.Magnitude < 0.1 then
+                                        launchDirection = Vector3.new(0, 1, 0)
+                                else
+                                        launchDirection = launchDirection.Unit
+                                end
+                                local spawnPosition = launchOrigin
 
-                                rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + targetDirection)
+                                rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + launchDirection)
                                 rocket.Parent = Workspace
                                 rocket:SetNetworkOwner(nil)
 
-                                -- Calculate trajectory with gravity compensation
-                                local distance = toTarget.Magnitude
-                                local timeToTarget = distance / MISSILE_SPEED
-                                local gravityCompensation = Vector3.new(0, Workspace.Gravity * timeToTarget * 0.5, 0)
-                                local initialVelocity = (targetDirection * MISSILE_SPEED) + gravityCompensation
+                                local initialVelocity = launchDirection * MISSILE_SPEED
 
                                 rocket.AssemblyLinearVelocity = initialVelocity
                                 if initialVelocity.Magnitude > 0 then
@@ -1005,7 +1005,7 @@ do
 
                                 local flightSound = Instance.new("Sound")
                                 flightSound.Name = "KillBotRocketFlight"
-                                flightSound.SoundId = "http://www.roblox.com/asset/?id=12222095"
+                                flightSound.SoundId = "rbxassetid://12222095"
                                 flightSound.Volume = 0.6
                                 flightSound.Looped = true
                                 flightSound.RollOffMaxDistance = 120
@@ -1043,8 +1043,8 @@ do
                                         soundAnchor.Parent = Workspace
 
                                         local impactSound = Instance.new("Sound")
-                                        impactSound.Name = "KillBotRocketImpact"
-                                        impactSound.SoundId = "rbxasset://sounds/collide.wav"
+                                        impactSound.Name = "KillBotRocketExplosion"
+                                        impactSound.SoundId = "rbxassetid://129988148028967"
                                         impactSound.Volume = 1
                                         impactSound.RollOffMaxDistance = 120
                                         impactSound.Parent = soundAnchor
@@ -1062,32 +1062,33 @@ do
                                                 return
                                         end
 
+                                        if hit and botState.model and hit:IsDescendantOf(botState.model) then
+                                                return
+                                        end
+
                                         explode()
                                 end)
 
-				-- Add a BodyVelocity to maintain trajectory
-				local bodyVelocity = Instance.new("BodyVelocity")
-				bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
-				bodyVelocity.Velocity = rocket.AssemblyLinearVelocity
-				bodyVelocity.Parent = rocket
+                                -- Add a BodyVelocity to maintain trajectory
+                                local bodyVelocity = Instance.new("BodyVelocity")
+                                bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+                                bodyVelocity.Velocity = launchDirection * MISSILE_SPEED
+                                bodyVelocity.Parent = rocket
 
-				-- Update velocity to track target
-				local connection
-				connection = RunService.Heartbeat:Connect(function()
-					if detonated or not rocket.Parent then
-						connection:Disconnect()
-						return
-					end
-
-					-- Recalculate target direction
-                                        local currentPos = rocket.Position
-                                        local newTargetPos = targetPosition
-                                        local toNewTarget = newTargetPos - currentPos
-                                        if toNewTarget.Magnitude > 0 then
-                                                local newDirection = toNewTarget.Unit
-                                                bodyVelocity.Velocity = newDirection * MISSILE_SPEED
-                                                rocket.CFrame = CFrame.lookAt(currentPos, currentPos + newDirection)
+                                -- Maintain upward trajectory and orientation
+                                local connection
+                                connection = RunService.Heartbeat:Connect(function()
+                                        if detonated or not rocket.Parent then
+                                                if connection then
+                                                        connection:Disconnect()
+                                                        connection = nil
+                                                end
+                                                return
                                         end
+
+                                        local currentPos = rocket.Position
+                                        bodyVelocity.Velocity = launchDirection * MISSILE_SPEED
+                                        rocket.CFrame = CFrame.lookAt(currentPos, currentPos + launchDirection)
                                 end)
 
                                 rocket.Destroying:Connect(function()
@@ -1097,6 +1098,7 @@ do
                                         end
                                         if connection then
                                                 connection:Disconnect()
+                                                connection = nil
                                         end
                                 end)
 
