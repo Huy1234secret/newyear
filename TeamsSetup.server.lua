@@ -865,16 +865,26 @@ do
 			local killBotRandom = Random.new()
 
 			-- Original Roblox KillBot settings
-			local BOT_SPEED = 30
-			local BOT_SIZE = Vector3.new(6, 6, 6)
-			local BOT_COLOR = Color3.fromRGB(255, 0, 0)
-			local BOT_MATERIAL = Enum.Material.Neon
-			local BOT_COUNT = 3
-			local MISSILE_DELAY = 0.75
+                        local MIN_BOT_SPEED = 30
+                        local MAX_BOT_SPEED = 100
+                        local BOT_SIZE = Vector3.new(6, 6, 6)
+                        local BOT_MATERIAL = Enum.Material.Neon
+                        local BOT_COUNT = 3
+                        local MIN_MOVE_DISTANCE = 100
+                        local MAX_MOVE_DISTANCE = 500
+                        local MAX_MISSILES_PER_BOT = 3
+                        local BOT_COLOR_PALETTE = {
+                                Color3.fromRGB(255, 75, 75),
+                                Color3.fromRGB(255, 200, 90),
+                                Color3.fromRGB(80, 175, 255),
+                                Color3.fromRGB(120, 70, 255),
+                                Color3.fromRGB(60, 220, 150),
+                        }
+                        local MISSILE_DELAY = 0.75
                         local MISSILE_SPEED = 55
-			local MISSILE_DAMAGE = 50
-			local MISSILE_BLAST_RADIUS = 15
-			local MOVE_INTERVAL = 2.0
+                        local MISSILE_DAMAGE = 50
+                        local MISSILE_BLAST_RADIUS = 15
+                        local MOVE_INTERVAL = 2.0
 			local STOP_INTERVAL = 3.0
 
 			local function hasLineOfSight(botPosition: Vector3, targetPosition: Vector3): boolean
@@ -954,6 +964,10 @@ do
                                 return Vector3.new(origin.X + clampedX, position.Y, origin.Z + clampedZ)
                         end
 
+                        local function getRandomHoverHeight(): number
+                                return killBotRandom:NextNumber(50, 100)
+                        end
+
                         local function getRandomPosition(): Vector3
                                 while true do
                                         local candidateX = killBotRandom:NextNumber(-horizontalRadiusX, horizontalRadiusX)
@@ -963,11 +977,126 @@ do
                                         if normalizedX * normalizedX + normalizedZ * normalizedZ <= 1 then
                                                 return Vector3.new(
                                                         origin.X + candidateX,
-                                                        killBotRandom:NextNumber(50, 100),
+                                                        getRandomHoverHeight(),
                                                         origin.Z + candidateZ
                                                 )
                                         end
                                 end
+                        end
+
+                        local function getMaxDistanceWithinRadius(currentPosition: Vector3, direction: Vector3): number
+                                local horizontalDirection = Vector3.new(direction.X, 0, direction.Z)
+                                if horizontalDirection.Magnitude < 1e-3 then
+                                        return 0
+                                end
+
+                                local unitDirection = horizontalDirection.Unit
+                                local normalizedPosX = (currentPosition.X - origin.X) / horizontalRadiusX
+                                local normalizedPosZ = (currentPosition.Z - origin.Z) / horizontalRadiusZ
+                                local normalizedDirX = unitDirection.X / horizontalRadiusX
+                                local normalizedDirZ = unitDirection.Z / horizontalRadiusZ
+
+                                local a = normalizedDirX * normalizedDirX + normalizedDirZ * normalizedDirZ
+                                if a <= 1e-6 then
+                                        return 0
+                                end
+
+                                local b = 2 * (normalizedPosX * normalizedDirX + normalizedPosZ * normalizedDirZ)
+                                local c = normalizedPosX * normalizedPosX + normalizedPosZ * normalizedPosZ - 1
+
+                                local discriminant = b * b - 4 * a * c
+                                if discriminant <= 0 then
+                                        return 0
+                                end
+
+                                local sqrtDisc = math.sqrt(discriminant)
+                                local root1 = (-b - sqrtDisc) / (2 * a)
+                                local root2 = (-b + sqrtDisc) / (2 * a)
+
+                                local minPositive = math.huge
+                                if root1 > 1e-3 then
+                                        minPositive = math.min(minPositive, root1)
+                                end
+                                if root2 > 1e-3 then
+                                        minPositive = math.min(minPositive, root2)
+                                end
+
+                                if minPositive == math.huge then
+                                        return 0
+                                end
+
+                                return math.max(minPositive, 0)
+                        end
+
+                        local function getRandomMovementTarget(currentPosition: Vector3): (Vector3, number)
+                                local bestDirection: Vector3? = nil
+                                local bestMaxDistance = 0
+
+                                for _ = 1, 16 do
+                                        local angle = killBotRandom:NextNumber(0, math.pi * 2)
+                                        local direction = Vector3.new(math.cos(angle), 0, math.sin(angle))
+                                        if direction.Magnitude < 1e-3 then
+                                                continue
+                                        end
+
+                                        direction = direction.Unit
+                                        local maxDistance = getMaxDistanceWithinRadius(currentPosition, direction)
+                                        if maxDistance > bestMaxDistance then
+                                                bestMaxDistance = maxDistance
+                                                bestDirection = direction
+                                        end
+
+                                        if maxDistance < MIN_MOVE_DISTANCE then
+                                                continue
+                                        end
+
+                                        local desiredDistance = killBotRandom:NextNumber(MIN_MOVE_DISTANCE, MAX_MOVE_DISTANCE)
+                                        local travelDistance = math.min(desiredDistance, maxDistance)
+                                        local targetPosition = Vector3.new(
+                                                currentPosition.X + direction.X * travelDistance,
+                                                getRandomHoverHeight(),
+                                                currentPosition.Z + direction.Z * travelDistance
+                                        )
+
+                                        if isWithinHorizontalRadius(targetPosition) then
+                                                return targetPosition, travelDistance
+                                        end
+                                end
+
+                                local toCenter = Vector3.new(origin.X - currentPosition.X, 0, origin.Z - currentPosition.Z)
+                                if toCenter.Magnitude > 1e-3 then
+                                        local direction = toCenter.Unit
+                                        local maxDistance = getMaxDistanceWithinRadius(currentPosition, direction)
+                                        if maxDistance >= MIN_MOVE_DISTANCE then
+                                                local desiredDistance = killBotRandom:NextNumber(MIN_MOVE_DISTANCE, MAX_MOVE_DISTANCE)
+                                                local travelDistance = math.min(desiredDistance, maxDistance)
+                                                local targetPosition = Vector3.new(
+                                                        currentPosition.X + direction.X * travelDistance,
+                                                        getRandomHoverHeight(),
+                                                        currentPosition.Z + direction.Z * travelDistance
+                                                )
+
+                                                local clampedTarget = clampToHorizontalRadius(targetPosition)
+                                                return clampedTarget, (clampedTarget - currentPosition).Magnitude
+                                        end
+                                end
+
+                                if bestDirection and bestMaxDistance > 0 then
+                                        local desiredFallback = killBotRandom:NextNumber(MIN_MOVE_DISTANCE, MAX_MOVE_DISTANCE)
+                                        local fallbackDistance = math.min(desiredFallback, bestMaxDistance)
+
+                                        local fallbackTarget = Vector3.new(
+                                                currentPosition.X + bestDirection.X * fallbackDistance,
+                                                getRandomHoverHeight(),
+                                                currentPosition.Z + bestDirection.Z * fallbackDistance
+                                        )
+
+                                        local clampedTarget = clampToHorizontalRadius(fallbackTarget)
+                                        return clampedTarget, (clampedTarget - currentPosition).Magnitude
+                                end
+
+                                local finalTarget = clampToHorizontalRadius(Vector3.new(currentPosition.X, getRandomHoverHeight(), currentPosition.Z))
+                                return finalTarget, (finalTarget - currentPosition).Magnitude
                         end
 
                         local function damageInRadius(center: Vector3, radius: number)
@@ -1098,6 +1227,12 @@ do
                                 if not botPart or not botPart.Parent then
                                         return false
                                 end
+
+                                if botState.rocketsFired >= MAX_MISSILES_PER_BOT then
+                                        return false
+                                end
+
+                                botState.rocketsFired += 1
 
                                 local rocket = Instance.new("Part")
                                 rocket.Name = "KillBotRocket"
@@ -1326,7 +1461,7 @@ do
                                 return true
                         end
 
-			local function createKillBot(index: number)
+                        local function createKillBot(index: number, botColor: Color3)
 				local model = Instance.new("Model")
 				model.Name = string.format("KillBot_%d", index)
 
@@ -1335,7 +1470,7 @@ do
 				botPart.Shape = Enum.PartType.Ball
 				botPart.Size = BOT_SIZE
 				botPart.Material = BOT_MATERIAL
-				botPart.Color = BOT_COLOR
+                                botPart.Color = botColor
 				botPart.CanCollide = false
 				botPart.CanTouch = false
 				botPart.CanQuery = false
@@ -1350,18 +1485,20 @@ do
 
 				botPart:SetNetworkOwner(nil)
 
-				local botState = {
-					model = model,
-					part = botPart,
-					target = nil :: Player?,
-					velocity = Vector3.zero,
-					lastMoveTime = 0,
-					lastStopTime = 0,
-					lastMissileTime = 0,
-					currentTarget = Vector3.zero,
-					isMoving = false,
-					isStopped = false,
-				}
+                                local botState = {
+                                        model = model,
+                                        part = botPart,
+                                        target = nil :: Player?,
+                                        velocity = Vector3.zero,
+                                        lastStopTime = 0,
+                                        lastMissileTime = 0,
+                                        currentTarget = Vector3.zero,
+                                        isMoving = false,
+                                        isStopped = false,
+                                        moveSpeed = killBotRandom:NextNumber(MIN_BOT_SPEED, MAX_BOT_SPEED),
+                                        rocketsFired = 0,
+                                        travelEndTime = 0,
+                                }
 
 				model.Destroying:Connect(function()
 					botState.part = nil
@@ -1371,9 +1508,19 @@ do
 			end
 
 			-- Spawn bots
-			for index = 1, BOT_COUNT do
-				createKillBot(index)
-			end
+                        local botColors = table.clone(BOT_COLOR_PALETTE)
+                        for i = #botColors, 2, -1 do
+                                local j = killBotRandom:NextInteger(1, i)
+                                botColors[i], botColors[j] = botColors[j], botColors[i]
+                        end
+                        if #botColors == 0 then
+                                botColors = {Color3.fromRGB(255, 0, 0)}
+                        end
+
+                        for index = 1, BOT_COUNT do
+                                local colorIndex = ((index - 1) % #botColors) + 1
+                                createKillBot(index, botColors[colorIndex])
+                        end
 
 			-- Main bot AI loop
 			state.heartbeatConn = RunService.Heartbeat:Connect(function(dt)
@@ -1392,48 +1539,63 @@ do
 					local targetPlayer = findNearestPlayer(botPosition)
 
 					-- Random movement behavior
-					if not botState.isMoving and not botState.isStopped then
-						-- Start moving to a random position
-                                                botState.currentTarget = getRandomPosition()
+                                        if not botState.isMoving and not botState.isStopped then
+                                                -- Start moving to a random position
+                                                local targetPosition, travelDistance = getRandomMovementTarget(botPosition)
+                                                travelDistance = travelDistance or 0
+                                                botState.currentTarget = targetPosition
                                                 botState.isMoving = true
-                                                botState.lastMoveTime = currentTime
+                                                botState.moveSpeed = killBotRandom:NextNumber(MIN_BOT_SPEED, MAX_BOT_SPEED)
+                                                if botState.moveSpeed <= 0 then
+                                                        botState.moveSpeed = MIN_BOT_SPEED
+                                                end
+                                                if travelDistance > 0 then
+                                                        botState.travelEndTime = currentTime + (travelDistance / botState.moveSpeed)
+                                                else
+                                                        botState.travelEndTime = currentTime + MOVE_INTERVAL
+                                                end
                                         elseif botState.isMoving then
-						-- Check if we've reached the target or time to stop
-						local distanceToTarget = (botState.currentTarget - botPosition).Magnitude
-						if distanceToTarget < 10 or currentTime - botState.lastMoveTime >= MOVE_INTERVAL then
-							-- Stop and wait
-							botState.isMoving = false
-							botState.isStopped = true
-							botState.lastStopTime = currentTime
-							botState.velocity = Vector3.zero
-						else
-							-- Continue moving towards target
+                                                -- Check if we've reached the target or time to stop
+                                                local distanceToTarget = (botState.currentTarget - botPosition).Magnitude
+                                                if distanceToTarget < 10 or currentTime >= botState.travelEndTime then
+                                                        -- Stop and wait
+                                                        botState.isMoving = false
+                                                        botState.isStopped = true
+                                                        botState.lastStopTime = currentTime
+                                                        botState.velocity = Vector3.zero
+                                                        botState.travelEndTime = 0
+                                                else
+                                                        -- Continue moving towards target
                                                         local directionVector = botState.currentTarget - botPosition
                                                         local direction = directionVector.Magnitude > 0 and directionVector.Unit or Vector3.zero
-                                                        botState.velocity = direction * BOT_SPEED
+                                                        botState.velocity = direction * botState.moveSpeed
                                                 end
                                         elseif botState.isStopped then
                                                 -- Check if it's time to start moving again
-						if currentTime - botState.lastStopTime >= STOP_INTERVAL then
-							botState.isStopped = false
+                                                if currentTime - botState.lastStopTime >= STOP_INTERVAL then
+                                                        botState.isStopped = false
 						else
 							botState.velocity = Vector3.zero
 						end
 					end
 
 					-- Fire missiles at nearest player while stopped
-					if botState.isStopped and targetPlayer and targetPlayer.Character then
-						local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-						if targetHRP and targetHRP:IsA("BasePart") then
-							local targetPosition = targetHRP.Position
-							local hasLOS = hasLineOfSight(botPosition, targetPosition)
-							
-							if hasLOS and currentTime - botState.lastMissileTime >= MISSILE_DELAY then
-								createRocket(botState, targetPosition)
-								botState.lastMissileTime = currentTime
-							end
-						end
-					end
+                                        if botState.isStopped and targetPlayer and targetPlayer.Character then
+                                                local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                                                if targetHRP and targetHRP:IsA("BasePart") then
+                                                        local targetPosition = targetHRP.Position
+                                                        local hasLOS = hasLineOfSight(botPosition, targetPosition)
+
+                                                        if hasLOS and currentTime - botState.lastMissileTime >= MISSILE_DELAY then
+                                                                if botState.rocketsFired < MAX_MISSILES_PER_BOT then
+                                                                        local created = createRocket(botState, targetPosition)
+                                                                        if created then
+                                                                                botState.lastMissileTime = currentTime
+                                                                        end
+                                                                end
+                                                        end
+                                                end
+                                        end
 
                                         -- Prevent bots from leaving the active storm radius
                                         local predictedPosition = botPosition + botState.velocity * dt
@@ -1441,7 +1603,7 @@ do
                                                 botState.currentTarget = clampToHorizontalRadius(botState.currentTarget)
                                                 local correctedDirection = botState.currentTarget - botPosition
                                                 if correctedDirection.Magnitude > 0 then
-                                                        botState.velocity = correctedDirection.Unit * BOT_SPEED
+                                                        botState.velocity = correctedDirection.Unit * botState.moveSpeed
                                                 else
                                                         botState.velocity = Vector3.zero
                                                 end
