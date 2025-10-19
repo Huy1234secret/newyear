@@ -9,105 +9,105 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 
 local allowedUserIds = {
-    [347735445] = true,
+	[347735445] = true,
 }
 
 type MapDefinition = {
-    id: string,
-    displayName: string,
-    modelName: string,
+	id: string,
+	displayName: string,
+	modelName: string,
 }
 
 type EventDefinition = {
-    id: string,
-    displayName: string,
-    description: string?,
+	id: string,
+	displayName: string,
+	description: string?,
 }
 
 local mapDefinitions: {MapDefinition} = {
-    {
-        id = "Crossroad",
-        displayName = "Crossroad",
-        modelName = "Crossroad",
-    },
-    {
-        id = "SFOTH",
-        displayName = "SFOTH",
-        modelName = "SFOTH",
-    },
-    {
-        id = "ChaosCanyon",
-        displayName = "Chaos Canyon",
-        modelName = "ChaosCanyon",
-    },
-    {
-        id = "Doomspire",
-        displayName = "Doomspire",
-        modelName = "Doomspire",
-    },
+	{
+		id = "Crossroad",
+		displayName = "Crossroad",
+		modelName = "Crossroad",
+	},
+	{
+		id = "SFOTH",
+		displayName = "SFOTH",
+		modelName = "SFOTH",
+	},
+	{
+		id = "ChaosCanyon",
+		displayName = "Chaos Canyon",
+		modelName = "ChaosCanyon",
+	},
+	{
+		id = "Doomspire",
+		displayName = "Doomspire",
+		modelName = "Doomspire",
+	},
 }
 
 local specialEventOptions: {EventDefinition} = {
-    {
-        id = "RANDOM",
-        displayName = "RANDOM",
-        description = "Pick a surprise event when the round begins.",
-    },
-    {
-        id = "ShatteredHeart",
-        displayName = "Shattered Heart💔",
-        description = "Neutral players cling to a single hit point.",
-    },
-    {
-        id = "SprintProhibit",
-        displayName = "Sprint Prohibit🦵🚫",
-        description = "Neutral players cannot sprint.",
-    },
-    {
-        id = "Retro",
-        displayName = "RETRO🧱",
-        description = "Neutral players receive retro gear only.",
-    },
-    {
-        id = "Invisible",
-        displayName = "Invisible👻",
-        description = "Neutral players turn translucent ninjas.",
-    },
-    {
-        id = "Bunny",
-        displayName = "Bunny🐰",
-        description = "Neutral players are powered by pogo legs.",
-    },
-    {
-        id = "Slippery",
-        displayName = "Slippery🧊",
-        description = "The arena loses all traction.",
-    },
-    {
-        id = "KillBot",
-        displayName = "KillBot🤖",
-        description = "Three rogue bots patrol the arena.",
-    },
-    {
-        id = "RainingBomb",
-        displayName = "Raining Bomb💣",
-        description = "Explosive hail falls from the sky.",
-    },
-    {
-        id = "InvertedControl",
-        displayName = "Inverted Control😕",
-        description = "Movement input is flipped for Neutral players.",
-    },
-    {
-        id = "HotTouch",
-        displayName = "Hot Touch🔥",
-        description = "Pass the explosive countdown or perish.",
-    },
+	{
+		id = "RANDOM",
+		displayName = "🎲 RANDOM",
+		description = "Pick a surprise event when the round begins.",
+	},
+	{
+		id = "ShatteredHeart",
+		displayName = "💔 Shattered Heart",
+		description = "Neutral players cling to a single hit point.",
+	},
+	{
+		id = "SprintProhibit",
+		displayName = "🚫 Sprint Prohibit",
+		description = "Neutral players cannot sprint.",
+	},
+	{
+		id = "Retro",
+		displayName = "🕹️ RETRO",
+		description = "Neutral players receive retro gear only.",
+	},
+	{
+		id = "Invisible",
+		displayName = "👻 Invisible",
+		description = "Neutral players turn translucent ninjas.",
+	},
+	{
+		id = "Bunny",
+		displayName = "🐰 Bunny",
+		description = "Neutral players are powered by pogo legs.",
+	},
+	{
+		id = "Slippery",
+		displayName = "🧊 Slippery",
+		description = "The arena loses all traction.",
+	},
+	{
+		id = "KillBot",
+		displayName = "🤖 KillBot",
+		description = "Three rogue bots patrol the arena.",
+	},
+	{
+		id = "RainingBomb",
+		displayName = "💣 Raining Bomb",
+		description = "Explosive hail falls from the sky.",
+	},
+	{
+		id = "InvertedControl",
+		displayName = "🔄 Inverted Control",
+		description = "Movement input is flipped for Neutral players.",
+	},
+	{
+		id = "HotTouch",
+		displayName = "🔥 Hot Touch",
+		description = "Pass the explosive countdown or perish.",
+	},
 }
 
 local eventDefinitionById: {[string]: EventDefinition} = {}
 for _, definition in ipairs(specialEventOptions) do
-    eventDefinitionById[definition.id] = definition
+	eventDefinitionById[definition.id] = definition
 end
 
 local CHECK_ICON_ASSET_ID = "rbxassetid://7072706620"
@@ -117,67 +117,67 @@ local mapButtonDefaultColor = Color3.fromRGB(190, 60, 60)
 local mapButtonSelectedColor = Color3.fromRGB(70, 170, 95)
 local mapButtonTextColor = Color3.fromRGB(255, 255, 255)
 local mapButtonDefaultGradient = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 70, 80)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 40, 50)),
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 70, 80)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 40, 50)),
 })
 local mapButtonSelectedGradient = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(85, 190, 120)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(55, 150, 90)),
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(85, 190, 120)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(55, 150, 90)),
 })
 local selectionTweenInfo = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local remotesFolder = ReplicatedStorage:FindFirstChild("PVPRemotes")
 if not remotesFolder then
-    remotesFolder = ReplicatedStorage:WaitForChild("PVPRemotes", 5)
+	remotesFolder = ReplicatedStorage:WaitForChild("PVPRemotes", 5)
 end
 
 local startRoundRemote: RemoteEvent? = nil
 local roundStateRemote: RemoteEvent? = nil
 
 if remotesFolder and remotesFolder:IsA("Folder") then
-    startRoundRemote = remotesFolder:FindFirstChild("StartRound") :: RemoteEvent?
-    roundStateRemote = remotesFolder:FindFirstChild("RoundState") :: RemoteEvent?
+	startRoundRemote = remotesFolder:FindFirstChild("StartRound") :: RemoteEvent?
+	roundStateRemote = remotesFolder:FindFirstChild("RoundState") :: RemoteEvent?
 
-    remotesFolder.ChildAdded:Connect(function(child)
-        if child.Name == "StartRound" and child:IsA("RemoteEvent") then
-            startRoundRemote = child
-        elseif child.Name == "RoundState" and child:IsA("RemoteEvent") then
-            roundStateRemote = child
-        end
-    end)
+	remotesFolder.ChildAdded:Connect(function(child)
+		if child.Name == "StartRound" and child:IsA("RemoteEvent") then
+			startRoundRemote = child
+		elseif child.Name == "RoundState" and child:IsA("RemoteEvent") then
+			roundStateRemote = child
+		end
+	end)
 end
 
 local function isGameOwner(): boolean
-    if allowedUserIds[player.UserId] then
-        return true
-    end
+	if allowedUserIds[player.UserId] then
+		return true
+	end
 
-    local creatorId = game.CreatorId
-    local creatorType = game.CreatorType
+	local creatorId = game.CreatorId
+	local creatorType = game.CreatorType
 
-    if creatorType == Enum.CreatorType.User then
-        return player.UserId == creatorId
-    elseif creatorType == Enum.CreatorType.Group then
-        -- Treat the group owner (rank 255) as the "game owner"
-        local success, rank = pcall(function()
-            return player:GetRankInGroup(creatorId)
-        end)
+	if creatorType == Enum.CreatorType.User then
+		return player.UserId == creatorId
+	elseif creatorType == Enum.CreatorType.Group then
+		-- Treat the group owner (rank 255) as the "game owner"
+		local success, rank = pcall(function()
+			return player:GetRankInGroup(creatorId)
+		end)
 
-        return success and rank == 255
-    end
+		return success and rank == 255
+	end
 
-    return false
+	return false
 end
 
 if not isGameOwner() then
-    return
+	return
 end
 
 local playerGui = player:WaitForChild("PlayerGui")
 
 local existingScreenGui = playerGui:FindFirstChild("OwnerPanel")
 if existingScreenGui then
-    existingScreenGui:Destroy()
+	existingScreenGui:Destroy()
 end
 
 local screenGui = Instance.new("ScreenGui")
@@ -205,8 +205,8 @@ panelCorner.Parent = panel
 
 local gradient = Instance.new("UIGradient")
 gradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(55, 62, 85)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(32, 35, 50))
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(55, 62, 85)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(32, 35, 50))
 })
 gradient.Rotation = 90
 gradient.Parent = panel
@@ -294,8 +294,8 @@ buttonCorner.Parent = toggleButton
 
 local buttonGradient = Instance.new("UIGradient")
 buttonGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(101, 115, 173)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(74, 87, 120))
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(101, 115, 173)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(74, 87, 120))
 })
 buttonGradient.Parent = toggleButton
 
@@ -308,10 +308,10 @@ glow.Parent = toggleButton
 
 local pvpFrame = Instance.new("Frame")
 pvpFrame.Name = "PVPPanel"
-pvpFrame.Size = UDim2.fromOffset(520, 520)
+pvpFrame.Size = UDim2.fromOffset(480, 520)
 pvpFrame.Position = UDim2.fromScale(0.5, 0.5)
 pvpFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-pvpFrame.BackgroundColor3 = Color3.fromRGB(32, 35, 50)
+pvpFrame.BackgroundColor3 = Color3.fromRGB(25, 28, 40)
 pvpFrame.Visible = false
 pvpFrame.ZIndex = 5
 pvpFrame.Parent = screenGui
@@ -322,106 +322,116 @@ pvpCorner.Parent = pvpFrame
 
 local pvpStroke = Instance.new("UIStroke")
 pvpStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-pvpStroke.Thickness = 2
-pvpStroke.Color = Color3.fromRGB(120, 135, 200)
-pvpStroke.Transparency = 0.4
+pvpStroke.Thickness = 3
+pvpStroke.Color = Color3.fromRGB(100, 150, 255)
+pvpStroke.Transparency = 0.2
 pvpStroke.Parent = pvpFrame
+
+local pvpGradient = Instance.new("UIGradient")
+pvpGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 45, 65)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 28, 40))
+})
+pvpGradient.Rotation = 90
+pvpGradient.Parent = pvpFrame
 
 local pvpTitle = Instance.new("TextLabel")
 pvpTitle.Name = "PVPTitle"
-pvpTitle.Size = UDim2.new(1, -40, 0, 40)
-pvpTitle.Position = UDim2.new(0, 20, 0, 20)
+pvpTitle.Size = UDim2.new(1, -40, 0, 35)
+pvpTitle.Position = UDim2.new(0, 20, 0, 15)
 pvpTitle.BackgroundTransparency = 1
 pvpTitle.Font = Enum.Font.GothamBold
-pvpTitle.Text = "PVP"
-pvpTitle.TextColor3 = Color3.fromRGB(245, 245, 255)
-pvpTitle.TextSize = 26
-pvpTitle.TextXAlignment = Enum.TextXAlignment.Left
+pvpTitle.Text = "⚔️ PVP MATCH"
+pvpTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+pvpTitle.TextSize = 24
+pvpTitle.TextXAlignment = Enum.TextXAlignment.Center
+pvpTitle.TextStrokeTransparency = 0.3
+pvpTitle.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 pvpTitle.ZIndex = 6
 pvpTitle.Parent = pvpFrame
 
 local function createRowSection(
-    name: string,
-    headerText: string,
-    positionOffset: number,
-    sectionHeight: number?,
-    listHeight: number?
+	name: string,
+	headerText: string,
+	positionOffset: number,
+	sectionHeight: number?,
+	listHeight: number?
 )
-    local section = Instance.new("Frame")
-    section.Name = name
-    section.Size = UDim2.new(1, -40, 0, sectionHeight or 120)
-    section.Position = UDim2.new(0, 20, 0, positionOffset)
-    section.BackgroundTransparency = 1
-    section.ZIndex = 6
-    section.Parent = pvpFrame
+	local section = Instance.new("Frame")
+	section.Name = name
+	section.Size = UDim2.new(1, -40, 0, sectionHeight or 120)
+	section.Position = UDim2.new(0, 20, 0, positionOffset)
+	section.BackgroundTransparency = 1
+	section.ZIndex = 6
+	section.Parent = pvpFrame
 
-    local header = Instance.new("TextLabel")
-    header.Name = "Header"
-    header.Size = UDim2.new(1, 0, 0, 24)
-    header.BackgroundTransparency = 1
-    header.Font = Enum.Font.GothamBold
-    header.Text = headerText
-    header.TextColor3 = Color3.fromRGB(245, 245, 255)
-    header.TextSize = 20
-    header.TextXAlignment = Enum.TextXAlignment.Left
-    header.ZIndex = 6
-    header.Parent = section
+	local header = Instance.new("TextLabel")
+	header.Name = "Header"
+	header.Size = UDim2.new(1, 0, 0, 24)
+	header.BackgroundTransparency = 1
+	header.Font = Enum.Font.GothamBold
+	header.Text = headerText
+	header.TextColor3 = Color3.fromRGB(245, 245, 255)
+	header.TextSize = 20
+	header.TextXAlignment = Enum.TextXAlignment.Left
+	header.ZIndex = 6
+	header.Parent = section
 
-    local list = Instance.new("ScrollingFrame")
-    list.Name = "List"
-    list.Size = UDim2.new(1, 0, 0, listHeight or 72)
-    list.Position = UDim2.new(0, 0, 0, 32)
-    list.BackgroundTransparency = 1
-    list.ScrollingDirection = Enum.ScrollingDirection.Y
-    list.ScrollBarThickness = 4
-    list.CanvasSize = UDim2.new(0, 0, 0, 0)
-    list.ZIndex = 6
-    list.AutomaticCanvasSize = Enum.AutomaticSize.None
-    list.BottomImage = "rbxassetid://9416839567"
-    list.MidImage = "rbxassetid://9416839567"
-    list.TopImage = "rbxassetid://9416839567"
-    list.Parent = section
+	local list = Instance.new("ScrollingFrame")
+	list.Name = "List"
+	list.Size = UDim2.new(1, 0, 0, listHeight or 72)
+	list.Position = UDim2.new(0, 0, 0, 32)
+	list.BackgroundTransparency = 1
+	list.ScrollingDirection = Enum.ScrollingDirection.Y
+	list.ScrollBarThickness = 4
+	list.CanvasSize = UDim2.new(0, 0, 0, 0)
+	list.ZIndex = 6
+	list.AutomaticCanvasSize = Enum.AutomaticSize.None
+	list.BottomImage = "rbxassetid://9416839567"
+	list.MidImage = "rbxassetid://9416839567"
+	list.TopImage = "rbxassetid://9416839567"
+	list.Parent = section
 
-    local padding = Instance.new("UIPadding")
-    padding.PaddingBottom = UDim.new(0, 6)
-    padding.PaddingTop = UDim.new(0, 6)
-    padding.PaddingLeft = UDim.new(0, 4)
-    padding.PaddingRight = UDim.new(0, 4)
-    padding.Parent = list
+	local padding = Instance.new("UIPadding")
+	padding.PaddingBottom = UDim.new(0, 6)
+	padding.PaddingTop = UDim.new(0, 6)
+	padding.PaddingLeft = UDim.new(0, 4)
+	padding.PaddingRight = UDim.new(0, 4)
+	padding.Parent = list
 
-    local layout = Instance.new("UIGridLayout")
-    layout.FillDirection = Enum.FillDirection.Horizontal
-    layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-    layout.VerticalAlignment = Enum.VerticalAlignment.Top
-    layout.CellPadding = UDim2.fromOffset(12, 10)
-    layout.CellSize = UDim2.new(0.5, -10, 0, 52)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = list
+	local layout = Instance.new("UIGridLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	layout.VerticalAlignment = Enum.VerticalAlignment.Top
+	layout.CellPadding = UDim2.fromOffset(12, 10)
+	layout.CellSize = UDim2.new(0.5, -10, 0, 52)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = list
 
-    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        local contentSize = layout.AbsoluteContentSize
-        list.CanvasSize = UDim2.new(0, 0, 0, contentSize.Y + 12)
-    end)
+	layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		local contentSize = layout.AbsoluteContentSize
+		list.CanvasSize = UDim2.new(0, 0, 0, contentSize.Y + 12)
+	end)
 
-    return section, list
+	return section, list
 end
 
-local mapSection, mapList = createRowSection("MapSection", "Map", 72, 180, 140)
-local eventSection, eventList = createRowSection("EventSection", "Event", 280, 220, 176)
+local mapSection, mapList = createRowSection("MapSection", "🗺️ Map Selection", 60, 160, 120)
+local eventSection, eventList = createRowSection("EventSection", "🎲 Special Events", 240, 180, 140)
 
 local eventDescriptionLabel = Instance.new("TextLabel")
 eventDescriptionLabel.Name = "EventDescription"
-eventDescriptionLabel.Size = UDim2.new(1, 0, 0, 44)
-eventDescriptionLabel.Position = UDim2.new(0, 0, 0, 156)
+eventDescriptionLabel.Size = UDim2.new(1, 0, 0, 40)
+eventDescriptionLabel.Position = UDim2.new(0, 0, 0, 140)
 eventDescriptionLabel.BackgroundTransparency = 1
 eventDescriptionLabel.Font = Enum.Font.Gotham
 eventDescriptionLabel.Text = DEFAULT_EVENT_DESCRIPTION
-eventDescriptionLabel.TextColor3 = Color3.fromRGB(210, 220, 245)
+eventDescriptionLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
 eventDescriptionLabel.TextSize = 16
 eventDescriptionLabel.TextWrapped = true
-eventDescriptionLabel.TextXAlignment = Enum.TextXAlignment.Left
+eventDescriptionLabel.TextXAlignment = Enum.TextXAlignment.Center
 eventDescriptionLabel.TextYAlignment = Enum.TextYAlignment.Top
-eventDescriptionLabel.TextTransparency = 0.1
+eventDescriptionLabel.TextTransparency = 0
 eventDescriptionLabel.ZIndex = 6
 eventDescriptionLabel.Parent = eventSection
 
@@ -437,15 +447,17 @@ actionContainer.Parent = pvpFrame
 local messageLabel = Instance.new("TextLabel")
 messageLabel.Name = "MessageLabel"
 messageLabel.AnchorPoint = Vector2.new(0, 1)
-messageLabel.Position = UDim2.new(0, 20, 1, -72)
-messageLabel.Size = UDim2.new(1, -40, 0, 20)
+messageLabel.Position = UDim2.new(0, 20, 1, -70)
+messageLabel.Size = UDim2.new(1, -40, 0, 25)
 messageLabel.BackgroundTransparency = 1
-messageLabel.Font = Enum.Font.Gotham
+messageLabel.Font = Enum.Font.GothamBold
 messageLabel.Text = ""
-messageLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
+messageLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
 messageLabel.TextSize = 16
 messageLabel.TextTransparency = 1
-messageLabel.TextXAlignment = Enum.TextXAlignment.Left
+messageLabel.TextXAlignment = Enum.TextXAlignment.Center
+messageLabel.TextStrokeTransparency = 0.5
+messageLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 messageLabel.ZIndex = 6
 messageLabel.Parent = pvpFrame
 
@@ -456,33 +468,43 @@ actionLayout.Padding = UDim.new(0, 12)
 actionLayout.Parent = actionContainer
 
 local function createActionButton(name: string, text: string): TextButton
-    local button = Instance.new("TextButton")
-    button.Name = name
-    button.Size = UDim2.fromOffset(90, 36)
-    button.AutoButtonColor = false
-    button.BackgroundColor3 = Color3.fromRGB(94, 108, 160)
-    button.Font = Enum.Font.GothamBold
-    button.Text = text
-    button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    button.TextSize = 18
-    button.ZIndex = 6
-    button.Parent = actionContainer
+	local button = Instance.new("TextButton")
+	button.Name = name
+	button.Size = UDim2.fromOffset(90, 36)
+	button.AutoButtonColor = false
+	button.BackgroundColor3 = Color3.fromRGB(94, 108, 160)
+	button.Font = Enum.Font.GothamBold
+	button.Text = text
+	button.TextColor3 = Color3.fromRGB(255, 255, 255)
+	button.TextSize = 18
+	button.TextStrokeTransparency = 0.3
+	button.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	button.ZIndex = 6
+	button.Parent = actionContainer
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = button
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = button
 
-    local stroke = Instance.new("UIStroke")
-    stroke.Thickness = 1.5
-    stroke.Color = Color3.fromRGB(150, 160, 210)
-    stroke.Transparency = 0.3
-    stroke.Parent = button
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1.5
+	stroke.Color = Color3.fromRGB(150, 160, 210)
+	stroke.Transparency = 0.2
+	stroke.Parent = button
 
-    return button
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 140, 200)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 100, 150))
+	})
+	gradient.Rotation = 90
+	gradient.Parent = button
+
+	return button
 end
 
-local startButton = createActionButton("StartButton", "Start")
-local cancelButton = createActionButton("CancelButton", "Cancel")
+local startButton = createActionButton("StartButton", "🚀 Start Match")
+local cancelButton = createActionButton("CancelButton", "❌ Cancel")
 
 local startButtonDefaultColor = startButton.BackgroundColor3
 local startButtonDisabledColor = Color3.fromRGB(70, 80, 110)
@@ -497,194 +519,194 @@ local messageFadeToken = 0
 local messageFadeTween: Tween? = nil
 
 local function updateStartButtonVisual()
-    startButton.Text = startButtonLabel
-    startButton.BackgroundColor3 = startButtonLocked and startButtonDisabledColor or startButtonDefaultColor
-    startButton.Active = not startButtonLocked
-    startButton.AutoButtonColor = not startButtonLocked
-    startButton.TextTransparency = startButtonLocked and 0.2 or 0
+	startButton.Text = startButtonLabel
+	startButton.BackgroundColor3 = startButtonLocked and startButtonDisabledColor or startButtonDefaultColor
+	startButton.Active = not startButtonLocked
+	startButton.AutoButtonColor = not startButtonLocked
+	startButton.TextTransparency = startButtonLocked and 0.2 or 0
 end
 
 local function setStartButtonState(isLocked: boolean, label: string?)
-    startButtonLocked = isLocked
-    if not isLocked then
-        startButtonLabel = "Start"
-    elseif label then
-        startButtonLabel = label
-    end
-    updateStartButtonVisual()
+	startButtonLocked = isLocked
+	if not isLocked then
+		startButtonLabel = "Start"
+	elseif label then
+		startButtonLabel = label
+	end
+	updateStartButtonVisual()
 end
 
 local function clearMessage()
-    if messageFadeTween then
-        messageFadeTween:Cancel()
-        messageFadeTween = nil
-    end
-    messageLabel.Text = ""
-    messageLabel.TextTransparency = 1
+	if messageFadeTween then
+		messageFadeTween:Cancel()
+		messageFadeTween = nil
+	end
+	messageLabel.Text = ""
+	messageLabel.TextTransparency = 1
 end
 
 local function showMessage(text: string, color: Color3?)
-    messageFadeToken += 1
-    local token = messageFadeToken
+	messageFadeToken += 1
+	local token = messageFadeToken
 
-    if messageFadeTween then
-        messageFadeTween:Cancel()
-        messageFadeTween = nil
-    end
+	if messageFadeTween then
+		messageFadeTween:Cancel()
+		messageFadeTween = nil
+	end
 
-    messageLabel.Text = text
-    messageLabel.TextColor3 = color or Color3.fromRGB(255, 120, 120)
-    messageLabel.TextTransparency = 0
+	messageLabel.Text = text
+	messageLabel.TextColor3 = color or Color3.fromRGB(255, 120, 120)
+	messageLabel.TextTransparency = 0
 
-    task.delay(3, function()
-        if token ~= messageFadeToken then
-            return
-        end
+	task.delay(3, function()
+		if token ~= messageFadeToken then
+			return
+		end
 
-        messageFadeTween = TweenService:Create(messageLabel, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            TextTransparency = 1,
-        })
-        messageFadeTween:Play()
-    end)
+		messageFadeTween = TweenService:Create(messageLabel, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			TextTransparency = 1,
+		})
+		messageFadeTween:Play()
+	end)
 end
 
 local function applySelectionVisual(button: TextButton, isSelected: boolean)
-    button.BackgroundColor3 = isSelected and mapButtonSelectedColor or mapButtonDefaultColor
-    button.TextColor3 = mapButtonTextColor
-    button.AutoButtonColor = not isSelected
+	button.BackgroundColor3 = isSelected and mapButtonSelectedColor or mapButtonDefaultColor
+	button.TextColor3 = mapButtonTextColor
+	button.AutoButtonColor = not isSelected
 
-    local stroke = button:FindFirstChildOfClass("UIStroke")
-    if stroke then
-        stroke.Color = isSelected and Color3.fromRGB(185, 255, 205) or Color3.fromRGB(120, 40, 40)
-        stroke.Transparency = isSelected and 0 or 0.2
-    end
+	local stroke = button:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = isSelected and Color3.fromRGB(185, 255, 205) or Color3.fromRGB(120, 40, 40)
+		stroke.Transparency = isSelected and 0 or 0.2
+	end
 
-    local gradient = button:FindFirstChild("SelectionGradient")
-    if gradient and gradient:IsA("UIGradient") then
-        gradient.Color = isSelected and mapButtonSelectedGradient or mapButtonDefaultGradient
-    end
+	local gradient = button:FindFirstChild("SelectionGradient")
+	if gradient and gradient:IsA("UIGradient") then
+		gradient.Color = isSelected and mapButtonSelectedGradient or mapButtonDefaultGradient
+	end
 
-    local icon = button:FindFirstChild("SelectionIcon")
-    if icon and icon:IsA("ImageLabel") then
-        icon.Visible = isSelected
-        icon.ImageTransparency = isSelected and 0 or 0.35
-    end
+	local icon = button:FindFirstChild("SelectionIcon")
+	if icon and icon:IsA("ImageLabel") then
+		icon.Visible = isSelected
+		icon.ImageTransparency = isSelected and 0 or 0.35
+	end
 
-    local scale = button:FindFirstChild("SelectionScale")
-    if scale and scale:IsA("UIScale") then
-        TweenService:Create(scale, selectionTweenInfo, {Scale = isSelected and 1.05 or 1}):Play()
-    end
+	local scale = button:FindFirstChild("SelectionScale")
+	if scale and scale:IsA("UIScale") then
+		TweenService:Create(scale, selectionTweenInfo, {Scale = isSelected and 1.05 or 1}):Play()
+	end
 end
 
 local function updateMapButtonVisual(button: TextButton, isSelected: boolean)
-    applySelectionVisual(button, isSelected)
+	applySelectionVisual(button, isSelected)
 end
 
 local function selectMap(mapId: string)
-    selectedMapId = mapId
-    for id, button in mapButtons do
-        updateMapButtonVisual(button, id == selectedMapId)
-    end
+	selectedMapId = mapId
+	for id, button in mapButtons do
+		updateMapButtonVisual(button, id == selectedMapId)
+	end
 end
 
 local function createSelectionButton(parent: Instance, order: number, id: string, displayName: string, buttonsTable: {[string]: TextButton}, onActivated: (string) -> ())
-    local button = Instance.new("TextButton")
-    button.Name = string.format("%sButton", id)
-    button.LayoutOrder = order
-    button.Size = UDim2.new(1, 0, 1, 0)
-    button.BackgroundColor3 = mapButtonDefaultColor
-    button.AutoButtonColor = false
-    button.Font = Enum.Font.GothamBold
-    button.Text = displayName
-    button.TextColor3 = mapButtonTextColor
-    button.TextSize = 18
-    button.ZIndex = 6
-    button.Parent = parent
+	local button = Instance.new("TextButton")
+	button.Name = string.format("%sButton", id)
+	button.LayoutOrder = order
+	button.Size = UDim2.new(1, 0, 1, 0)
+	button.BackgroundColor3 = mapButtonDefaultColor
+	button.AutoButtonColor = false
+	button.Font = Enum.Font.GothamBold
+	button.Text = displayName
+	button.TextColor3 = mapButtonTextColor
+	button.TextSize = 18
+	button.ZIndex = 6
+	button.Parent = parent
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = button
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = button
 
-    local stroke = Instance.new("UIStroke")
-    stroke.Thickness = 1.6
-    stroke.Transparency = 0.2
-    stroke.Color = Color3.fromRGB(120, 40, 40)
-    stroke.Parent = button
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1.6
+	stroke.Transparency = 0.2
+	stroke.Color = Color3.fromRGB(120, 40, 40)
+	stroke.Parent = button
 
-    local gradient = Instance.new("UIGradient")
-    gradient.Name = "SelectionGradient"
-    gradient.Color = mapButtonDefaultGradient
-    gradient.Rotation = 90
-    gradient.Parent = button
+	local gradient = Instance.new("UIGradient")
+	gradient.Name = "SelectionGradient"
+	gradient.Color = mapButtonDefaultGradient
+	gradient.Rotation = 90
+	gradient.Parent = button
 
-    local scale = Instance.new("UIScale")
-    scale.Name = "SelectionScale"
-    scale.Parent = button
+	local scale = Instance.new("UIScale")
+	scale.Name = "SelectionScale"
+	scale.Parent = button
 
-    local icon = Instance.new("ImageLabel")
-    icon.Name = "SelectionIcon"
-    icon.BackgroundTransparency = 1
-    icon.Size = UDim2.fromOffset(20, 20)
-    icon.Position = UDim2.new(1, -10, 0, 10)
-    icon.AnchorPoint = Vector2.new(1, 0)
-    icon.Image = CHECK_ICON_ASSET_ID
-    icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
-    icon.ImageTransparency = 0.35
-    icon.Visible = false
-    icon.ZIndex = button.ZIndex + 1
-    icon.Parent = button
+	local icon = Instance.new("ImageLabel")
+	icon.Name = "SelectionIcon"
+	icon.BackgroundTransparency = 1
+	icon.Size = UDim2.fromOffset(20, 20)
+	icon.Position = UDim2.new(1, -10, 0, 10)
+	icon.AnchorPoint = Vector2.new(1, 0)
+	icon.Image = CHECK_ICON_ASSET_ID
+	icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+	icon.ImageTransparency = 0.35
+	icon.Visible = false
+	icon.ZIndex = button.ZIndex + 1
+	icon.Parent = button
 
-    buttonsTable[id] = button
-    updateMapButtonVisual(button, false)
+	buttonsTable[id] = button
+	updateMapButtonVisual(button, false)
 
-    button.Activated:Connect(function()
-        onActivated(id)
-    end)
+	button.Activated:Connect(function()
+		onActivated(id)
+	end)
 
-    return button
+	return button
 end
 
 for order, definition in ipairs(mapDefinitions) do
-    createSelectionButton(mapList, order, definition.id, definition.displayName, mapButtons, function(mapId)
-        if selectedMapId ~= mapId then
-            selectMap(mapId)
-        end
-    end)
+	createSelectionButton(mapList, order, definition.id, definition.displayName, mapButtons, function(mapId)
+		if selectedMapId ~= mapId then
+			selectMap(mapId)
+		end
+	end)
 end
 
 local function updateEventButtonVisual(button: TextButton, isSelected: boolean)
-    applySelectionVisual(button, isSelected)
+	applySelectionVisual(button, isSelected)
 end
 
 local function selectEvent(eventId: string?)
-    selectedEventId = eventId
-    for id, button in eventButtons do
-        updateEventButtonVisual(button, id == selectedEventId)
-    end
+	selectedEventId = eventId
+	for id, button in eventButtons do
+		updateEventButtonVisual(button, id == selectedEventId)
+	end
 
-    if eventDescriptionLabel then
-        if eventId then
-            local definition = eventDefinitionById[eventId]
-            local description = definition and definition.description or nil
-            if description and #description > 0 then
-                eventDescriptionLabel.Text = description
-            else
-                eventDescriptionLabel.Text = string.format("%s ready to deploy.", definition and definition.displayName or "Event")
-            end
-        else
-            eventDescriptionLabel.Text = DEFAULT_EVENT_DESCRIPTION
-        end
-    end
+	if eventDescriptionLabel then
+		if eventId then
+			local definition = eventDefinitionById[eventId]
+			local description = definition and definition.description or nil
+			if description and #description > 0 then
+				eventDescriptionLabel.Text = description
+			else
+				eventDescriptionLabel.Text = string.format("%s ready to deploy.", definition and definition.displayName or "Event")
+			end
+		else
+			eventDescriptionLabel.Text = DEFAULT_EVENT_DESCRIPTION
+		end
+	end
 end
 
 for order, definition in ipairs(specialEventOptions) do
-    createSelectionButton(eventList, order, definition.id, definition.displayName, eventButtons, function(eventId)
-        if selectedEventId == eventId then
-            selectEvent(nil)
-        else
-            selectEvent(eventId)
-        end
-    end)
+	createSelectionButton(eventList, order, definition.id, definition.displayName, eventButtons, function(eventId)
+		if selectedEventId == eventId then
+			selectEvent(nil)
+		else
+			selectEvent(eventId)
+		end
+	end)
 end
 
 selectEvent(nil)
@@ -698,144 +720,144 @@ local openPosition = UDim2.new(0, 20, 0.5, -panelHeight / 2)
 local closedPosition = UDim2.new(0, -panelWidth + buttonWidth, 0.5, -panelHeight / 2)
 
 local function updateToggleVisual()
-    local targetRotation = opened and 180 or 0
-    TweenService:Create(toggleButton, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Rotation = targetRotation
-    }):Play()
+	local targetRotation = opened and 180 or 0
+	TweenService:Create(toggleButton, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Rotation = targetRotation
+	}):Play()
 end
 
 local function tweenPanel()
-    local targetPosition = opened and openPosition or closedPosition
-    TweenService:Create(panel, tweenInfo, {Position = targetPosition}):Play()
+	local targetPosition = opened and openPosition or closedPosition
+	TweenService:Create(panel, tweenInfo, {Position = targetPosition}):Play()
 end
 
 local function animateButtonPress()
-    local pressTween = TweenService:Create(toggleButton, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Size = UDim2.fromOffset(buttonWidth - 4, 56)
-    })
-    pressTween:Play()
-    pressTween.Completed:Connect(function()
-        TweenService:Create(toggleButton, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Size = UDim2.fromOffset(buttonWidth, 60)
-        }):Play()
-    end)
+	local pressTween = TweenService:Create(toggleButton, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Size = UDim2.fromOffset(buttonWidth - 4, 56)
+	})
+	pressTween:Play()
+	pressTween.Completed:Connect(function()
+		TweenService:Create(toggleButton, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = UDim2.fromOffset(buttonWidth, 60)
+		}):Play()
+	end)
 end
 
 local function showPanelUI()
-    pvpFrame.Visible = false
-    panel.Visible = true
-    opened = true
-    updateToggleVisual()
-    tweenPanel()
-    clearMessage()
+	pvpFrame.Visible = false
+	panel.Visible = true
+	opened = true
+	updateToggleVisual()
+	tweenPanel()
+	clearMessage()
 end
 
 local function closeAllUI()
-    pvpFrame.Visible = false
-    panel.Visible = true
-    opened = false
-    updateToggleVisual()
-    tweenPanel()
-    clearMessage()
+	pvpFrame.Visible = false
+	panel.Visible = true
+	opened = false
+	updateToggleVisual()
+	tweenPanel()
+	clearMessage()
 end
 
 local function showPVPUI()
-    panel.Visible = false
-    pvpFrame.Visible = true
-    clearMessage()
-    updateStartButtonVisual()
+	panel.Visible = false
+	pvpFrame.Visible = true
+	clearMessage()
+	updateStartButtonVisual()
 end
 
 local toggleDebounce = false
 local pvpDebounce = false
 
 local function onPVPActivated()
-    if pvpDebounce then
-        return
-    end
+	if pvpDebounce then
+		return
+	end
 
-    pvpDebounce = true
-    showPVPUI()
-    task.wait(0.15)
-    pvpDebounce = false
+	pvpDebounce = true
+	showPVPUI()
+	task.wait(0.15)
+	pvpDebounce = false
 end
 
 pvpButton.Activated:Connect(onPVPActivated)
 
 startButton.Activated:Connect(function()
-    if startButtonLocked then
-        return
-    end
+	if startButtonLocked then
+		return
+	end
 
-    if not selectedMapId then
-        showMessage("Select a map to begin a round.")
-        return
-    end
+	if not selectedMapId then
+		showMessage("Select a map to begin a round.")
+		return
+	end
 
-    if not startRoundRemote then
-        showMessage("PVP controls are not ready yet.")
-        return
-    end
+	if not startRoundRemote then
+		showMessage("PVP controls are not ready yet.")
+		return
+	end
 
-    setStartButtonState(true, "Starting...")
-    local payload = {
-        mapId = selectedMapId,
-    }
+	setStartButtonState(true, "Starting...")
+	local payload = {
+		mapId = selectedMapId,
+	}
 
-    if selectedEventId and selectedEventId ~= "" then
-        payload.eventId = selectedEventId
-    end
+	if selectedEventId and selectedEventId ~= "" then
+		payload.eventId = selectedEventId
+	end
 
-    startRoundRemote:FireServer(payload)
-    closeAllUI()
+	startRoundRemote:FireServer(payload)
+	closeAllUI()
 end)
 
 cancelButton.Activated:Connect(function()
-    clearMessage()
-    showPanelUI()
+	clearMessage()
+	showPanelUI()
 end)
 
 if roundStateRemote then
-    roundStateRemote.OnClientEvent:Connect(function(payload)
-        if typeof(payload) == "table" then
-            local state = payload.state
-            if state == "Starting" then
-                setStartButtonState(true, "Starting...")
-            elseif state == "Active" then
-                setStartButtonState(true, "In Progress")
-            elseif state == "Idle" or state == "Ended" then
-                setStartButtonState(false)
-                clearMessage()
-            elseif state == "Error" then
-                setStartButtonState(false)
-                if payload.message then
-                    showMessage(payload.message)
-                end
-            end
-        elseif typeof(payload) == "string" then
-            if payload == "Active" then
-                setStartButtonState(true, "In Progress")
-            elseif payload == "Idle" then
-                setStartButtonState(false)
-                clearMessage()
-            end
-        end
-    end)
+	roundStateRemote.OnClientEvent:Connect(function(payload)
+		if typeof(payload) == "table" then
+			local state = payload.state
+			if state == "Starting" then
+				setStartButtonState(true, "Starting...")
+			elseif state == "Active" then
+				setStartButtonState(true, "In Progress")
+			elseif state == "Idle" or state == "Ended" then
+				setStartButtonState(false)
+				clearMessage()
+			elseif state == "Error" then
+				setStartButtonState(false)
+				if payload.message then
+					showMessage(payload.message)
+				end
+			end
+		elseif typeof(payload) == "string" then
+			if payload == "Active" then
+				setStartButtonState(true, "In Progress")
+			elseif payload == "Idle" then
+				setStartButtonState(false)
+				clearMessage()
+			end
+		end
+	end)
 end
 
 toggleButton.Activated:Connect(function()
-    if toggleDebounce then
-        return
-    end
+	if toggleDebounce then
+		return
+	end
 
-    toggleDebounce = true
-    opened = not opened
-    updateToggleVisual()
-    tweenPanel()
-    animateButtonPress()
+	toggleDebounce = true
+	opened = not opened
+	updateToggleVisual()
+	tweenPanel()
+	animateButtonPress()
 
-    task.wait(0.25)
-    toggleDebounce = false
+	task.wait(0.25)
+	toggleDebounce = false
 end)
 
 updateToggleVisual()
