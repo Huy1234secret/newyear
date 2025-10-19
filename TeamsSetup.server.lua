@@ -153,6 +153,17 @@ local function ensureRigIsR6(player: Player, character: Model)
 	end
 end
 
+type MusicCycleSound = {
+        id: string | number,
+        playbackSpeed: number?,
+}
+
+type MusicCycleConfig = {
+        sounds: {MusicCycleSound},
+        minDelay: number?,
+        maxDelay: number?,
+}
+
 type MapConfig = {
         id: string,
         displayName: string,
@@ -160,6 +171,7 @@ type MapConfig = {
         spawnContainer: string,
         skyboxName: string,
         musicId: string?,
+        musicCycle: MusicCycleConfig?,
         deathMatchMusicId: string?,
         deathMatchMusicStartTime: number?,
         deathMatchStormSize: Vector2?,
@@ -251,18 +263,27 @@ local mapConfigurations: {[string]: MapConfig} = {
 		deathMatchStormSize = Vector2.new(400, 400),
 		deathMatchShrinkDuration = 100,
 	},
-	HauntedMansion = {
-		id = "HauntedMansion",
-		displayName = "Haunted Mansion",
-		modelName = "HauntedMansion",
-		spawnContainer = "HauntedSpawns",
-		skyboxName = "ScarySky",
-		musicId = "",
-		deathMatchMusicId = "9041745502",
-		deathMatchStormSize = Vector2.new(400, 400),
-		deathMatchShrinkDuration = 100,
-		lightningBrightness = 0.25,
-		deathMatchStormColor = Color3.fromRGB(0, 0, 0),
+        HauntedMansion = {
+                id = "HauntedMansion",
+                displayName = "Haunted Mansion",
+                modelName = "HauntedMansion",
+                spawnContainer = "HauntedSpawns",
+                skyboxName = "ScarySky",
+                musicCycle = {
+                        sounds = {
+                                {id = "13061810", playbackSpeed = 0.3},
+                                {id = "13061809", playbackSpeed = 0.2},
+                                {id = "13061802", playbackSpeed = 0.1},
+                                {id = "12229501", playbackSpeed = 0.1},
+                        },
+                        minDelay = 8,
+                        maxDelay = 10,
+                },
+                deathMatchMusicId = "9041745502",
+                deathMatchStormSize = Vector2.new(400, 400),
+                deathMatchShrinkDuration = 100,
+                lightningBrightness = 0.25,
+                deathMatchStormColor = Color3.fromRGB(0, 0, 0),
 		deathMatchAtmosphereColor = Color3.fromRGB(0, 0, 0),
 		deathMatchAtmosphereDecay = Color3.fromRGB(0, 0, 0),
 	},
@@ -2267,11 +2288,22 @@ end
 
 local currentMusic: Sound? = nil
 local currentMusicId: string? = nil
+local currentMusicLoopThread: thread? = nil
+local currentMusicLoopToken = 0
+
+local function cancelMusicLoopThread()
+        currentMusicLoopToken += 1
+
+        if currentMusicLoopThread then
+                task.cancel(currentMusicLoopThread)
+                currentMusicLoopThread = nil
+        end
+end
 
 local function normalizeSoundId(assetId: string | number | nil): string?
-	local idType = typeof(assetId)
-	if idType == "number" then
-		assetId = tostring(assetId :: number)
+        local idType = typeof(assetId)
+        if idType == "number" then
+                assetId = tostring(assetId :: number)
 	elseif idType ~= "string" then
 		return nil
 	end
@@ -2288,17 +2320,19 @@ local function normalizeSoundId(assetId: string | number | nil): string?
 end
 
 local function stopCurrentMusic()
-	if currentMusic then
-		currentMusic:Stop()
-		currentMusic:Destroy()
-		currentMusic = nil
-		currentMusicId = nil
-	end
+        cancelMusicLoopThread()
+
+        if currentMusic then
+                currentMusic:Stop()
+                currentMusic:Destroy()
+                currentMusic = nil
+                currentMusicId = nil
+        end
 end
 
 local function playMusic(assetId: string | number | nil)
-	local normalizedId = normalizeSoundId(assetId)
-	if not normalizedId then
+        local normalizedId = normalizeSoundId(assetId)
+        if not normalizedId then
 		stopCurrentMusic()
 		return
 	end
@@ -2312,18 +2346,92 @@ local function playMusic(assetId: string | number | nil)
 		return
 	end
 
-	stopCurrentMusic()
+        stopCurrentMusic()
 
-	local sound = Instance.new("Sound")
-	sound.Name = "PVPBackgroundMusic"
-	sound.SoundId = normalizedId
-	sound.Looped = true
-	sound.Volume = DEFAULT_MUSIC_VOLUME
-	sound.Parent = SoundService
-	sound:Play()
+        local sound = Instance.new("Sound")
+        sound.Name = "PVPBackgroundMusic"
+        sound.SoundId = normalizedId
+        sound.Looped = true
+        sound.Volume = DEFAULT_MUSIC_VOLUME
+        sound.Parent = SoundService
+        sound:Play()
 
-	currentMusic = sound
-	currentMusicId = normalizedId
+        currentMusic = sound
+        currentMusicId = normalizedId
+end
+
+local function playMusicCycle(config: MusicCycleConfig)
+        if not config then
+                stopCurrentMusic()
+                return
+        end
+
+        local normalizedSounds = {}
+        for _, soundConfig in ipairs(config.sounds) do
+                local normalizedId = normalizeSoundId(soundConfig.id)
+                if normalizedId then
+                        table.insert(normalizedSounds, {
+                                id = normalizedId,
+                                playbackSpeed = soundConfig.playbackSpeed,
+                        })
+                end
+        end
+
+        if #normalizedSounds == 0 then
+                stopCurrentMusic()
+                return
+        end
+
+        stopCurrentMusic()
+
+        local sound = Instance.new("Sound")
+        sound.Name = "PVPBackgroundMusic"
+        sound.Looped = false
+        sound.Volume = DEFAULT_MUSIC_VOLUME
+        sound.Parent = SoundService
+
+        currentMusic = sound
+        currentMusicId = "MusicCycle"
+
+        local loopToken = currentMusicLoopToken
+        local random = Random.new()
+        local minDelay = config.minDelay or 0
+        local maxDelay = config.maxDelay or minDelay
+        if maxDelay < minDelay then
+                maxDelay = minDelay
+        end
+
+        currentMusicLoopThread = task.spawn(function()
+                while currentMusic and currentMusicLoopToken == loopToken do
+                        local choice = normalizedSounds[random:NextInteger(1, #normalizedSounds)]
+                        sound.SoundId = choice.id
+                        sound.TimePosition = 0
+                        sound.PlaybackSpeed = choice.playbackSpeed or 1
+                        sound:Play()
+
+                        local delayDuration
+                        if minDelay == maxDelay then
+                                delayDuration = minDelay
+                        elseif math.floor(minDelay) == minDelay and math.floor(maxDelay) == maxDelay then
+                                delayDuration = random:NextInteger(minDelay, maxDelay)
+                        else
+                                delayDuration = random:NextNumber(minDelay, maxDelay)
+                        end
+
+                        local remaining = math.max(delayDuration, 0)
+                        while remaining > 0 and currentMusic and currentMusicLoopToken == loopToken do
+                                local waitTime = task.wait(math.min(1, remaining))
+                                if not waitTime then
+                                        waitTime = 0.03
+                                end
+                                remaining -= waitTime
+                        end
+                end
+
+                if currentMusicLoopToken == loopToken then
+                        currentMusicLoopThread = nil
+                end
+        end)
 end
 
 local function playIntermissionMusic()
@@ -2331,11 +2439,13 @@ local function playIntermissionMusic()
 end
 
 local function playMapMusic(config: MapConfig)
-	if config.musicId then
-		playMusic(config.musicId)
-	else
-		playIntermissionMusic()
-	end
+        if config.musicCycle then
+                playMusicCycle(config.musicCycle)
+        elseif config.musicId then
+                playMusic(config.musicId)
+        else
+                playIntermissionMusic()
+        end
 end
 
 local function playDeathMatchMusic(config: MapConfig?)
@@ -3148,9 +3258,11 @@ local function beginDeathMatch(roundId: number)
 end
 
 performDeathMatchTransition = function(roundId: number)
-	if roundId ~= currentRoundId or not roundInProgress then
-		return
-	end
+        if roundId ~= currentRoundId or not roundInProgress then
+                return
+        end
+
+        cancelMusicLoopThread()
 
         sendStatusUpdate({
                 action = "DeathMatchTransition",
