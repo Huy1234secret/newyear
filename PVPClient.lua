@@ -1857,28 +1857,33 @@ local function hideSpecialEvent(immediate: boolean?)
 	scaleTween:Play()
 end
 
-local function showSpecialEvent(titleText: string, keepSeconds: number?)
+local function showSpecialEvent(titleText: string, keepSeconds: number?, skipIntroAnimation: boolean?)
         specialEventState.hideToken += 1
         local token = specialEventState.hideToken
 
         specialEventUI.title.Text = titleText
         setSpecialEventRollText(nil)
         specialEventUI.frame.Visible = true
-	specialEventUI.frame.BackgroundTransparency = 1
-	specialEventUI.scale.Scale = 0.2
+        if skipIntroAnimation then
+                specialEventUI.frame.BackgroundTransparency = 0.05
+                specialEventUI.scale.Scale = 1
+        else
+                specialEventUI.frame.BackgroundTransparency = 1
+                specialEventUI.scale.Scale = 0.2
 
-	TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		BackgroundTransparency = 0.05,
-	}):Play()
+                TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                        BackgroundTransparency = 0.05,
+                }):Play()
 
-	TweenService:Create(specialEventUI.scale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Scale = 1,
-	}):Play()
+                TweenService:Create(specialEventUI.scale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                        Scale = 1,
+                }):Play()
+        end
 
-	if keepSeconds and keepSeconds > 0 then
-		task.delay(keepSeconds, function()
-			if specialEventState.hideToken == token then
-				hideSpecialEvent(false)
+        if keepSeconds and keepSeconds > 0 then
+                task.delay(keepSeconds, function()
+                        if specialEventState.hideToken == token then
+                                hideSpecialEvent(false)
 			end
 		end)
 	end
@@ -1960,7 +1965,7 @@ local function showSpecialEventDifficulty(eventId: string, eventName: string, di
                 holdTime = 3
         end
 
-        showSpecialEvent(baseName, nil)
+        showSpecialEvent(baseName, nil, true)
         setSpecialEventRollText("Difficulty ?")
         local hideToken = specialEventState.hideToken
 

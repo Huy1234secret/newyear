@@ -919,24 +919,36 @@ do
                                                         {color = Color3.fromRGB(255, 0, 0), material = Enum.Material.Neon},
                                                 }
 
-						task.spawn(function()
-							local flashIndex = 1
-							while countdownStarted and not exploded and bomb.Parent do
-								flashIndex = flashIndex == 1 and 2 or 1
-								local style = flashStyles[flashIndex]
-								bomb.Color = style.color
-								bomb.Material = style.material
+                                                task.spawn(function()
+                                                        local flashIndex = 1
+                                                        local maxInterval = math.clamp(totalDuration / 3, 0.18, 0.6)
+                                                        local minInterval = math.clamp(totalDuration / 12, 0.05, 0.25)
+                                                        if minInterval > maxInterval then
+                                                                minInterval, maxInterval = maxInterval, minInterval
+                                                        end
 
-								local elapsed = os.clock() - startTime
-								if elapsed >= totalDuration then
-									break
-								end
+                                                        while countdownStarted and not exploded and bomb.Parent do
+                                                                flashIndex = flashIndex == 1 and 2 or 1
+                                                                local style = flashStyles[flashIndex]
+                                                                bomb.Color = style.color
+                                                                bomb.Material = style.material
 
-								local progress = math.clamp(elapsed / totalDuration, 0, 1)
-								local interval = math.clamp(0.55 - progress * 0.4, 0.08, 0.55)
-								task.wait(interval)
-							end
-						end)
+                                                                local elapsed = os.clock() - startTime
+                                                                if elapsed >= totalDuration then
+                                                                        break
+                                                                end
+
+                                                                local progress = math.clamp(elapsed / totalDuration, 0, 1)
+                                                                local interval = maxInterval - (maxInterval - minInterval) * progress
+                                                                task.wait(math.clamp(interval, 0.03, 1))
+                                                        end
+
+                                                        if bomb.Parent and not exploded then
+                                                                local finalStyle = flashStyles[2]
+                                                                bomb.Color = finalStyle.color
+                                                                bomb.Material = finalStyle.material
+                                                        end
+                                                end)
 
 						task.delay(totalDuration, function()
 							if not exploded and bomb.Parent then
