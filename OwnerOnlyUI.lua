@@ -45,6 +45,42 @@ local mapDefinitions: {MapDefinition} = {
 		displayName = "Doomspire",
 		modelName = "Doomspire",
 	},
+	{
+		id = "GlassHouses",
+		displayName = "Glass Houses",
+		modelName = "GlassHouses",
+	},
+	{
+		id = "RobloxHQ",
+		displayName = "Roblox HQ",
+		modelName = "RobloxHQ",
+	},
+	{
+		id = "RocketArena",
+		displayName = "Rocket Arena",
+		modelName = "RocketArena",
+	},
+	{
+		id = "HauntedMansion",
+		displayName = "Haunted Mansion",
+		modelName = "HauntedMansion",
+	},
+	{
+		id = "BowlingAlley",
+		displayName = "Bowling Alley",
+		modelName = "BowlingAlley",
+	},
+	{
+		id = "HappyHomeOfRobloxia",
+		displayName = "Happy Home of Robloxia",
+		modelName = "HappyHomeOfRobloxia",
+	},
+	{
+		id = "RavenRock",
+		displayName = "Raven Rock",
+		modelName = "RavenRock",
+	},
+
 }
 
 local specialEventOptions: {EventDefinition} = {
