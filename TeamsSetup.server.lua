@@ -970,32 +970,87 @@ do
                                 end
                         end
 
-			local function damageInRadius(center: Vector3, radius: number)
-				local params = OverlapParams.new()
-				for _, part in ipairs(Workspace:GetPartBoundsInRadius(center, radius, params)) do
-					local parent = part.Parent
-					if not parent then
-						continue
-					end
+                        local function damageInRadius(center: Vector3, radius: number)
+                                local params = OverlapParams.new()
+                                for _, part in ipairs(Workspace:GetPartBoundsInRadius(center, radius, params)) do
+                                        local parent = part.Parent
+                                        if not parent then
+                                                continue
+                                        end
 
-					local humanoid = parent:FindFirstChildWhichIsA("Humanoid")
-					if not humanoid and parent.Parent then
-						humanoid = parent.Parent:FindFirstChildWhichIsA("Humanoid")
-					end
+                                        local humanoid = parent:FindFirstChildWhichIsA("Humanoid")
+                                        if not humanoid and parent.Parent then
+                                                humanoid = parent.Parent:FindFirstChildWhichIsA("Humanoid")
+                                        end
 
-					if humanoid and humanoid.Health > 0 then
-						local character = humanoid.Parent
-						local hrp = character and character:FindFirstChild("HumanoidRootPart")
-						if hrp then
-							local distance = (hrp.Position - center).Magnitude
-							if distance <= radius then
-								local damage = math.clamp(MISSILE_DAMAGE * (1 - (distance / radius)), 10, MISSILE_DAMAGE)
-								humanoid:TakeDamage(damage)
-							end
-						end
-					end
-				end
-			end
+                                        if humanoid and humanoid.Health > 0 then
+                                                local character = humanoid.Parent
+                                                local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                                                if hrp then
+                                                        local distance = (hrp.Position - center).Magnitude
+                                                        if distance <= radius then
+                                                                local damage = math.clamp(MISSILE_DAMAGE * (1 - (distance / radius)), 10, MISSILE_DAMAGE)
+                                                                humanoid:TakeDamage(damage)
+                                                        end
+                                                end
+                                        end
+                                end
+                        end
+
+                        local function destroyEnvironmentInRadius(center: Vector3, radius: number, ignoreModel: Model?)
+                                if not activeMapModel then
+                                        return
+                                end
+
+                                local overlapParams = OverlapParams.new()
+                                overlapParams.FilterType = Enum.RaycastFilterType.Whitelist
+                                overlapParams.FilterDescendantsInstances = {activeMapModel}
+
+                                local partsInRadius = Workspace:GetPartBoundsInRadius(center, radius, overlapParams)
+                                for _, part in ipairs(partsInRadius) do
+                                        if not part:IsA("BasePart") then
+                                                continue
+                                        end
+
+                                        if ignoreModel and part:IsDescendantOf(ignoreModel) then
+                                                continue
+                                        end
+
+                                        if part:GetAttribute("KillBotIndestructible") then
+                                                continue
+                                        end
+
+                                        local parent = part.Parent
+                                        if parent then
+                                                local humanoid = parent:FindFirstChildWhichIsA("Humanoid")
+                                                if not humanoid and parent.Parent then
+                                                        humanoid = parent.Parent:FindFirstChildWhichIsA("Humanoid")
+                                                end
+                                                if humanoid then
+                                                        continue
+                                                end
+                                        end
+
+                                        local shouldDestroy = not part.Anchored or part:GetAttribute("KillBotDestructible")
+                                        if not shouldDestroy then
+                                                continue
+                                        end
+
+                                        if part.Anchored then
+                                                part.Anchored = false
+                                        end
+
+                                        part:BreakJoints()
+
+                                        local offset = part.Position - center
+                                        if offset.Magnitude > 0 then
+                                                local push = offset.Unit * 80
+                                                part.AssemblyLinearVelocity = part.AssemblyLinearVelocity + push
+                                        end
+
+                                        Debris:AddItem(part, 8)
+                                end
+                        end
 
                         local function createRocket(botState, targetPosition: Vector3)
                                 local botPart = botState.part
@@ -1011,28 +1066,50 @@ do
                                 rocket.Color = Color3.fromRGB(255, 100, 100)
                                 rocket.CanCollide = false
                                 rocket.CanQuery = false
-                                rocket.CanTouch = true
-                                rocket.Anchored = false
+                                rocket.CanTouch = false
+                                rocket.Anchored = true
                                 rocket.Massless = true
 
-                                local launchOrigin = botPart.Position
-                                local desiredDirection = (targetPosition - launchOrigin)
-                                if desiredDirection.Magnitude < 1e-3 then
-                                        desiredDirection = botPart.CFrame.LookVector
-                                end
-                                local launchDirection = desiredDirection.Unit
-                                local spawnPosition = launchOrigin
+                                local spawnPosition = botPart.Position
 
-                                rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + launchDirection)
+                                local function positionToAngle(position: Vector3): number
+                                        local normalizedX = (position.X - origin.X) / horizontalRadiusX
+                                        local normalizedZ = (position.Z - origin.Z) / horizontalRadiusZ
+                                        return math.atan2(normalizedZ, normalizedX)
+                                end
+
+                                local startOnEnvelope = clampToHorizontalRadius(Vector3.new(spawnPosition.X, spawnPosition.Y, spawnPosition.Z))
+                                local startAngle = positionToAngle(startOnEnvelope)
+
+                                local targetOnEnvelope = clampToHorizontalRadius(Vector3.new(targetPosition.X, spawnPosition.Y, targetPosition.Z))
+                                local targetAngle = positionToAngle(targetOnEnvelope)
+                                local angleDiff = math.atan2(math.sin(targetAngle - startAngle), math.cos(targetAngle - startAngle))
+
+                                local tangentVector = Vector3.new(-math.sin(startAngle) * horizontalRadiusX, 0, math.cos(startAngle) * horizontalRadiusZ)
+                                if tangentVector.Magnitude < 1e-3 then
+                                        tangentVector = botPart.CFrame.RightVector * horizontalRadiusX
+                                end
+                                tangentVector = tangentVector.Unit
+
+                                local approximateArc = math.abs(angleDiff) * 0.5 * (horizontalRadiusX + horizontalRadiusZ)
+                                local controlDistance = math.clamp(approximateArc, 30, 150)
+
+                                local controlBase = Vector3.new(startOnEnvelope.X, spawnPosition.Y, startOnEnvelope.Z) + tangentVector * controlDistance
+                                controlBase = clampToHorizontalRadius(Vector3.new(controlBase.X, spawnPosition.Y, controlBase.Z))
+
+                                local controlHeight = math.max(spawnPosition.Y, targetPosition.Y) + 35
+                                local controlPoint1 = Vector3.new(controlBase.X, controlHeight, controlBase.Z)
+                                local midHeight = math.max(targetPosition.Y + 10, (spawnPosition.Y + controlHeight) * 0.5)
+                                local controlPoint2 = Vector3.new(targetOnEnvelope.X, midHeight, targetOnEnvelope.Z)
+
+                                local pathLength = (spawnPosition - controlPoint1).Magnitude
+                                        + (controlPoint1 - controlPoint2).Magnitude
+                                        + (controlPoint2 - targetPosition).Magnitude
+                                local travelTime = math.max(pathLength / MISSILE_SPEED, 0.5)
+
+                                rocket.CFrame = CFrame.lookAt(spawnPosition, controlPoint1)
                                 rocket.Parent = Workspace
                                 rocket:SetNetworkOwner(nil)
-
-                                local initialVelocity = launchDirection * MISSILE_SPEED
-
-                                rocket.AssemblyLinearVelocity = initialVelocity
-                                if initialVelocity.Magnitude > 0 then
-                                        rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + initialVelocity.Unit)
-                                end
 
                                 local flightSound = Instance.new("Sound")
                                 flightSound.Name = "KillBotRocketFlight"
@@ -1044,24 +1121,112 @@ do
                                 flightSound.Parent = rocket
                                 flightSound:Play()
 
+                                local raycastIgnore = {}
+                                if botState.model then
+                                        table.insert(raycastIgnore, botState.model)
+                                end
+                                table.insert(raycastIgnore, rocket)
+
+                                local raycastParams = RaycastParams.new()
+                                raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+                                raycastParams.FilterDescendantsInstances = raycastIgnore
+
                                 local detonated = false
-                                local function explode()
+                                local flightConnection: RBXScriptConnection? = nil
+                                local elapsed = 0
+                                local lastPosition = spawnPosition
+
+                                local function evaluateCubic(t: number)
+                                        local inv = 1 - t
+                                        local p0 = spawnPosition
+                                        local p1 = controlPoint1
+                                        local p2 = controlPoint2
+                                        local p3 = targetPosition
+
+                                        local position = (inv * inv * inv) * p0
+                                                + (3 * inv * inv * t) * p1
+                                                + (3 * inv * t * t) * p2
+                                                + (t * t * t) * p3
+
+                                        local derivative = (3 * inv * inv) * (p1 - p0)
+                                                + (6 * inv * t) * (p2 - p1)
+                                                + (3 * t * t) * (p3 - p2)
+
+                                        return position, derivative
+                                end
+
+                                local function explode(hitInstance: Instance?, impactPosition: Vector3?)
                                         if detonated then
                                                 return
                                         end
 
                                         detonated = true
 
-                                        flightSound:Stop()
+                                        if flightConnection then
+                                                flightConnection:Disconnect()
+                                                flightConnection = nil
+                                        end
+
+                                        if flightSound.IsPlaying then
+                                                flightSound:Stop()
+                                        end
+
+                                        local explosionPosition = impactPosition or rocket.Position
 
                                         local explosion = Instance.new("Explosion")
                                         explosion.BlastRadius = MISSILE_BLAST_RADIUS
-                                        explosion.BlastPressure = 0
-                                        explosion.DestroyJointRadiusPercent = 0
-                                        explosion.Position = rocket.Position
+                                        explosion.BlastPressure = 500000
+                                        explosion.DestroyJointRadiusPercent = 100
+                                        explosion.Position = explosionPosition
                                         explosion.Parent = Workspace
 
-                                        damageInRadius(rocket.Position, MISSILE_BLAST_RADIUS)
+                                        explosion.Hit:Connect(function(hitPart)
+                                                if not hitPart or not hitPart:IsA("BasePart") then
+                                                        return
+                                                end
+
+                                                if botState.model and hitPart:IsDescendantOf(botState.model) then
+                                                        return
+                                                end
+
+                                                if hitPart:GetAttribute("KillBotIndestructible") then
+                                                        return
+                                                end
+
+                                                local hitParent = hitPart.Parent
+                                                if hitParent then
+                                                        local humanoid = hitParent:FindFirstChildWhichIsA("Humanoid")
+                                                        if not humanoid and hitParent.Parent then
+                                                                humanoid = hitParent.Parent:FindFirstChildWhichIsA("Humanoid")
+                                                        end
+                                                        if humanoid then
+                                                                return
+                                                        end
+                                                end
+
+                                                if hitPart:IsDescendantOf(activeMapModel) then
+                                                        if hitPart.Anchored and not hitPart:GetAttribute("KillBotDestructible") then
+                                                                return
+                                                        end
+                                                end
+
+                                                if hitPart.Anchored then
+                                                        hitPart.Anchored = false
+                                                end
+
+                                                hitPart:BreakJoints()
+
+                                                local pushOffset = hitPart.Position - explosionPosition
+                                                if pushOffset.Magnitude > 0 then
+                                                        local impulse = pushOffset.Unit * 80
+                                                        hitPart.AssemblyLinearVelocity = hitPart.AssemblyLinearVelocity + impulse
+                                                end
+
+                                                Debris:AddItem(hitPart, 10)
+                                        end)
+
+                                        damageInRadius(explosionPosition, MISSILE_BLAST_RADIUS)
+                                        destroyEnvironmentInRadius(explosionPosition, MISSILE_BLAST_RADIUS, botState.model)
 
                                         local soundAnchor = Instance.new("Part")
                                         soundAnchor.Anchored = true
@@ -1070,7 +1235,7 @@ do
                                         soundAnchor.CanTouch = false
                                         soundAnchor.Transparency = 1
                                         soundAnchor.Size = Vector3.new(0.1, 0.1, 0.1)
-                                        soundAnchor.CFrame = CFrame.new(rocket.Position)
+                                        soundAnchor.CFrame = CFrame.new(explosionPosition)
                                         soundAnchor.Parent = Workspace
 
                                         local impactSound = Instance.new("Sound")
@@ -1088,68 +1253,80 @@ do
                                         end
                                 end
 
-                                rocket.Touched:Connect(function(hit)
-                                        if detonated then
-                                                return
-                                        end
-
-                                        if hit and botState.model and hit:IsDescendantOf(botState.model) then
-                                                return
-                                        end
-
-                                        explode()
-                                end)
-
-                                -- Add a BodyVelocity to maintain trajectory
-                                local bodyVelocity = Instance.new("BodyVelocity")
-                                bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
-                                bodyVelocity.Velocity = launchDirection * MISSILE_SPEED
-                                bodyVelocity.Parent = rocket
-
-                                -- Maintain trajectory and orientation
-                                local connection
-                                connection = RunService.Heartbeat:Connect(function()
+                                flightConnection = RunService.Heartbeat:Connect(function(dt)
                                         if detonated or not rocket.Parent then
-                                                if connection then
-                                                        connection:Disconnect()
-                                                        connection = nil
+                                                if flightConnection then
+                                                        flightConnection:Disconnect()
+                                                        flightConnection = nil
                                                 end
                                                 return
                                         end
 
-                                        local currentPos = rocket.Position
-                                        bodyVelocity.Velocity = launchDirection * MISSILE_SPEED
-                                        rocket.CFrame = CFrame.lookAt(currentPos, currentPos + launchDirection)
+                                        elapsed += dt
+                                        local t = math.clamp(elapsed / travelTime, 0, 1)
+                                        local position, derivative = evaluateCubic(t)
+
+                                        local movement = position - lastPosition
+                                        if movement.Magnitude > 0 then
+                                                local result = Workspace:Raycast(lastPosition, movement, raycastParams)
+                                                if result and result.Instance then
+                                                        local lookVector = derivative
+                                                        if lookVector.Magnitude < 1e-3 then
+                                                                lookVector = movement
+                                                        end
+                                                        if lookVector.Magnitude < 1e-3 then
+                                                                lookVector = Vector3.new(0, -1, 0)
+                                                        end
+                                                        rocket.CFrame = CFrame.lookAt(result.Position, result.Position + lookVector.Unit)
+                                                        explode(result.Instance, result.Position)
+                                                        return
+                                                end
+                                        end
+
+                                        if derivative.Magnitude < 1e-3 then
+                                                derivative = Vector3.new(0, -1, 0)
+                                        end
+
+                                        rocket.CFrame = CFrame.lookAt(position, position + derivative.Unit)
+                                        lastPosition = position
+
+                                        if t >= 1 then
+                                                explode(nil, position)
+                                        end
                                 end)
 
                                 rocket.Destroying:Connect(function()
-                                        detonated = true
+                                        if flightConnection then
+                                                flightConnection:Disconnect()
+                                                flightConnection = nil
+                                        end
                                         if flightSound.IsPlaying then
                                                 flightSound:Stop()
                                         end
-                                        if connection then
-                                                connection:Disconnect()
-                                                connection = nil
+                                end)
+
+                                -- Auto-explode after 8 seconds
+                                task.delay(8, function()
+                                        if not detonated and rocket.Parent then
+                                                explode(nil, rocket.Position)
                                         end
                                 end)
 
-				-- Auto-explode after 8 seconds
-				task.delay(8, function()
-					if not detonated and rocket.Parent then
-						explode()
-					end
-				end)
+                                table.insert(state.rockets, function()
+                                        if flightConnection then
+                                                flightConnection:Disconnect()
+                                                flightConnection = nil
+                                        end
+                                        if flightSound.IsPlaying then
+                                                flightSound:Stop()
+                                        end
+                                        if rocket.Parent then
+                                                rocket:Destroy()
+                                        end
+                                end)
 
-				Debris:AddItem(rocket, 8)
-
-				table.insert(state.rockets, function()
-					if not detonated and rocket.Parent then
-						rocket:Destroy()
-					end
-				end)
-
-				return true
-			end
+                                return true
+                        end
 
 			local function createKillBot(index: number)
 				local model = Instance.new("Model")
