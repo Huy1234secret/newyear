@@ -1235,20 +1235,29 @@ local transitionState = {
 }
 
 local specialEventState = {
-	active = false,
-	id = nil :: string?,
-	displayName = nil :: string?,
-	randomized = false,
-	randomToken = 0,
-	hideToken = 0,
-	options = {} :: {{id: string?, name: string?}},
-	finalName = nil :: string?,
-	effects = {
-		sprintDisabled = false,
-		invisible = false,
-		inverted = false,
-	},
+        active = false,
+        id = nil :: string?,
+        displayName = nil :: string?,
+        randomized = false,
+        randomToken = 0,
+        hideToken = 0,
+        options = {} :: {{id: string?, name: string?}},
+        finalName = nil :: string?,
+        effects = {
+                sprintDisabled = false,
+                invisible = false,
+                inverted = false,
+        },
+        difficultyToken = 0,
 }
+
+local DIFFICULTY_EVENT_IDS = {
+        HotTouch = true,
+        KillBot = true,
+        RainingBomb = true,
+}
+
+local DIFFICULTY_NUMBERS = {1, 2, 3, 4, 5}
 
 local invisibilityState = {
 	enabled = false,
@@ -1883,21 +1892,82 @@ local function beginSpecialEventRandomization(options: {{id: string?, name: stri
 end
 
 local function completeSpecialEventRandomization(finalName: string)
-	if not specialEventState.randomized then
-		showSpecialEvent(finalName, 3)
-		return
-	end
+        if not specialEventState.randomized then
+                showSpecialEvent(finalName, 3)
+                return
+        end
 
-	specialEventState.randomized = false
-	specialEventUI.title.Text = finalName
-	showSpecialEvent(finalName, 3)
+        specialEventState.randomized = false
+        specialEventUI.title.Text = finalName
+        showSpecialEvent(finalName, 3)
+end
+
+local function showSpecialEventDifficulty(eventId: string, eventName: string, difficulty: number, rollDuration: number?, displaySeconds: number?)
+        if not DIFFICULTY_EVENT_IDS[eventId] then
+                return
+        end
+
+        if specialEventState.id ~= eventId then
+                return
+        end
+
+        local baseName = eventName
+        if baseName == nil or baseName == "" then
+                baseName = specialEventState.displayName or "Special Event"
+        end
+
+        local clampedDifficulty = math.clamp(math.floor(difficulty), 1, #DIFFICULTY_NUMBERS)
+        local rollTime = rollDuration
+        if typeof(rollTime) ~= "number" or rollTime <= 0 then
+                rollTime = 2.4
+        end
+
+        local holdTime = displaySeconds
+        if typeof(holdTime) ~= "number" or holdTime < 0 then
+                holdTime = 3
+        end
+
+        showSpecialEvent(string.format("%s\nDifficulty ?", baseName), nil)
+        local hideToken = specialEventState.hideToken
+
+        specialEventState.difficultyToken += 1
+        local token = specialEventState.difficultyToken
+
+        task.spawn(function()
+                local startTime = os.clock()
+                local index = 1
+                local step = 0.09
+                local totalNumbers = #DIFFICULTY_NUMBERS
+
+                while specialEventState.difficultyToken == token and os.clock() - startTime < rollTime do
+                        local rollValue = DIFFICULTY_NUMBERS[((index - 1) % totalNumbers) + 1]
+                        specialEventUI.title.Text = string.format("%s\nDifficulty %d", baseName, rollValue)
+                        index += 1
+                        task.wait(step)
+                        step = math.min(0.22, step + 0.01)
+                end
+
+                if specialEventState.difficultyToken ~= token then
+                        return
+                end
+
+                specialEventUI.title.Text = string.format("%s\nDifficulty %d", baseName, clampedDifficulty)
+
+                if holdTime and holdTime > 0 then
+                        task.delay(holdTime, function()
+                                if specialEventState.difficultyToken == token and specialEventState.hideToken == hideToken then
+                                        hideSpecialEvent(false)
+                                end
+                        end)
+                end
+        end)
 end
 
 local function cancelInvisibleHighlightFade(highlight: Highlight)
-	local bundle = invisibleHighlightTweens[highlight]
-	if not bundle then
-		return
-	end
+        local bundle = invisibleHighlightTweens[highlight]
+        if not bundle then
+                return
+        end
 
 	if bundle.conn then
 		bundle.conn:Disconnect()
@@ -4256,14 +4326,15 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		specialEventState.active = false
 		specialEventState.id = nil
 		specialEventState.displayName = nil
-		specialEventState.randomized = false
-		specialEventState.options = {}
-		specialEventState.finalName = nil
-		specialEventState.effects.sprintDisabled = false
-		specialEventState.effects.invisible = false
-		specialEventState.effects.inverted = false
-		setSprintEventDisabled(false)
-		setInvisibilityEnabled(false)
+                specialEventState.randomized = false
+                specialEventState.options = {}
+                specialEventState.finalName = nil
+                specialEventState.difficultyToken += 1
+                specialEventState.effects.sprintDisabled = false
+                specialEventState.effects.invisible = false
+                specialEventState.effects.inverted = false
+                setSprintEventDisabled(false)
+                setInvisibilityEnabled(false)
 		setInvertedControlsEnabled(false)
 		hideSpecialEvent(true)
 		setCurrentEventDisplayName(nil)
@@ -4295,26 +4366,28 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		specialEventUI.header.Text = headerText
 
 		local isActive = payload.active
-		if isActive == false then
-			specialEventState.active = false
-			specialEventState.id = nil
-			specialEventState.displayName = nil
-			specialEventState.randomized = false
-			specialEventState.options = {}
-			specialEventState.finalName = nil
-			setSprintEventDisabled(false)
-			setInvisibilityEnabled(false)
-			setInvertedControlsEnabled(false)
-			hideSpecialEvent(true)
-			setHotTouchActive(false)
-			setCurrentEventDisplayName(nil)
-		else
-			local eventId = if typeof(payload.id) == "string" then payload.id else nil
-			local eventName = if typeof(payload.name) == "string" then payload.name elseif eventId then eventId else "Special Event"
-			specialEventState.active = true
-			specialEventState.id = eventId
-			specialEventState.displayName = eventName
-			setCurrentEventDisplayName(eventName)
+                if isActive == false then
+                        specialEventState.active = false
+                        specialEventState.id = nil
+                        specialEventState.displayName = nil
+                        specialEventState.randomized = false
+                        specialEventState.options = {}
+                        specialEventState.finalName = nil
+                        specialEventState.difficultyToken += 1
+                        setSprintEventDisabled(false)
+                        setInvisibilityEnabled(false)
+                        setInvertedControlsEnabled(false)
+                        hideSpecialEvent(true)
+                        setHotTouchActive(false)
+                        setCurrentEventDisplayName(nil)
+                else
+                        local eventId = if typeof(payload.id) == "string" then payload.id else nil
+                        local eventName = if typeof(payload.name) == "string" then payload.name elseif eventId then eventId else "Special Event"
+                        specialEventState.difficultyToken += 1
+                        specialEventState.active = true
+                        specialEventState.id = eventId
+                        specialEventState.displayName = eventName
+                        setCurrentEventDisplayName(eventName)
 
 			if eventId == "HotTouch" then
 				setHotTouchActive(true)
@@ -4325,14 +4398,25 @@ statusRemote.OnClientEvent:Connect(function(payload)
 			if payload.randomized then
 				completeSpecialEventRandomization(eventName)
 			else
-				specialEventState.randomized = false
-				showSpecialEvent(eventName, 3)
-			end
-		end
-	elseif action == "SpecialEventEffect" then
-		if payload.sprintDisabled ~= nil then
-			local disabled = payload.sprintDisabled == true
-			specialEventState.effects.sprintDisabled = disabled
+                                specialEventState.randomized = false
+                                showSpecialEvent(eventName, 3)
+                        end
+                end
+        elseif action == "SpecialEventDifficulty" then
+                local eventId = if typeof(payload.id) == "string" then payload.id else nil
+                if eventId then
+                        local difficultyValue = tonumber(payload.difficulty)
+                        if difficultyValue then
+                                local eventName = if typeof(payload.name) == "string" then payload.name else specialEventState.displayName or eventId
+                                local rollDuration = tonumber(payload.rollDuration)
+                                local displaySeconds = tonumber(payload.displaySeconds)
+                                showSpecialEventDifficulty(eventId, eventName, difficultyValue, rollDuration, displaySeconds)
+                        end
+                end
+        elseif action == "SpecialEventEffect" then
+                if payload.sprintDisabled ~= nil then
+                        local disabled = payload.sprintDisabled == true
+                        specialEventState.effects.sprintDisabled = disabled
 			setSprintEventDisabled(disabled)
 		end
 
