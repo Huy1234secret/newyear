@@ -926,16 +926,48 @@ do
 				return nearestPlayer
 			end
 
-                        local function getRandomPosition(): Vector3
-                                local stormSize = getStormHorizontalSize()
-                                local radiusX = stormSize.X / 2
-                                local radiusZ = stormSize.Y / 2
+                        local stormSize = getStormHorizontalSize()
+                        local horizontalRadiusX = math.max(stormSize.X / 2, 1)
+                        local horizontalRadiusZ = math.max(stormSize.Y / 2, 1)
 
-                                return Vector3.new(
-                                        killBotRandom:NextNumber(-radiusX, radiusX),
-                                        killBotRandom:NextNumber(50, 100),
-                                        killBotRandom:NextNumber(-radiusZ, radiusZ)
-                                )
+                        local function isWithinHorizontalRadius(position: Vector3): boolean
+                                local offset = Vector3.new(position.X - origin.X, 0, position.Z - origin.Z)
+                                local normalizedX = offset.X / horizontalRadiusX
+                                local normalizedZ = offset.Z / horizontalRadiusZ
+                                return normalizedX * normalizedX + normalizedZ * normalizedZ <= 1
+                        end
+
+                        local function clampToHorizontalRadius(position: Vector3): Vector3
+                                if isWithinHorizontalRadius(position) then
+                                        return position
+                                end
+
+                                local offset = Vector3.new(position.X - origin.X, 0, position.Z - origin.Z)
+                                if offset.Magnitude < 1e-3 then
+                                        return Vector3.new(origin.X, position.Y, origin.Z)
+                                end
+
+                                local angle = math.atan2(offset.Z, offset.X)
+                                local clampedX = math.cos(angle) * horizontalRadiusX
+                                local clampedZ = math.sin(angle) * horizontalRadiusZ
+
+                                return Vector3.new(origin.X + clampedX, position.Y, origin.Z + clampedZ)
+                        end
+
+                        local function getRandomPosition(): Vector3
+                                while true do
+                                        local candidateX = killBotRandom:NextNumber(-horizontalRadiusX, horizontalRadiusX)
+                                        local candidateZ = killBotRandom:NextNumber(-horizontalRadiusZ, horizontalRadiusZ)
+                                        local normalizedX = candidateX / horizontalRadiusX
+                                        local normalizedZ = candidateZ / horizontalRadiusZ
+                                        if normalizedX * normalizedX + normalizedZ * normalizedZ <= 1 then
+                                                return Vector3.new(
+                                                        origin.X + candidateX,
+                                                        killBotRandom:NextNumber(50, 100),
+                                                        origin.Z + candidateZ
+                                                )
+                                        end
+                                end
                         end
 
 			local function damageInRadius(center: Vector3, radius: number)
@@ -965,11 +997,11 @@ do
 				end
 			end
 
-                        local function createRocket(botState, _targetPosition: Vector3)
-				local botPart = botState.part
-				if not botPart or not botPart.Parent then
-					return false
-				end
+                        local function createRocket(botState, targetPosition: Vector3)
+                                local botPart = botState.part
+                                if not botPart or not botPart.Parent then
+                                        return false
+                                end
 
                                 local rocket = Instance.new("Part")
                                 rocket.Name = "KillBotRocket"
@@ -984,12 +1016,11 @@ do
                                 rocket.Massless = true
 
                                 local launchOrigin = botPart.Position
-                                local launchDirection = botPart.CFrame.UpVector
-                                if launchDirection.Magnitude < 0.1 then
-                                        launchDirection = Vector3.new(0, 1, 0)
-                                else
-                                        launchDirection = launchDirection.Unit
+                                local desiredDirection = (targetPosition - launchOrigin)
+                                if desiredDirection.Magnitude < 1e-3 then
+                                        desiredDirection = botPart.CFrame.LookVector
                                 end
+                                local launchDirection = desiredDirection.Unit
                                 local spawnPosition = launchOrigin
 
                                 rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + launchDirection)
@@ -1075,7 +1106,7 @@ do
                                 bodyVelocity.Velocity = launchDirection * MISSILE_SPEED
                                 bodyVelocity.Parent = rocket
 
-                                -- Maintain upward trajectory and orientation
+                                -- Maintain trajectory and orientation
                                 local connection
                                 connection = RunService.Heartbeat:Connect(function()
                                         if detonated or not rocket.Parent then
@@ -1188,10 +1219,10 @@ do
 					-- Random movement behavior
 					if not botState.isMoving and not botState.isStopped then
 						-- Start moving to a random position
-						botState.currentTarget = getRandomPosition()
-						botState.isMoving = true
-						botState.lastMoveTime = currentTime
-					elseif botState.isMoving then
+                                                botState.currentTarget = getRandomPosition()
+                                                botState.isMoving = true
+                                                botState.lastMoveTime = currentTime
+                                        elseif botState.isMoving then
 						-- Check if we've reached the target or time to stop
 						local distanceToTarget = (botState.currentTarget - botPosition).Magnitude
 						if distanceToTarget < 10 or currentTime - botState.lastMoveTime >= MOVE_INTERVAL then
@@ -1202,11 +1233,12 @@ do
 							botState.velocity = Vector3.zero
 						else
 							-- Continue moving towards target
-							local direction = (botState.currentTarget - botPosition).Unit
-							botState.velocity = direction * BOT_SPEED
-						end
-					elseif botState.isStopped then
-						-- Check if it's time to start moving again
+                                                        local directionVector = botState.currentTarget - botPosition
+                                                        local direction = directionVector.Magnitude > 0 and directionVector.Unit or Vector3.zero
+                                                        botState.velocity = direction * BOT_SPEED
+                                                end
+                                        elseif botState.isStopped then
+                                                -- Check if it's time to start moving again
 						if currentTime - botState.lastStopTime >= STOP_INTERVAL then
 							botState.isStopped = false
 						else
@@ -1228,8 +1260,26 @@ do
 						end
 					end
 
-					-- Apply velocity
-					botPart.AssemblyLinearVelocity = botState.velocity
+                                        -- Prevent bots from leaving the active storm radius
+                                        local predictedPosition = botPosition + botState.velocity * dt
+                                        if not isWithinHorizontalRadius(predictedPosition) then
+                                                botState.currentTarget = clampToHorizontalRadius(botState.currentTarget)
+                                                local correctedDirection = botState.currentTarget - botPosition
+                                                if correctedDirection.Magnitude > 0 then
+                                                        botState.velocity = correctedDirection.Unit * BOT_SPEED
+                                                else
+                                                        botState.velocity = Vector3.zero
+                                                end
+                                                predictedPosition = botPosition + botState.velocity * dt
+                                        end
+
+                                        if not isWithinHorizontalRadius(botPosition) then
+                                                local clampedPosition = clampToHorizontalRadius(botPosition)
+                                                botPart.CFrame = CFrame.new(clampedPosition)
+                                        end
+
+                                        -- Apply velocity
+                                        botPart.AssemblyLinearVelocity = botState.velocity
 
 					-- Keep bot flying (above ground)
 					if botPosition.Y < 20 then
