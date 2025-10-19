@@ -1107,9 +1107,11 @@ do
                                         + (controlPoint2 - targetPosition).Magnitude
                                 local travelTime = math.max(pathLength / MISSILE_SPEED, 0.5)
 
-                                rocket.CFrame = CFrame.lookAt(spawnPosition, controlPoint1)
-                                rocket.Parent = Workspace
-                                rocket:SetNetworkOwner(nil)
+                                 rocket.CFrame = CFrame.lookAt(spawnPosition, controlPoint1)
+                                 rocket.Parent = Workspace
+
+                                 rocket.Anchored = false
+                                 rocket:SetNetworkOwner(nil)
 
                                 local flightSound = Instance.new("Sound")
                                 flightSound.Name = "KillBotRocketFlight"
