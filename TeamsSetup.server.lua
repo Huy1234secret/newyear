@@ -865,6 +865,7 @@ do
 
                         task.spawn(function()
                                 local spawnDelay = math.max(config.spawnInterval or 0.5, 0.1)
+                                local rng = Random.new()
                                 while running and roundInProgress and context.roundId == currentRoundId do
                                         local offsetX = rng:NextNumber(-stormSize.X / 2, stormSize.X / 2)
                                         local offsetZ = rng:NextNumber(-stormSize.Y / 2, stormSize.Y / 2)
