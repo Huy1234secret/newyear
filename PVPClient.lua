@@ -3090,6 +3090,15 @@ local function onHumanoidAdded(humanoid: Humanoid)
 	end
 
 	currentHumanoid = humanoid
+	
+	-- Force reset all movement effects when humanoid is added (player respawned)
+	task.wait(0.5) -- Wait for character to fully load
+	resetInvertedMovement()
+	enableDefaultControlsIfDisabled()
+	setInvertedControlsEnabled(false)
+	setSprintEventDisabled(false)
+	setInvisibilityEnabled(false)
+	
 	if not invertedControlState.requested then
 		enableDefaultControlsIfDisabled()
 	end
@@ -4328,5 +4337,12 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		if taggedUserId and localPlayer.UserId == taggedUserId then
 			showHotTouchAlert()
 		end
+	elseif action == "ResetMovement" then
+		-- Force reset all movement effects for this player
+		resetInvertedMovement()
+		enableDefaultControlsIfDisabled()
+		setInvertedControlsEnabled(false)
+		setSprintEventDisabled(false)
+		setInvisibilityEnabled(false)
 	end
 end)
