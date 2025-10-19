@@ -1388,20 +1388,22 @@ local function startInvisibleCharacterFade(character: Model, owner: Player?, dur
 end
 
 local invertedControlState = {
-	active = false,
-	requested = false,
-	controlsDisabled = false,
-	keyboard = {
-		forward = false,
-		back = false,
-		left = false,
-		right = false,
-	},
-	thumbstick = Vector2.new(),
-	connections = {} :: {RBXScriptConnection},
-	heartbeatConn = nil :: RBXScriptConnection?,
-	jumpConn = nil :: RBXScriptConnection?,
+        active = false,
+        requested = false,
+        controlsDisabled = false,
+        keyboard = {
+                forward = false,
+                back = false,
+                left = false,
+                right = false,
+        },
+        thumbstick = Vector2.new(),
+        connections = {} :: {RBXScriptConnection},
+        heartbeatConn = nil :: RBXScriptConnection?,
+        jumpConn = nil :: RBXScriptConnection?,
 }
+
+local awaitingRespawnMovementReset = false
 
 type HighlightConnections = {RBXScriptConnection}
 
@@ -2379,12 +2381,23 @@ local function applyInvertedControlState()
 end
 
 local function setInvertedControlsEnabled(enabled: boolean)
-	invertedControlState.requested = enabled
-	applyInvertedControlState()
+        invertedControlState.requested = enabled
+        applyInvertedControlState()
+end
+
+local function restoreNormalMovementControls()
+        specialEventState.effects.inverted = false
+
+        if invertedControlState.active or invertedControlState.requested or invertedControlState.controlsDisabled then
+                setInvertedControlsEnabled(false)
+        else
+                resetInvertedMovement()
+                enableDefaultControlsIfDisabled()
+        end
 end
 
 local function getSprintActionButton(): ImageButton?
-	local button = uiRefs.sprintActionButton
+        local button = uiRefs.sprintActionButton
 	if button and button.Parent then
 		return button
 	end
@@ -3143,12 +3156,13 @@ local function onHumanoidAdded(humanoid: Humanoid)
 		sprintState.originalWalkSpeed = newSpeed
 	end)
 
-	humanoid.Died:Connect(function()
-		sprintState.keyboardIntent = false
-		sprintState.touchIntent = false
-		recomputeSprintIntent()
-		stopSprinting(true)
-		if invertedControlState.active then
+        humanoid.Died:Connect(function()
+                awaitingRespawnMovementReset = true
+                sprintState.keyboardIntent = false
+                sprintState.touchIntent = false
+                recomputeSprintIntent()
+                stopSprinting(true)
+                if invertedControlState.active then
 			resetInvertedMovement()
 		end
 	end)
@@ -3157,11 +3171,16 @@ local function onHumanoidAdded(humanoid: Humanoid)
 end
 
 local function onCharacterAdded(character: Model)
-	resetSprintState()
-	watchCharacterTools(character)
-	updateInventorySlots()
+        if awaitingRespawnMovementReset then
+                awaitingRespawnMovementReset = false
+                restoreNormalMovementControls()
+        end
 
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
+        resetSprintState()
+        watchCharacterTools(character)
+        updateInventorySlots()
+
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		onHumanoidAdded(humanoid)
 	else
@@ -3183,14 +3202,15 @@ end
 localPlayer.CharacterAdded:Connect(onCharacterAdded)
 
 localPlayer.CharacterRemoving:Connect(function()
-	sprintState.keyboardIntent = false
-	sprintState.touchIntent = false
-	recomputeSprintIntent()
-	stopSprinting(true)
-	if humanoidSpeedChangedConn then
-		humanoidSpeedChangedConn:Disconnect()
-		humanoidSpeedChangedConn = nil
-	end
+        sprintState.keyboardIntent = false
+        sprintState.touchIntent = false
+        recomputeSprintIntent()
+        stopSprinting(true)
+        awaitingRespawnMovementReset = true
+        if humanoidSpeedChangedConn then
+                humanoidSpeedChangedConn:Disconnect()
+                humanoidSpeedChangedConn = nil
+        end
 	if humanoidSprintBonusConn then
 		humanoidSprintBonusConn:Disconnect()
 		humanoidSprintBonusConn = nil
