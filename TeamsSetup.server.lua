@@ -10,8 +10,6 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local Debris = game:GetService("Debris")
 
-local KillBotEvent = require(script.Parent:WaitForChild("KillBotEvent"))
-
 local function getOrCreateTeam(name: string, color: Color3, autoAssignable: boolean): Team
 	local team = TeamsService:FindFirstChild(name) :: Team?
 	if not team then
@@ -411,7 +409,7 @@ end
 do
 	registerSpecialEvent({
 		id = "ShatteredHeart",
-		displayName = "Shattered Heart??",
+		displayName = "💔 Shattered Heart",
 		onParticipantCharacter = function(context, record, _character, humanoid)
 			if not isPlayerInNeutralState(record.player) then
 				return
@@ -472,7 +470,7 @@ do
 
 	registerSpecialEvent({
 		id = "SprintProhibit",
-		displayName = "Sprint Prohibit????",
+		displayName = "🚫 Sprint Prohibit",
 		onRoundPrepared = function()
 			sendStatusUpdate({
 				action = "SpecialEventEffect",
@@ -491,7 +489,7 @@ do
 
 	registerSpecialEvent({
 		id = "Retro",
-		displayName = "RETRO??",
+		displayName = "🕹️ RETRO",
 		ignoreDefaultGear = true,
 		provideGear = function(context, record)
 			local gearRoot = ReplicatedStorage:FindFirstChild("PVPGears")
@@ -548,7 +546,7 @@ do
 
 	registerSpecialEvent({
 		id = "Invisible",
-		displayName = "Invisible??",
+		displayName = "👻 Invisible",
 		onRoundPrepared = function()
 			sendStatusUpdate({
 				action = "SpecialEventEffect",
@@ -569,7 +567,7 @@ do
 
 	registerSpecialEvent({
 		id = "Bunny",
-		displayName = "Bunny??",
+		displayName = "🐰 Bunny",
 		onParticipantCharacter = function(context, record, _character, humanoid)
 			local data = record.eventData
 			local bundle = data.Bunny
@@ -620,7 +618,7 @@ do
 
 	registerSpecialEvent({
 		id = "Slippery",
-		displayName = "Slippery??",
+		displayName = "🧊 Slippery",
 		onRoundPrepared = function(context, _config, mapModel)
 			local originals: {[BasePart]: PhysicalProperties?} = {}
 			for _, descendant in mapModel:GetDescendants() do
@@ -657,7 +655,7 @@ do
 
 	registerSpecialEvent({
 		id = "RainingBomb",
-		displayName = "Raining Bomb??",
+		displayName = "💣 Raining Bomb",
 		onCountdownComplete = function(context)
 			local state = context.state
 			if state.RainingBomb and state.RainingBomb.active then
@@ -818,7 +816,7 @@ do
 
 	registerSpecialEvent({
 		id = "InvertedControl",
-		displayName = "Inverted Control??",
+		displayName = "🔄 Inverted Control",
 		onRoundPrepared = function()
 			sendStatusUpdate({
 				action = "SpecialEventEffect",
@@ -833,22 +831,431 @@ do
 				inverted = false,
 			})
 		end,
+		onParticipantCleanup = function(context, record)
+			-- Ensure movement is restored when participant is cleaned up
+			sendStatusUpdate({
+				action = "SpecialEventEffect",
+				id = "InvertedControl",
+				inverted = false,
+			})
+		end,
+		onParticipantEliminated = function(context, record)
+			-- Ensure movement is restored when participant is eliminated
+			sendStatusUpdate({
+				action = "SpecialEventEffect",
+				id = "InvertedControl",
+				inverted = false,
+			})
+		end,
 	})
 
-	registerSpecialEvent(KillBotEvent.create({
-		getNeutralParticipantRecords = getNeutralParticipantRecords,
-		getActiveMapBounds = getActiveMapBounds,
-		RunService = RunService,
-		Workspace = Workspace,
-		Debris = Debris,
-		isRoundActive = function(roundId: number)
-			return roundInProgress and roundId == currentRoundId
+	registerSpecialEvent({
+		id = "KillBot",
+		displayName = "🤖 KillBot",
+		onRoundPrepared = function(context)
+			local state = {
+				bots = {},
+				rockets = {},
+				heartbeatConn = nil :: RBXScriptConnection?,
+			}
+			context.state.KillBot = state
+
+			local cf, _ = getActiveMapBounds()
+			local origin = cf.Position
+			local killBotRandom = Random.new()
+
+			-- Original Roblox KillBot settings
+			local BOT_SPEED = 30
+			local BOT_SIZE = Vector3.new(6, 6, 6)
+			local BOT_COLOR = Color3.fromRGB(255, 0, 0)
+			local BOT_MATERIAL = Enum.Material.Neon
+			local BOT_COUNT = 3
+			local MISSILE_DELAY = 0.75
+			local MISSILE_SPEED = 35
+			local MISSILE_DAMAGE = 50
+			local MISSILE_BLAST_RADIUS = 15
+			local MOVE_INTERVAL = 2.0
+			local STOP_INTERVAL = 3.0
+
+			local function hasLineOfSight(botPosition: Vector3, targetPosition: Vector3): boolean
+				local direction = targetPosition - botPosition
+				local distance = direction.Magnitude
+				if distance == 0 then
+					return true
+				end
+
+				local params = RaycastParams.new()
+				params.FilterType = Enum.RaycastFilterType.Blacklist
+				params.FilterDescendantsInstances = {activeMapModel}
+
+				local result = Workspace:Raycast(botPosition, direction, params)
+				if not result then
+					return true
+				end
+
+				return (result.Position - targetPosition).Magnitude < 5
+			end
+
+			local function findNearestPlayer(botPosition: Vector3): Player?
+				local nearestPlayer: Player? = nil
+				local nearestDistance = math.huge
+
+				for _, record in ipairs(getNeutralParticipantRecords()) do
+					local character = record.player.Character
+					if not character then
+						continue
+					end
+
+					local humanoid = record.humanoid or character:FindFirstChildOfClass("Humanoid")
+					if not humanoid or humanoid.Health <= 0 then
+						continue
+					end
+
+					local hrp = character:FindFirstChild("HumanoidRootPart")
+					if not hrp or not hrp:IsA("BasePart") then
+						continue
+					end
+
+					local distance = (hrp.Position - botPosition).Magnitude
+					if distance < nearestDistance then
+						nearestDistance = distance
+						nearestPlayer = record.player
+					end
+				end
+
+				return nearestPlayer
+			end
+
+			local function getRandomPosition(): Vector3
+				local stormSize = getStormHorizontalSize()
+				local radiusX = stormSize.X / 2
+				local radiusZ = stormSize.Y / 2
+				
+				return Vector3.new(
+					killBotRandom:NextNumber(-radiusX, radiusX),
+					killBotRandom:NextNumber(100, 200),
+					killBotRandom:NextNumber(-radiusZ, radiusZ)
+				)
+			end
+
+			local function damageInRadius(center: Vector3, radius: number)
+				local params = OverlapParams.new()
+				for _, part in ipairs(Workspace:GetPartBoundsInRadius(center, radius, params)) do
+					local parent = part.Parent
+					if not parent then
+						continue
+					end
+
+					local humanoid = parent:FindFirstChildWhichIsA("Humanoid")
+					if not humanoid and parent.Parent then
+						humanoid = parent.Parent:FindFirstChildWhichIsA("Humanoid")
+					end
+
+					if humanoid and humanoid.Health > 0 then
+						local character = humanoid.Parent
+						local hrp = character and character:FindFirstChild("HumanoidRootPart")
+						if hrp then
+							local distance = (hrp.Position - center).Magnitude
+							if distance <= radius then
+								local damage = math.clamp(MISSILE_DAMAGE * (1 - (distance / radius)), 10, MISSILE_DAMAGE)
+								humanoid:TakeDamage(damage)
+							end
+						end
+					end
+				end
+			end
+
+			local function createRocket(botState, targetPosition: Vector3)
+				local botPart = botState.part
+				if not botPart or not botPart.Parent then
+					return false
+				end
+
+				local rocket = Instance.new("Part")
+				rocket.Name = "KillBotRocket"
+				rocket.Shape = Enum.PartType.Block
+				rocket.Size = Vector3.new(3, 1, 1)
+				rocket.Material = Enum.Material.Neon
+				rocket.Color = Color3.fromRGB(255, 100, 100)
+				rocket.CanCollide = false
+				rocket.CanQuery = false
+				rocket.CanTouch = true
+				rocket.Anchored = false
+				rocket.Massless = true
+
+				local launchOrigin = botPart.Position
+				local toTarget = targetPosition - launchOrigin
+				local targetDirection = toTarget.Unit
+				local spawnPosition = launchOrigin + targetDirection * 3
+
+				rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + targetDirection)
+				rocket.Parent = Workspace
+				rocket:SetNetworkOwner(nil)
+
+				-- Calculate trajectory with gravity compensation
+				local distance = toTarget.Magnitude
+				local timeToTarget = distance / MISSILE_SPEED
+				local gravityCompensation = Vector3.new(0, Workspace.Gravity * timeToTarget * 0.5, 0)
+				
+				rocket.AssemblyLinearVelocity = (targetDirection * MISSILE_SPEED) + gravityCompensation
+
+				local detonated = false
+				local function explode()
+					if detonated then
+						return
+					end
+
+					detonated = true
+
+					local explosion = Instance.new("Explosion")
+					explosion.BlastRadius = MISSILE_BLAST_RADIUS
+					explosion.BlastPressure = 0
+					explosion.DestroyJointRadiusPercent = 0
+					explosion.Position = rocket.Position
+					explosion.Parent = Workspace
+
+					damageInRadius(rocket.Position, MISSILE_BLAST_RADIUS)
+
+					if rocket.Parent then
+						rocket:Destroy()
+					end
+				end
+
+				rocket.Touched:Connect(function(hit)
+					if detonated then
+						return
+					end
+
+					-- Don't collide with other KillBots or rockets
+					if hit and hit.Parent then
+						local parent = hit.Parent
+						if parent:IsA("Model") then
+							-- Check if it's a KillBot
+							if parent.Name:find("KillBot") then
+								return
+							end
+							-- Check if it's a rocket
+							if hit.Name == "KillBotRocket" then
+								return
+							end
+							
+							local humanoid = parent:FindFirstChildOfClass("Humanoid")
+							if humanoid and humanoid.Health > 0 then
+								explode()
+							end
+						elseif hit.Name == "KillBotRocket" then
+							return
+						else
+							-- Hit any other part (walls, ground, etc.)
+							explode()
+						end
+					else
+						-- Hit something without a parent
+						explode()
+					end
+				end)
+
+				-- Add a BodyVelocity to maintain trajectory
+				local bodyVelocity = Instance.new("BodyVelocity")
+				bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+				bodyVelocity.Velocity = rocket.AssemblyLinearVelocity
+				bodyVelocity.Parent = rocket
+
+				-- Update velocity to track target
+				local connection
+				connection = RunService.Heartbeat:Connect(function()
+					if detonated or not rocket.Parent then
+						connection:Disconnect()
+						return
+					end
+
+					-- Recalculate target direction
+					local currentPos = rocket.Position
+					local newTargetPos = targetPosition
+					local newDirection = (newTargetPos - currentPos).Unit
+					
+					-- Update velocity to track target
+					bodyVelocity.Velocity = newDirection * MISSILE_SPEED
+				end)
+
+				rocket.Destroying:Connect(function()
+					detonated = true
+					if connection then
+						connection:Disconnect()
+					end
+				end)
+
+				-- Auto-explode after 8 seconds
+				task.delay(8, function()
+					if not detonated and rocket.Parent then
+						explode()
+					end
+				end)
+
+				Debris:AddItem(rocket, 8)
+
+				table.insert(state.rockets, function()
+					if not detonated and rocket.Parent then
+						rocket:Destroy()
+					end
+				end)
+
+				return true
+			end
+
+			local function createKillBot(index: number)
+				local model = Instance.new("Model")
+				model.Name = string.format("KillBot_%d", index)
+
+				local botPart = Instance.new("Part")
+				botPart.Name = "BotPart"
+				botPart.Shape = Enum.PartType.Ball
+				botPart.Size = BOT_SIZE
+				botPart.Material = BOT_MATERIAL
+				botPart.Color = BOT_COLOR
+				botPart.CanCollide = false
+				botPart.CanTouch = false
+				botPart.CanQuery = false
+				botPart.Anchored = false
+				botPart.Massless = true
+
+				local spawnPosition = getRandomPosition()
+				botPart.CFrame = CFrame.new(spawnPosition)
+				botPart.Parent = model
+				model.PrimaryPart = botPart
+				model.Parent = Workspace
+
+				botPart:SetNetworkOwner(nil)
+
+				local botState = {
+					model = model,
+					part = botPart,
+					target = nil :: Player?,
+					velocity = Vector3.zero,
+					lastMoveTime = 0,
+					lastStopTime = 0,
+					lastMissileTime = 0,
+					currentTarget = Vector3.zero,
+					isMoving = false,
+					isStopped = false,
+				}
+
+				model.Destroying:Connect(function()
+					botState.part = nil
+				end)
+
+				table.insert(state.bots, botState)
+			end
+
+			-- Spawn bots
+			for index = 1, BOT_COUNT do
+				createKillBot(index)
+			end
+
+			-- Main bot AI loop
+			state.heartbeatConn = RunService.Heartbeat:Connect(function(dt)
+				if not roundInProgress or context.roundId ~= currentRoundId then
+					return
+				end
+
+				for _, botState in ipairs(state.bots) do
+					local botPart = botState.part
+					if not botPart or not botPart.Parent then
+						continue
+					end
+
+					local botPosition = botPart.Position
+					local currentTime = os.clock()
+					local targetPlayer = findNearestPlayer(botPosition)
+
+					-- Random movement behavior
+					if not botState.isMoving and not botState.isStopped then
+						-- Start moving to a random position
+						botState.currentTarget = getRandomPosition()
+						botState.isMoving = true
+						botState.lastMoveTime = currentTime
+					elseif botState.isMoving then
+						-- Check if we've reached the target or time to stop
+						local distanceToTarget = (botState.currentTarget - botPosition).Magnitude
+						if distanceToTarget < 10 or currentTime - botState.lastMoveTime >= MOVE_INTERVAL then
+							-- Stop and wait
+							botState.isMoving = false
+							botState.isStopped = true
+							botState.lastStopTime = currentTime
+							botState.velocity = Vector3.zero
+						else
+							-- Continue moving towards target
+							local direction = (botState.currentTarget - botPosition).Unit
+							botState.velocity = direction * BOT_SPEED
+						end
+					elseif botState.isStopped then
+						-- Check if it's time to start moving again
+						if currentTime - botState.lastStopTime >= STOP_INTERVAL then
+							botState.isStopped = false
+						else
+							botState.velocity = Vector3.zero
+						end
+					end
+
+					-- Fire missiles at nearest player while stopped
+					if botState.isStopped and targetPlayer and targetPlayer.Character then
+						local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+						if targetHRP and targetHRP:IsA("BasePart") then
+							local targetPosition = targetHRP.Position
+							local hasLOS = hasLineOfSight(botPosition, targetPosition)
+							
+							if hasLOS and currentTime - botState.lastMissileTime >= MISSILE_DELAY then
+								createRocket(botState, targetPosition)
+								botState.lastMissileTime = currentTime
+							end
+						end
+					end
+
+					-- Apply velocity
+					botPart.AssemblyLinearVelocity = botState.velocity
+
+					-- Keep bot flying (above ground)
+					if botPosition.Y < 20 then
+						botPart.AssemblyLinearVelocity = botPart.AssemblyLinearVelocity + Vector3.new(0, 15, 0)
+					end
+				end
+			end)
 		end,
-	}))
+		onRoundEnded = function(context)
+			local state = context.state.KillBot
+			if not state then
+				return
+			end
+
+			if state.heartbeatConn then
+				state.heartbeatConn:Disconnect()
+				state.heartbeatConn = nil
+			end
+
+			for _, botState in ipairs(state.bots) do
+				if botState.model and botState.model.Parent then
+					botState.model:Destroy()
+				elseif botState.part and botState.part.Parent then
+					botState.part:Destroy()
+				end
+			end
+
+			for _, cleanup in ipairs(state.rockets) do
+				local ok, err = pcall(cleanup)
+				if not ok then
+					warn("KillBot rocket cleanup error", err)
+				end
+			end
+
+			state.bots = {}
+			state.rockets = {}
+			context.state.KillBot = nil
+		end,
+	})
 
 	registerSpecialEvent({
 		id = "HotTouch",
-		displayName = "Hot Touch??",
+		displayName = "🔥 Hot Touch",
 		ignoreDefaultGear = true,
 		onCountdownComplete = function(context)
 			local state = context.state
@@ -2685,6 +3092,32 @@ local function onPlayerAdded(player: Player)
 
 	player.CharacterAdded:Connect(function(character)
 		onCharacterAdded(player, character)
+		
+		-- Wait for character to fully load
+		task.wait(0.5)
+		
+		-- Reset any special event effects when player respawns
+		sendStatusUpdate({
+			action = "SpecialEventEffect",
+			id = "InvertedControl",
+			inverted = false,
+		})
+		sendStatusUpdate({
+			action = "SpecialEventEffect",
+			id = "SprintProhibit",
+			sprintDisabled = false,
+		})
+		sendStatusUpdate({
+			action = "SpecialEventEffect",
+			id = "Invisible",
+			invisible = false,
+		})
+		
+		-- Force reset movement for this specific player
+		roundStateRemote:FireClient(player, {
+			action = "ResetMovement",
+			playerId = player.UserId,
+		})
 	end)
 
 	player.CharacterAppearanceLoaded:Connect(function(character)
