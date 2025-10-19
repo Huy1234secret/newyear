@@ -872,7 +872,7 @@ do
                         local BOT_COUNT = 3
                         local MIN_MOVE_DISTANCE = 100
                         local MAX_MOVE_DISTANCE = 500
-                        local MAX_MISSILES_PER_BOT = 3
+                        local MAX_ACTIVE_MISSILES_PER_BOT = 3
                         local BOT_COLOR_PALETTE = {
                                 Color3.fromRGB(255, 75, 75),
                                 Color3.fromRGB(255, 200, 90),
@@ -1228,11 +1228,22 @@ do
                                         return false
                                 end
 
-                                if botState.rocketsFired >= MAX_MISSILES_PER_BOT then
+                                if botState.activeRockets >= MAX_ACTIVE_MISSILES_PER_BOT then
                                         return false
                                 end
 
-                                botState.rocketsFired += 1
+                                botState.activeRockets += 1
+
+                                local rocketFinished = false
+                                local function markRocketFinished()
+                                        if rocketFinished then
+                                                return
+                                        end
+                                        rocketFinished = true
+                                        if botState.activeRockets > 0 then
+                                                botState.activeRockets -= 1
+                                        end
+                                end
 
                                 local rocket = Instance.new("Part")
                                 rocket.Name = "KillBotRocket"
@@ -1296,6 +1307,7 @@ do
                                         end
 
                                         detonated = true
+                                        markRocketFinished()
 
                                         if flightConnection then
                                                 flightConnection:Disconnect()
@@ -1429,6 +1441,7 @@ do
                                 end)
 
                                 rocket.Destroying:Connect(function()
+                                        markRocketFinished()
                                         if flightConnection then
                                                 flightConnection:Disconnect()
                                                 flightConnection = nil
@@ -1446,6 +1459,7 @@ do
                                 end)
 
                                 table.insert(state.rockets, function()
+                                        markRocketFinished()
                                         if flightConnection then
                                                 flightConnection:Disconnect()
                                                 flightConnection = nil
@@ -1496,7 +1510,7 @@ do
                                         isMoving = false,
                                         isStopped = false,
                                         moveSpeed = killBotRandom:NextNumber(MIN_BOT_SPEED, MAX_BOT_SPEED),
-                                        rocketsFired = 0,
+                                        activeRockets = 0,
                                         travelEndTime = 0,
                                 }
 
@@ -1587,7 +1601,7 @@ do
                                                         local hasLOS = hasLineOfSight(botPosition, targetPosition)
 
                                                         if hasLOS and currentTime - botState.lastMissileTime >= MISSILE_DELAY then
-                                                                if botState.rocketsFired < MAX_MISSILES_PER_BOT then
+                                                                if botState.activeRockets < MAX_ACTIVE_MISSILES_PER_BOT then
                                                                         local created = createRocket(botState, targetPosition)
                                                                         if created then
                                                                                 botState.lastMissileTime = currentTime
