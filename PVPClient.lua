@@ -90,8 +90,10 @@ local function createInstance(className: string, props: {[string]: any})
 	return instance
 end
 
-local playerModule: any = nil
-local playerControls: any = nil
+local playerControlState = {
+        module = nil :: any,
+        controls = nil :: any,
+}
 
 local function setBackpackCoreGuiEnabled(enabled: boolean)
 	local success, result = pcall(function()
@@ -122,13 +124,14 @@ else
 end
 
 local function getPlayerControls()
-	if playerControls then
-		return playerControls
-	end
+        local existingControls = playerControlState.controls
+        if existingControls then
+                return existingControls
+        end
 
-	local success, moduleOrErr = pcall(function()
-		local playerScripts = localPlayer:WaitForChild("PlayerScripts", 5)
-		if not playerScripts then
+        local success, moduleOrErr = pcall(function()
+                local playerScripts = localPlayer:WaitForChild("PlayerScripts", 5)
+                if not playerScripts then
 			return nil
 		end
 		local moduleScript = playerScripts:FindFirstChild("PlayerModule")
@@ -142,21 +145,21 @@ local function getPlayerControls()
 	end)
 
 	if not success or not moduleOrErr then
-		warn("Unable to load PlayerModule for inverted controls.")
-		return nil
-	end
+                warn("Unable to load PlayerModule for inverted controls.")
+                return nil
+        end
 
-	playerModule = moduleOrErr
-	local controls = nil
-	local ok, result = pcall(function()
-		return playerModule:GetControls()
-	end)
-	if ok then
-		controls = result
-	end
+        playerControlState.module = moduleOrErr
+        local controls = nil
+        local ok, result = pcall(function()
+                return moduleOrErr:GetControls()
+        end)
+        if ok then
+                controls = result
+        end
 
-	playerControls = controls
-	return controls
+        playerControlState.controls = controls
+        return controls
 end
 
 local GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
@@ -263,12 +266,16 @@ local uiRefs: UiRefs = {
 	sprintActionButton = nil,
 }
 
-local inventoryVisible = true
-local inventoryAutoOpened = false
+local inventoryVisibility = {
+        isVisible = true,
+        autoOpened = false,
+}
 local setInventoryVisibility: (boolean) -> ()
 
-local hotTouchActive = false
-local currentHotTouchHolderId: number? = nil
+local hotTouchState = {
+        active = false,
+        holderId = nil :: number?,
+}
 
 local function refreshHotTouchStatusVisibility()
 	local label = uiRefs.hotTouchStatusLabel
@@ -282,11 +289,11 @@ local function refreshHotTouchStatusVisibility()
 		return
 	end
 
-	if not hotTouchActive or label.Text == "" then
-		label.Visible = false
-	else
-		label.Visible = true
-	end
+        if not hotTouchState.active or label.Text == "" then
+                label.Visible = false
+        else
+                label.Visible = true
+        end
 end
 
 local function setHotTouchStatusText(text: string?)
@@ -870,21 +877,21 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 				return
 			end
 
-			if inventoryVisible then
-				button.ImageTransparency = 0
-				button.ImageColor3 = Color3.fromRGB(255, 255, 255)
-			else
-				button.ImageTransparency = 0.2
-				button.ImageColor3 = Color3.fromRGB(200, 205, 220)
+                        if inventoryVisibility.isVisible then
+                                button.ImageTransparency = 0
+                                button.ImageColor3 = Color3.fromRGB(255, 255, 255)
+                        else
+                                button.ImageTransparency = 0.2
+                                button.ImageColor3 = Color3.fromRGB(200, 205, 220)
 			end
 		end
 
-		state.setVisibility = function(visible: boolean)
-			inventoryVisible = visible
+                state.setVisibility = function(visible: boolean)
+                        inventoryVisibility.isVisible = visible
 
-			if refs.inventoryFrame then
-				refs.inventoryFrame.Visible = visible
-			end
+                        if refs.inventoryFrame then
+                                refs.inventoryFrame.Visible = visible
+                        end
 
 			updateInventoryToggleVisual()
 		end
@@ -904,12 +911,12 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 			})
 
 			refs.inventoryToggleButton.Activated:Connect(function()
-				if state.setVisibility then
-					state.setVisibility(not inventoryVisible)
-				end
-				inventoryAutoOpened = true
-			end)
-		end
+                                if state.setVisibility then
+                                        state.setVisibility(not inventoryVisibility.isVisible)
+                                end
+                                inventoryVisibility.autoOpened = true
+                        end)
+                end
 
 		if state.setVisibility then
 			state.setVisibility(not isTouch)
@@ -1050,11 +1057,11 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 
 			inventorySlots[slotIndex] = slotUI
 		end
-	else
-		state.setVisibility = function(visible: boolean)
-			inventoryVisible = visible
-		end
-	end
+        else
+                state.setVisibility = function(visible: boolean)
+                        inventoryVisibility.isVisible = visible
+                end
+        end
 
 	return state
 end
@@ -1163,26 +1170,28 @@ local function showHotTouchAlert()
 end
 
 local function setHotTouchActive(active: boolean)
-	if hotTouchActive == active then
-		refreshHotTouchStatusVisibility()
-		return
-	end
+        if hotTouchState.active == active then
+                refreshHotTouchStatusVisibility()
+                return
+        end
 
-	hotTouchActive = active
-	if not hotTouchActive then
-		currentHotTouchHolderId = nil
-		setHotTouchStatusText(nil)
-		stopHotTouchAlert()
-	else
-		refreshHotTouchStatusVisibility()
-	end
+        hotTouchState.active = active
+        if not hotTouchState.active then
+                hotTouchState.holderId = nil
+                setHotTouchStatusText(nil)
+                stopHotTouchAlert()
+        else
+                refreshHotTouchStatusVisibility()
+        end
 end
 
 local defaultColor = statusUI.label.TextColor3
-local countdownColor = Color3.fromRGB(245, 245, 255)
-local matchColor = Color3.fromRGB(210, 235, 255)
-local deathMatchBackground = Color3.fromRGB(60, 10, 10)
-local deathMatchStroke = Color3.fromRGB(255, 90, 90)
+local colorPalette = {
+        countdown = Color3.fromRGB(245, 245, 255),
+        match = Color3.fromRGB(210, 235, 255),
+        deathMatchBackground = Color3.fromRGB(60, 10, 10),
+        deathMatchStroke = Color3.fromRGB(255, 90, 90),
+}
 local highlightStyles = {
 	Spectate = {
 		outlineColor = Color3.fromRGB(255, 255, 255),
@@ -2771,12 +2780,12 @@ updateInventorySlots = function()
 	trackedGearOrder = cleanedOrder
 
 	local toolCount = #trackedGearOrder
-	if toolCount == 0 then
-		inventoryAutoOpened = false
-	elseif isTouchDevice and not inventoryVisible and not inventoryAutoOpened then
-		inventoryAutoOpened = true
-		setInventoryVisibility(true)
-	end
+        if toolCount == 0 then
+                inventoryVisibility.autoOpened = false
+        elseif isTouchDevice and not inventoryVisibility.isVisible and not inventoryVisibility.autoOpened then
+                inventoryVisibility.autoOpened = true
+                setInventoryVisibility(true)
+        end
 
 	for slotIndex = 1, 10 do
 		local slot = inventorySlots[slotIndex]
@@ -3437,7 +3446,7 @@ local function stopFlash()
 		flashConnection = nil
 	end
 
-	statusUI.label.TextColor3 = matchColor
+                statusUI.label.TextColor3 = colorPalette.match
 	statusUI.labelStroke.Color = Color3.fromRGB(20, 20, 35)
 	statusUI.labelStroke.Transparency = 0.3
 end
@@ -3528,10 +3537,10 @@ end
 
 local function startDeathMatchEffect()
 	stopFlash()
-	stopShake()
+        stopShake()
 
-	statusUI.frame.BackgroundColor3 = deathMatchBackground
-	statusUI.stroke.Color = deathMatchStroke
+        statusUI.frame.BackgroundColor3 = colorPalette.deathMatchBackground
+        statusUI.stroke.Color = colorPalette.deathMatchStroke
 	statusUI.stroke.Transparency = 0
 	statusUI.frame.BackgroundTransparency = 1
 	statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
@@ -4162,8 +4171,8 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		stopFlash()
 		resetFrameVisual()
 		statusUI.frame.BackgroundTransparency = UI_CONFIG.DEFAULT_BACKGROUND_TRANSPARENCY
-		statusUI.frame.Visible = true
-		statusUI.label.TextColor3 = countdownColor
+                statusUI.frame.Visible = true
+                statusUI.label.TextColor3 = colorPalette.countdown
 		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
 		statusUI.label.Text = formatCountdown(currentRemaining)
 		statusUI.labelStroke.Transparency = 0.1
@@ -4171,7 +4180,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		currentRemaining = math.max(0, math.floor(tonumber(payload.remaining) or 0))
 		statusUI.frame.Visible = true
 		resetFrameVisual()
-		statusUI.label.TextColor3 = matchColor
+                statusUI.label.TextColor3 = colorPalette.match
 		statusUI.label.Text = formatTimer(currentRemaining)
 
 		if currentRemaining <= 30 then
@@ -4184,18 +4193,18 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		stopShake()
 		statusUI.frame.Visible = true
 		resetFrameVisual()
-		statusUI.label.TextColor3 = matchColor
+                statusUI.label.TextColor3 = colorPalette.match
 		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
 		statusUI.label.Text = if typeof(payload.text) == "string" then payload.text else ""
 		statusUI.labelStroke.Transparency = 0.2
 	elseif action == "DeathMatchTransition" then
 		stopFlash()
 		stopShake()
-		statusUI.frame.Visible = true
-		statusUI.frame.BackgroundColor3 = deathMatchBackground
-		statusUI.stroke.Color = deathMatchStroke
+                statusUI.frame.Visible = true
+                statusUI.frame.BackgroundColor3 = colorPalette.deathMatchBackground
+                statusUI.stroke.Color = colorPalette.deathMatchStroke
 		statusUI.stroke.Transparency = 0
-		statusUI.label.TextColor3 = matchColor
+                statusUI.label.TextColor3 = colorPalette.match
 		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
 		statusUI.label.Text = "Death Match"
 		statusUI.frame.BackgroundTransparency = 1
@@ -4230,7 +4239,7 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		resetFrameVisual()
 		setHotTouchActive(false)
 		statusUI.frame.Visible = true
-		statusUI.label.TextColor3 = countdownColor
+                statusUI.label.TextColor3 = colorPalette.countdown
 		statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
 		statusUI.label.Text = "Intermission"
 		statusUI.labelStroke.Transparency = 0.3
@@ -4331,27 +4340,27 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		end
 	elseif action == "HotTouchStatus" then
 		local state = if typeof(payload.state) == "string" then payload.state else ""
-		if state == "Holder" then
-			local userId = if typeof(payload.userId) == "number" then payload.userId elseif typeof(payload.userId) == "string" then tonumber(payload.userId) else nil
-			currentHotTouchHolderId = userId
-			local name = if typeof(payload.displayName) == "string" then payload.displayName elseif typeof(payload.name) == "string" then payload.name else "Someone"
-			setHotTouchActive(true)
-			setHotTouchStatusText(string.format("%s has the BOMB!", name))
-		elseif state == "Selecting" then
-			currentHotTouchHolderId = nil
-			setHotTouchActive(true)
-			setHotTouchStatusText("Selecting random...")
-		elseif state == "Complete" then
-			currentHotTouchHolderId = nil
-			setHotTouchActive(true)
-			setHotTouchStatusText("GG")
-		elseif state == "Clear" then
-			currentHotTouchHolderId = nil
-			setHotTouchActive(false)
-		else
-			currentHotTouchHolderId = nil
-			setHotTouchStatusText(nil)
-		end
+                if state == "Holder" then
+                        local userId = if typeof(payload.userId) == "number" then payload.userId elseif typeof(payload.userId) == "string" then tonumber(payload.userId) else nil
+                        hotTouchState.holderId = userId
+                        local name = if typeof(payload.displayName) == "string" then payload.displayName elseif typeof(payload.name) == "string" then payload.name else "Someone"
+                        setHotTouchActive(true)
+                        setHotTouchStatusText(string.format("%s has the BOMB!", name))
+                elseif state == "Selecting" then
+                        hotTouchState.holderId = nil
+                        setHotTouchActive(true)
+                        setHotTouchStatusText("Selecting random...")
+                elseif state == "Complete" then
+                        hotTouchState.holderId = nil
+                        setHotTouchActive(true)
+                        setHotTouchStatusText("GG")
+                elseif state == "Clear" then
+                        hotTouchState.holderId = nil
+                        setHotTouchActive(false)
+                else
+                        hotTouchState.holderId = nil
+                        setHotTouchStatusText(nil)
+                end
 	elseif action == "HotTouchTagged" then
 		local taggedUserId = if typeof(payload.userId) == "number" then payload.userId elseif typeof(payload.userId) == "string" then tonumber(payload.userId) else nil
 		if taggedUserId and localPlayer.UserId == taggedUserId then
