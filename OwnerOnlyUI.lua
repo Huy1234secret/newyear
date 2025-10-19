@@ -124,21 +124,16 @@ local specialEventOptions: {EventDefinition} = {
 		displayName = "🤖 KillBot",
 		description = "Three rogue bots patrol the arena.",
 	},
-	{
-		id = "RainingBomb",
-		displayName = "💣 Raining Bomb",
-		description = "Explosive hail falls from the sky.",
-	},
-	{
-		id = "InvertedControl",
-		displayName = "🔄 Inverted Control",
-		description = "Movement input is flipped for Neutral players.",
-	},
-	{
-		id = "HotTouch",
-		displayName = "🔥 Hot Touch",
-		description = "Pass the explosive countdown or perish.",
-	},
+        {
+                id = "RainingBomb",
+                displayName = "💣 Raining Bomb",
+                description = "Explosive hail falls from the sky.",
+        },
+        {
+                id = "HotTouch",
+                displayName = "🔥 Hot Touch",
+                description = "Pass the explosive countdown or perish.",
+        },
 }
 
 local eventDefinitionById: {[string]: EventDefinition} = {}

@@ -767,49 +767,95 @@ do
 		end,
 	})
 
-	registerSpecialEvent({
-		id = "RainingBomb",
-		displayName = "💣 Raining Bomb",
-		onCountdownComplete = function(context)
-			local state = context.state
-			if state.RainingBomb and state.RainingBomb.active then
-				return
-			end
+        registerSpecialEvent({
+                id = "RainingBomb",
+                displayName = "💣 Raining Bomb",
+                onCountdownComplete = function(context)
+                        local state = context.state
+                        if state.RainingBomb and state.RainingBomb.active then
+                                return
+                        end
 
-			local running = true
-			local activeBombs: {[BasePart]: boolean} = {}
+                        local difficultySettings = {
+                                {spawnInterval = 1, blastRadius = 8, countdownTime = 3},
+                                {spawnInterval = 0.75, blastRadius = 10, countdownTime = 3},
+                                {spawnInterval = 0.5, blastRadius = 12, countdownTime = 2.25},
+                                {spawnInterval = 0.4, blastRadius = 13, countdownTime = 2.25},
+                                {spawnInterval = 0.3, blastRadius = 15, countdownTime = 1.75},
+                        }
 
-			local function removeBomb(bomb: BasePart?, alreadyDestroying: boolean?)
-				if not bomb then
-					return
-				end
+                        local difficultyRng = Random.new()
+                        local difficultyIndex = difficultyRng:NextInteger(1, #difficultySettings)
+                        local config = difficultySettings[difficultyIndex] or difficultySettings[1]
 
-				if activeBombs[bomb] then
-					activeBombs[bomb] = nil
-				end
+                        sendStatusUpdate({
+                                action = "SpecialEventDifficulty",
+                                id = context.definition.id,
+                                name = context.definition.displayName,
+                                difficulty = difficultyIndex,
+                                rollDuration = 2.4,
+                                displaySeconds = 3,
+                        })
 
-				if not alreadyDestroying and bomb.Parent then
-					bomb:Destroy()
-				end
-			end
+                        local running = true
+                        local activeBombs: {[BasePart]: boolean} = {}
 
-			local function createExplosion(bomb: BasePart)
-				local explosion = Instance.new("Explosion")
-				explosion.BlastRadius = 12
-				explosion.BlastPressure = 500000
-				explosion.Position = bomb.Position
-				explosion.Parent = Workspace
-				removeBomb(bomb)
-			end
+                        local function removeBomb(bomb: BasePart?, alreadyDestroying: boolean?)
+                                if not bomb then
+                                        return
+                                end
 
-			state.RainingBomb = {
-				active = true,
-				bombs = activeBombs,
-				stop = function()
-					running = false
-					for part in pairs(activeBombs) do
-						removeBomb(part)
-					end
+                                if activeBombs[bomb] then
+                                        activeBombs[bomb] = nil
+                                end
+
+                                if not alreadyDestroying and bomb.Parent then
+                                        bomb:Destroy()
+                                end
+                        end
+
+                        local function playExplosionSound(position: Vector3)
+                                local soundAnchor = Instance.new("Part")
+                                soundAnchor.Anchored = true
+                                soundAnchor.CanCollide = false
+                                soundAnchor.CanQuery = false
+                                soundAnchor.CanTouch = false
+                                soundAnchor.Transparency = 1
+                                soundAnchor.Size = Vector3.new(0.1, 0.1, 0.1)
+                                soundAnchor.CFrame = CFrame.new(position)
+                                soundAnchor.Parent = Workspace
+
+                                local sound = Instance.new("Sound")
+                                sound.Name = "RainingBombExplosion"
+                                sound.SoundId = "rbxassetid://129988148028967"
+                                sound.Volume = 1
+                                sound.RollOffMaxDistance = 140
+                                sound.Parent = soundAnchor
+                                sound:Play()
+
+                                Debris:AddItem(soundAnchor, math.max(sound.TimeLength, 2))
+                        end
+
+                        local function createExplosion(bomb: BasePart)
+                                local explosion = Instance.new("Explosion")
+                                explosion.BlastRadius = config.blastRadius or 12
+                                explosion.BlastPressure = 500000
+                                explosion.Position = bomb.Position
+                                explosion.Parent = Workspace
+                                playExplosionSound(bomb.Position)
+                                removeBomb(bomb)
+                        end
+
+                        state.RainingBomb = {
+                                active = true,
+                                bombs = activeBombs,
+                                difficulty = difficultyIndex,
+                                config = config,
+                                stop = function()
+                                        running = false
+                                        for part in pairs(activeBombs) do
+                                                removeBomb(part)
+                                        end
 				end,
 			}
 
@@ -817,12 +863,12 @@ do
 			local cf, _ = getActiveMapBounds()
 			local origin = cf.Position
 
-			task.spawn(function()
-				local rng = Random.new()
-				while running and roundInProgress and context.roundId == currentRoundId do
-					local offsetX = rng:NextNumber(-stormSize.X / 2, stormSize.X / 2)
-					local offsetZ = rng:NextNumber(-stormSize.Y / 2, stormSize.Y / 2)
-					local spawnPosition = Vector3.new(origin.X + offsetX, origin.Y + 120, origin.Z + offsetZ)
+                        task.spawn(function()
+                                local spawnDelay = math.max(config.spawnInterval or 0.5, 0.1)
+                                while running and roundInProgress and context.roundId == currentRoundId do
+                                        local offsetX = rng:NextNumber(-stormSize.X / 2, stormSize.X / 2)
+                                        local offsetZ = rng:NextNumber(-stormSize.Y / 2, stormSize.Y / 2)
+                                        local spawnPosition = Vector3.new(origin.X + offsetX, origin.Y + 120, origin.Z + offsetZ)
 
 					local bomb = Instance.new("Part")
 					bomb.Shape = Enum.PartType.Ball
@@ -860,17 +906,17 @@ do
 							return
 						end
 
-						countdownStarted = true
-						bomb.Anchored = false
-						bomb.AssemblyLinearVelocity *= 0.5
-						bomb.AssemblyAngularVelocity *= 0.5
+                                                countdownStarted = true
+                                                bomb.Anchored = false
+                                                bomb.AssemblyLinearVelocity *= 0.5
+                                                bomb.AssemblyAngularVelocity *= 0.5
 
-						local totalDuration = 3
-						local startTime = os.clock()
-						local flashStyles = {
-							{color = Color3.fromRGB(0, 0, 0), material = Enum.Material.SmoothPlastic},
-							{color = Color3.fromRGB(255, 0, 0), material = Enum.Material.Neon},
-						}
+                                                local totalDuration = config.countdownTime or 3
+                                                local startTime = os.clock()
+                                                local flashStyles = {
+                                                        {color = Color3.fromRGB(0, 0, 0), material = Enum.Material.SmoothPlastic},
+                                                        {color = Color3.fromRGB(255, 0, 0), material = Enum.Material.Neon},
+                                                }
 
 						task.spawn(function()
 							local flashIndex = 1
@@ -903,13 +949,13 @@ do
 							return
 						end
 						startCountdown()
-					end)
+                                        end)
 
-					Debris:AddItem(bomb, 15)
-					task.wait(0.5)
-				end
-			end)
-		end,
+                                        Debris:AddItem(bomb, 15)
+                                        task.wait(spawnDelay)
+                                end
+                        end)
+                end,
 		onRoundEnded = function(context)
 			local state = context.state.RainingBomb
 			if state then
@@ -928,65 +974,55 @@ do
 		end,
 	})
 
-	registerSpecialEvent({
-		id = "InvertedControl",
-		displayName = "🔄 Inverted Control",
-		onRoundPrepared = function()
-			sendStatusUpdate({
-				action = "SpecialEventEffect",
-				id = "InvertedControl",
-				inverted = true,
-			})
-		end,
-		onRoundEnded = function()
-			sendStatusUpdate({
-				action = "SpecialEventEffect",
-				id = "InvertedControl",
-				inverted = false,
-			})
-		end,
-		onParticipantCleanup = function(context, record)
-			-- Ensure movement is restored when participant is cleaned up
-			sendStatusUpdate({
-				action = "SpecialEventEffect",
-				id = "InvertedControl",
-				inverted = false,
-			})
-		end,
-		onParticipantEliminated = function(context, record)
-			-- Ensure movement is restored when participant is eliminated
-			sendStatusUpdate({
-				action = "SpecialEventEffect",
-				id = "InvertedControl",
-				inverted = false,
-			})
-		end,
-	})
+        registerSpecialEvent({
+                id = "KillBot",
+                displayName = "🤖 KillBot",
+                onRoundPrepared = function(context)
+                        local state = {
+                                bots = {},
+                                rockets = {},
+                                heartbeatConn = nil :: RBXScriptConnection?,
+                                difficulty = 1,
+                                config = nil,
+                        }
+                        context.state.KillBot = state
 
-	registerSpecialEvent({
-		id = "KillBot",
-		displayName = "🤖 KillBot",
-		onRoundPrepared = function(context)
-			local state = {
-				bots = {},
-				rockets = {},
-				heartbeatConn = nil :: RBXScriptConnection?,
-			}
-			context.state.KillBot = state
+                        local cf, _ = getActiveMapBounds()
+                        local origin = cf.Position
+                        local killBotRandom = Random.new()
 
-			local cf, _ = getActiveMapBounds()
-			local origin = cf.Position
-			local killBotRandom = Random.new()
+                        local difficultySettings = {
+                                {botCount = 2, rocketsPerVolley = 1, missileSpeed = 65, maxActiveRockets = 1},
+                                {botCount = 3, rocketsPerVolley = 1, missileSpeed = 75, maxActiveRockets = 1},
+                                {botCount = 4, rocketsPerVolley = 2, missileSpeed = 90, maxActiveRockets = 2},
+                                {botCount = 5, rocketsPerVolley = 2, missileSpeed = 100, maxActiveRockets = 2},
+                                {botCount = 6, rocketsPerVolley = 3, missileSpeed = 120, maxActiveRockets = 3},
+                        }
 
-			-- Original Roblox KillBot settings
+                        local difficultyIndex = killBotRandom:NextInteger(1, #difficultySettings)
+                        local difficultyConfig = difficultySettings[difficultyIndex] or difficultySettings[1]
+                        state.difficulty = difficultyIndex
+                        state.config = difficultyConfig
+
+                        sendStatusUpdate({
+                                action = "SpecialEventDifficulty",
+                                id = context.definition.id,
+                                name = context.definition.displayName,
+                                difficulty = difficultyIndex,
+                                rollDuration = 2.4,
+                                displaySeconds = 3,
+                        })
+
+                        -- Original Roblox KillBot settings
                         local MIN_BOT_SPEED = 30
                         local MAX_BOT_SPEED = 100
                         local BOT_SIZE = Vector3.new(6, 6, 6)
                         local BOT_MATERIAL = Enum.Material.Neon
-                        local BOT_COUNT = 3
+                        local BOT_COUNT = difficultyConfig.botCount or 3
                         local MIN_MOVE_DISTANCE = 100
                         local MAX_MOVE_DISTANCE = 500
-                        local MAX_ACTIVE_MISSILES_PER_BOT = 3
+                        local MAX_ACTIVE_MISSILES_PER_BOT = math.max(difficultyConfig.maxActiveRockets or 1, 1)
+                        local ROCKETS_PER_VOLLEY = math.max(difficultyConfig.rocketsPerVolley or 1, 1)
                         local BOT_COLOR_PALETTE = {
                                 Color3.fromRGB(255, 75, 75),
                                 Color3.fromRGB(255, 200, 90),
@@ -995,11 +1031,11 @@ do
                                 Color3.fromRGB(60, 220, 150),
                         }
                         local MISSILE_DELAY = 0.75
-                        local MISSILE_SPEED = 55
+                        local MISSILE_SPEED = difficultyConfig.missileSpeed or 55
                         local MISSILE_DAMAGE = 50
                         local MISSILE_BLAST_RADIUS = 15
                         local MOVE_INTERVAL = 2.0
-			local STOP_INTERVAL = 3.0
+                        local STOP_INTERVAL = 3.0
 
 			local function hasLineOfSight(botPosition: Vector3, targetPosition: Vector3): boolean
 				local direction = targetPosition - botPosition
@@ -1715,10 +1751,16 @@ do
                                                         local hasLOS = hasLineOfSight(botPosition, targetPosition)
 
                                                         if hasLOS and currentTime - botState.lastMissileTime >= MISSILE_DELAY then
-                                                                if botState.activeRockets < MAX_ACTIVE_MISSILES_PER_BOT then
-                                                                        local created = createRocket(botState, targetPosition)
-                                                                        if created then
-                                                                                botState.lastMissileTime = currentTime
+                                                                for volley = 1, ROCKETS_PER_VOLLEY do
+                                                                        if botState.activeRockets < MAX_ACTIVE_MISSILES_PER_BOT then
+                                                                                local created = createRocket(botState, targetPosition)
+                                                                                if created then
+                                                                                        botState.lastMissileTime = currentTime
+                                                                                else
+                                                                                        break
+                                                                                end
+                                                                        else
+                                                                                break
                                                                         end
                                                                 end
                                                         end
@@ -1787,22 +1829,50 @@ do
 
 	registerSpecialEvent({
 		id = "HotTouch",
-		displayName = "🔥 Hot Touch",
-		ignoreDefaultGear = true,
-		onCountdownComplete = function(context)
-			local state = context.state
-			if state.HotTouch then
-				return
-			end
+                displayName = "🔥 Hot Touch",
+                ignoreDefaultGear = true,
+                onCountdownComplete = function(context)
+                        local state = context.state
+                        if state.HotTouch then
+                                return
+                        end
 
-			local hotState = {
-				holder = nil :: ParticipantRecord?,
-				timer = 30,
-				running = true,
-				connections = {},
-				disableRoundTimer = true,
-			}
-			state.HotTouch = hotState
+                        local difficultySettings = {
+                                {initialTimer = 60, speedBonus = 2},
+                                {initialTimer = 50, speedBonus = 3},
+                                {initialTimer = 40, speedBonus = 4},
+                                {initialTimer = 30, speedBonus = 7},
+                                {initialTimer = 20, speedBonus = 10},
+                        }
+
+                        local rng = Random.new()
+                        local difficultyIndex = rng:NextInteger(1, #difficultySettings)
+                        local difficultyConfig = difficultySettings[difficultyIndex] or difficultySettings[1]
+
+                        sendStatusUpdate({
+                                action = "SpecialEventDifficulty",
+                                id = context.definition.id,
+                                name = context.definition.displayName,
+                                difficulty = difficultyIndex,
+                                rollDuration = 2.4,
+                                displaySeconds = 3,
+                        })
+
+                        local initialTimer = math.max(difficultyConfig.initialTimer or 30, 5)
+                        local speedBonus = math.max(difficultyConfig.speedBonus or 0, 0)
+
+                        local hotState = {
+                                holder = nil :: ParticipantRecord?,
+                                timer = initialTimer,
+                                initialTimer = initialTimer,
+                                maxTimer = initialTimer,
+                                speedBonus = speedBonus,
+                                difficulty = difficultyIndex,
+                                running = true,
+                                connections = {},
+                                disableRoundTimer = true,
+                        }
+                        state.HotTouch = hotState
 
 			forEachActiveParticipant(function(_, participant)
 				clearPVPTools(participant.player)
@@ -1883,11 +1953,11 @@ do
 				table.clear(hotState.connections)
 			end
 
-			local function applyHolderMovement(record: ParticipantRecord, active: boolean)
-				local character = record.player.Character
-				if not character then
-					return
-				end
+                        local function applyHolderMovement(record: ParticipantRecord, active: boolean)
+                                local character = record.player.Character
+                                if not character then
+                                        return
+                                end
 
 				local humanoid = record.humanoid or character:FindFirstChildOfClass("Humanoid")
 				if not humanoid then
@@ -1901,32 +1971,34 @@ do
 						record.eventData.HotTouchOriginalWalk = humanoid.WalkSpeed
 					end
 
-					if record.eventData.HotTouchHadSprintBonus == nil then
-						local existingBonus = humanoid:GetAttribute("SprintSpeedBonus")
-						if typeof(existingBonus) == "number" then
-							record.eventData.HotTouchSprintBonus = existingBonus
-							record.eventData.HotTouchHadSprintBonus = true
-						else
-							record.eventData.HotTouchSprintBonus = nil
-							record.eventData.HotTouchHadSprintBonus = false
-							existingBonus = 0
-						end
+                                        local bonusAmount = hotState.speedBonus or 0
 
-						local bonusValue = if typeof(existingBonus) == "number" then existingBonus else 0
-						humanoid:SetAttribute("SprintSpeedBonus", bonusValue + 2)
-					else
-						local storedBonus = record.eventData.HotTouchSprintBonus
-						local baseValue = if typeof(storedBonus) == "number" then storedBonus else 0
-						humanoid:SetAttribute("SprintSpeedBonus", baseValue + 2)
-					end
+                                        if record.eventData.HotTouchHadSprintBonus == nil then
+                                                local existingBonus = humanoid:GetAttribute("SprintSpeedBonus")
+                                                if typeof(existingBonus) == "number" then
+                                                        record.eventData.HotTouchSprintBonus = existingBonus
+                                                        record.eventData.HotTouchHadSprintBonus = true
+                                                else
+                                                        record.eventData.HotTouchSprintBonus = nil
+                                                        record.eventData.HotTouchHadSprintBonus = false
+                                                        existingBonus = 0
+                                                end
 
-					local baseline = record.eventData.HotTouchOriginalWalk or humanoid.WalkSpeed
-					humanoid.WalkSpeed = baseline + 2
-				else
-					if record.eventData.HotTouchOriginalWalk ~= nil then
-						humanoid.WalkSpeed = record.eventData.HotTouchOriginalWalk
-					end
-					record.eventData.HotTouchOriginalWalk = nil
+                                                local bonusValue = if typeof(existingBonus) == "number" then existingBonus else 0
+                                                humanoid:SetAttribute("SprintSpeedBonus", bonusValue + bonusAmount)
+                                        else
+                                                local storedBonus = record.eventData.HotTouchSprintBonus
+                                                local baseValue = if typeof(storedBonus) == "number" then storedBonus else 0
+                                                humanoid:SetAttribute("SprintSpeedBonus", baseValue + bonusAmount)
+                                        end
+
+                                        local baseline = record.eventData.HotTouchOriginalWalk or humanoid.WalkSpeed
+                                        humanoid.WalkSpeed = baseline + bonusAmount
+                                else
+                                        if record.eventData.HotTouchOriginalWalk ~= nil then
+                                                humanoid.WalkSpeed = record.eventData.HotTouchOriginalWalk
+                                        end
+                                        record.eventData.HotTouchOriginalWalk = nil
 
 					local hadBonus = record.eventData.HotTouchHadSprintBonus
 					local originalBonus = record.eventData.HotTouchSprintBonus
@@ -2015,16 +2087,17 @@ do
 				end
 
 				local billboard = character:FindFirstChild("HotTouchBillboard")
-				if billboard and billboard:IsA("BillboardGui") then
-					local label = billboard:FindFirstChild("Label")
-					if label and label:IsA("TextLabel") then
-						label.Text = tostring(math.max(0, math.floor(hotState.timer)))
-						local ratio = math.clamp(hotState.timer / 60, 0, 1)
-						local color = Color3.fromRGB(255, 255 * ratio, 255 * ratio)
-						label.TextColor3 = color
-					end
-				end
-			end
+                                if billboard and billboard:IsA("BillboardGui") then
+                                        local label = billboard:FindFirstChild("Label")
+                                        if label and label:IsA("TextLabel") then
+                                                label.Text = tostring(math.max(0, math.floor(hotState.timer)))
+                                                local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
+                                                local ratio = math.clamp(hotState.timer / maxTimer, 0, 1)
+                                                local color = Color3.fromRGB(255, 255 * ratio, 255 * ratio)
+                                                label.TextColor3 = color
+                                        end
+                                end
+                        end
 
 			local function detachHolder(record: ParticipantRecord?)
 				if record then
@@ -2070,16 +2143,17 @@ do
 							end
 
 							local targetRecord = getParticipantFromPlayer(otherPlayer)
-							if not targetRecord or not isPlayerInNeutralState(targetRecord.player) then
-								return
-							end
+                                                        if not targetRecord or not isPlayerInNeutralState(targetRecord.player) then
+                                                                return
+                                                        end
 
-							hotState.timer = math.min(hotState.timer + 5, 60)
-							setParticipantFrozen(targetRecord, true)
-							task.delay(2, function()
-								if context.roundId == currentRoundId and roundInProgress then
-									setParticipantFrozen(targetRecord, false)
-								end
+                                                        local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
+                                                        hotState.timer = math.min(hotState.timer + 5, maxTimer)
+                                                        setParticipantFrozen(targetRecord, true)
+                                                        task.delay(2, function()
+                                                                if context.roundId == currentRoundId and roundInProgress then
+                                                                        setParticipantFrozen(targetRecord, false)
+                                                                end
 							end)
 
 							setHolder(targetRecord, false)
@@ -2089,15 +2163,15 @@ do
 			end
 
 			local function setHolder(newRecord: ParticipantRecord?, resetTimer: boolean)
-				if newRecord == hotState.holder then
-					if newRecord then
-						if resetTimer then
-							hotState.timer = 30
-						end
-						updateHolderVisual(newRecord, true)
-						updateTimerVisual()
-						attachHolderConnections(newRecord)
-						broadcastHolder(newRecord)
+                                if newRecord == hotState.holder then
+                                        if newRecord then
+                                                if resetTimer then
+                                                        hotState.timer = hotState.initialTimer or 30
+                                                end
+                                                updateHolderVisual(newRecord, true)
+                                                updateTimerVisual()
+                                                attachHolderConnections(newRecord)
+                                                broadcastHolder(newRecord)
 					else
 						broadcastSelecting()
 					end
@@ -2105,15 +2179,15 @@ do
 				end
 
 				detachHolder(hotState.holder)
-				hotState.holder = newRecord
-				if newRecord then
-					if resetTimer then
-						hotState.timer = 30
-					end
-					updateHolderVisual(newRecord, true)
-					updateTimerVisual()
-					attachHolderConnections(newRecord)
-					broadcastHolder(newRecord)
+                                hotState.holder = newRecord
+                                if newRecord then
+                                        if resetTimer then
+                                                hotState.timer = hotState.initialTimer or 30
+                                        end
+                                        updateHolderVisual(newRecord, true)
+                                        updateTimerVisual()
+                                        attachHolderConnections(newRecord)
+                                        broadcastHolder(newRecord)
 				else
 					broadcastSelecting()
 				end
@@ -3786,15 +3860,9 @@ local function onPlayerAdded(player: Player)
 		-- Wait for character to fully load
 		task.wait(0.5)
 		
-		-- Reset any special event effects when player respawns
-		sendStatusUpdate({
-			action = "SpecialEventEffect",
-			id = "InvertedControl",
-			inverted = false,
-		})
-		sendStatusUpdate({
-			action = "SpecialEventEffect",
-			id = "SprintProhibit",
+                sendStatusUpdate({
+                        action = "SpecialEventEffect",
+                        id = "SprintProhibit",
 			sprintDisabled = false,
 		})
 		sendStatusUpdate({
