@@ -1214,33 +1214,37 @@ local function setHotTouchActive(active: boolean)
         end
 end
 
-local defaultColor = statusUI.label.TextColor3
-local colorPalette = {
-        countdown = Color3.fromRGB(245, 245, 255),
-        match = Color3.fromRGB(210, 235, 255),
-        deathMatchBackground = Color3.fromRGB(60, 10, 10),
-        deathMatchStroke = Color3.fromRGB(255, 90, 90),
-}
-local highlightStyles = {
-	Spectate = {
-		outlineColor = Color3.fromRGB(255, 255, 255),
-		fillColor = Color3.fromRGB(255, 255, 255),
-		fillTransparency = 0.5,
-	},
-	DeathMatch = {
-		outlineColor = Color3.fromRGB(255, 0, 0),
-		fillColor = Color3.fromRGB(255, 0, 0),
-		fillTransparency = 0.5,
-	},
+local statusTheme = {
+        defaultColor = statusUI.label.TextColor3,
+        palette = {
+                countdown = Color3.fromRGB(245, 245, 255),
+                match = Color3.fromRGB(210, 235, 255),
+                deathMatchBackground = Color3.fromRGB(60, 10, 10),
+                deathMatchStroke = Color3.fromRGB(255, 90, 90),
+        },
+        highlightStyles = {
+                Spectate = {
+                        outlineColor = Color3.fromRGB(255, 255, 255),
+                        fillColor = Color3.fromRGB(255, 255, 255),
+                        fillTransparency = 0.5,
+                },
+                DeathMatch = {
+                        outlineColor = Color3.fromRGB(255, 0, 0),
+                        fillColor = Color3.fromRGB(255, 0, 0),
+                        fillTransparency = 0.5,
+                },
+        },
+        baseFramePosition = statusUI.frame.Position,
+        baseLabelPosition = statusUI.label.Position,
 }
 
-local baseFramePosition = statusUI.frame.Position
-local baseLabelPosition = statusUI.label.Position
-local currentMapId: string? = nil
-local currentEventDisplayName: string? = nil
-local currentRemaining = 0
-local flashConnection: RBXScriptConnection? = nil
-local shakeConnection: RBXScriptConnection? = nil
+local matchState = {
+        mapId = nil :: string?,
+        eventDisplayName = nil :: string?,
+        remaining = 0,
+        flashConnection = nil :: RBXScriptConnection?,
+        shakeConnection = nil :: RBXScriptConnection?,
+}
 
 type NeutralButtonShakeTarget = {
 	instance: GuiObject,
@@ -1626,11 +1630,11 @@ local function getHighlightStyleForContext(context: string?): HighlightStyle?
 	if context == "Spectate" then
 		local team = localPlayer.Team
 		if team and team.Name == "Spectate" then
-			return highlightStyles.Spectate
+                        return statusTheme.highlightStyles.Spectate
 		end
 	elseif context == "DeathMatch" then
 		if localPlayer.Neutral then
-			return highlightStyles.DeathMatch
+                        return statusTheme.highlightStyles.DeathMatch
 		end
 	end
 
@@ -1672,7 +1676,7 @@ local function updateHighlightForPlayer(targetPlayer: Player)
 		highlightState.highlights[targetPlayer] = highlight
 	end
 
-	local style = highlightState.style or highlightStyles.DeathMatch
+        local style = highlightState.style or statusTheme.highlightStyles.DeathMatch
 	highlight.OutlineColor = style.outlineColor
 	highlight.FillColor = style.fillColor
 	highlight.FillTransparency = style.fillTransparency
@@ -3604,38 +3608,38 @@ local function resetFrameVisual()
 	statusUI.frame.BackgroundTransparency = UI_CONFIG.DEFAULT_BACKGROUND_TRANSPARENCY
 	statusUI.stroke.Color = Color3.fromRGB(120, 135, 200)
 	statusUI.stroke.Transparency = 0.35
-	statusUI.frame.Position = baseFramePosition
-	statusUI.label.TextColor3 = defaultColor
+        statusUI.frame.Position = statusTheme.baseFramePosition
+        statusUI.label.TextColor3 = statusTheme.defaultColor
 	statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
-	statusUI.label.Position = baseLabelPosition
+        statusUI.label.Position = statusTheme.baseLabelPosition
 	statusUI.label.Rotation = 0
 	statusUI.labelStroke.Transparency = 0.3
 end
 
 local function stopFlash()
-	if flashConnection then
-		flashConnection:Disconnect()
-		flashConnection = nil
-	end
+        if matchState.flashConnection then
+                matchState.flashConnection:Disconnect()
+                matchState.flashConnection = nil
+        end
 
-                statusUI.label.TextColor3 = colorPalette.match
-	statusUI.labelStroke.Color = Color3.fromRGB(20, 20, 35)
-	statusUI.labelStroke.Transparency = 0.3
+        statusUI.label.TextColor3 = statusTheme.palette.match
+        statusUI.labelStroke.Color = Color3.fromRGB(20, 20, 35)
+        statusUI.labelStroke.Transparency = 0.3
 end
 
 local function startFlash()
-	stopFlash()
+        stopFlash()
 
-	statusUI.labelStroke.Color = Color3.fromRGB(255, 110, 110)
-	statusUI.labelStroke.Transparency = 0
+        statusUI.labelStroke.Color = Color3.fromRGB(255, 110, 110)
+        statusUI.labelStroke.Transparency = 0
 
-	flashConnection = RunService.RenderStepped:Connect(function()
-		local timeScale = math.clamp(currentRemaining / 30, 0, 1)
-		local frequency = 3 + (1 - timeScale) * 6
-		local pulse = math.abs(math.sin(os.clock() * frequency))
-		local green = 60 + math.floor(140 * (1 - pulse))
-		statusUI.label.TextColor3 = Color3.fromRGB(255, green, green)
-	end)
+        matchState.flashConnection = RunService.RenderStepped:Connect(function()
+                local timeScale = math.clamp(matchState.remaining / 30, 0, 1)
+                local frequency = 3 + (1 - timeScale) * 6
+                local pulse = math.abs(math.sin(os.clock() * frequency))
+                local green = 60 + math.floor(140 * (1 - pulse))
+                statusUI.label.TextColor3 = Color3.fromRGB(255, green, green)
+        end)
 end
 
 local function resetNeutralButtonShakeTargets()
@@ -3670,18 +3674,18 @@ local function collectNeutralButtonShakeTargets()
 end
 
 local function stopShake()
-	if shakeConnection then
-		shakeConnection:Disconnect()
-		shakeConnection = nil
-	end
+        if matchState.shakeConnection then
+                matchState.shakeConnection:Disconnect()
+                matchState.shakeConnection = nil
+        end
 
-	resetNeutralButtonShakeTargets()
+        resetNeutralButtonShakeTargets()
 
-	statusUI.frame.Position = baseFramePosition
-	statusUI.label.Position = baseLabelPosition
-	statusUI.label.Rotation = 0
-	statusUI.label.TextColor3 = defaultColor
-	statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
+        statusUI.frame.Position = statusTheme.baseFramePosition
+        statusUI.label.Position = statusTheme.baseLabelPosition
+        statusUI.label.Rotation = 0
+        statusUI.label.TextColor3 = statusTheme.defaultColor
+        statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
 
 	if uiRefs.inventoryFrame then
 		uiRefs.inventoryFrame.Position = inventoryState.basePosition
@@ -3711,8 +3715,8 @@ local function startDeathMatchEffect()
 	stopFlash()
         stopShake()
 
-        statusUI.frame.BackgroundColor3 = colorPalette.deathMatchBackground
-        statusUI.stroke.Color = colorPalette.deathMatchStroke
+        statusUI.frame.BackgroundColor3 = statusTheme.palette.deathMatchBackground
+        statusUI.stroke.Color = statusTheme.palette.deathMatchStroke
 	statusUI.stroke.Transparency = 0
 	statusUI.frame.BackgroundTransparency = 1
 	statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
@@ -3720,19 +3724,19 @@ local function startDeathMatchEffect()
 
 	collectNeutralButtonShakeTargets()
 
-	shakeConnection = RunService.RenderStepped:Connect(function()
-		local now = os.clock()
-		local frameMagnitude = 1 + math.abs(math.sin(now * 5)) * 1.4
-		local offsetX = math.noise(now * 8, 0, 0) * frameMagnitude * 4
-		local offsetY = math.noise(now * 9, 1, 0) * frameMagnitude * 3
-		statusUI.frame.Position = baseFramePosition + UDim2.fromOffset(offsetX, offsetY)
+        matchState.shakeConnection = RunService.RenderStepped:Connect(function()
+                local now = os.clock()
+                local frameMagnitude = 1 + math.abs(math.sin(now * 5)) * 1.4
+                local offsetX = math.noise(now * 8, 0, 0) * frameMagnitude * 4
+                local offsetY = math.noise(now * 9, 1, 0) * frameMagnitude * 3
+                statusUI.frame.Position = statusTheme.baseFramePosition + UDim2.fromOffset(offsetX, offsetY)
 
-		local textMagnitude = 0.5 + math.abs(math.sin(now * 12)) * 1.5
-		local textOffsetX = math.noise(now * 20, 2, 0) * textMagnitude * 4
-		local textOffsetY = math.noise(now * 18, 3, 0) * textMagnitude * 3
-		local buttonOffset = UDim2.fromOffset(textOffsetX, textOffsetY)
-		statusUI.label.Position = baseLabelPosition + buttonOffset
-		statusUI.label.Rotation = math.noise(now * 14, 4, 0) * 8
+                local textMagnitude = 0.5 + math.abs(math.sin(now * 12)) * 1.5
+                local textOffsetX = math.noise(now * 20, 2, 0) * textMagnitude * 4
+                local textOffsetY = math.noise(now * 18, 3, 0) * textMagnitude * 3
+                local buttonOffset = UDim2.fromOffset(textOffsetX, textOffsetY)
+                statusUI.label.Position = statusTheme.baseLabelPosition + buttonOffset
+                statusUI.label.Rotation = math.noise(now * 14, 4, 0) * 8
 
 		local pulse = (math.sin(now * 6) + 1) / 2
 		local colorOffset = math.floor(40 * pulse)
@@ -3832,25 +3836,25 @@ local function updateEventLabelText()
 		return
 	end
 
-	local displayName = currentEventDisplayName
-	if displayName and displayName ~= "" then
-		label.Text = string.format("Event: %s", displayName)
-	else
-		label.Text = "Event: None"
-	end
+        local displayName = matchState.eventDisplayName
+        if displayName and displayName ~= "" then
+                label.Text = string.format("Event: %s", displayName)
+        else
+                label.Text = "Event: None"
+        end
 end
 
 local function setCurrentEventDisplayName(name: string?)
-	if name and name ~= "" then
-		currentEventDisplayName = name
-	else
-		currentEventDisplayName = nil
-	end
-	updateEventLabelText()
+        if name and name ~= "" then
+                matchState.eventDisplayName = name
+        else
+                matchState.eventDisplayName = nil
+        end
+        updateEventLabelText()
 end
 
 local function updateMapLabel(mapId: string?)
-	currentMapId = mapId
+        matchState.mapId = mapId
 
 	local targetLabel = uiRefs.mapLabel
 	local container = uiRefs.mapLabelContainer
@@ -4334,52 +4338,52 @@ statusRemote.OnClientEvent:Connect(function(payload)
 	end
 
 	local action = payload.action
-	if action == "PrepCountdown" then
-		currentRemaining = tonumber(payload.remaining) or 0
-		if typeof(payload.map) == "string" then
-			updateMapLabel(payload.map)
-		end
+        if action == "PrepCountdown" then
+                matchState.remaining = tonumber(payload.remaining) or 0
+                if typeof(payload.map) == "string" then
+                        updateMapLabel(payload.map)
+                end
 		stopShake()
 		stopFlash()
 		resetFrameVisual()
 		statusUI.frame.BackgroundTransparency = UI_CONFIG.DEFAULT_BACKGROUND_TRANSPARENCY
                 statusUI.frame.Visible = true
-                statusUI.label.TextColor3 = colorPalette.countdown
-		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
-		statusUI.label.Text = formatCountdown(currentRemaining)
-		statusUI.labelStroke.Transparency = 0.1
-	elseif action == "MatchTimer" then
-		currentRemaining = math.max(0, math.floor(tonumber(payload.remaining) or 0))
-		statusUI.frame.Visible = true
-		resetFrameVisual()
-                statusUI.label.TextColor3 = colorPalette.match
-		statusUI.label.Text = formatTimer(currentRemaining)
-
-		if currentRemaining <= 30 then
-			startFlash()
-		else
-			stopFlash()
-		end
-	elseif action == "MatchMessage" then
-		stopFlash()
-		stopShake()
-		statusUI.frame.Visible = true
-		resetFrameVisual()
-                statusUI.label.TextColor3 = colorPalette.match
-		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
-		statusUI.label.Text = if typeof(payload.text) == "string" then payload.text else ""
-		statusUI.labelStroke.Transparency = 0.2
-	elseif action == "DeathMatchTransition" then
-		stopFlash()
-		stopShake()
+                statusUI.label.TextColor3 = statusTheme.palette.countdown
+                statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
+                statusUI.label.Text = formatCountdown(matchState.remaining)
+                statusUI.labelStroke.Transparency = 0.1
+        elseif action == "MatchTimer" then
+                matchState.remaining = math.max(0, math.floor(tonumber(payload.remaining) or 0))
                 statusUI.frame.Visible = true
-                statusUI.frame.BackgroundColor3 = colorPalette.deathMatchBackground
-                statusUI.stroke.Color = colorPalette.deathMatchStroke
-		statusUI.stroke.Transparency = 0
-                statusUI.label.TextColor3 = colorPalette.match
-		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
-		statusUI.label.Text = "Death Match"
-		statusUI.frame.BackgroundTransparency = 1
+                resetFrameVisual()
+                statusUI.label.TextColor3 = statusTheme.palette.match
+                statusUI.label.Text = formatTimer(matchState.remaining)
+
+                if matchState.remaining <= 30 then
+                        startFlash()
+                else
+                        stopFlash()
+                end
+        elseif action == "MatchMessage" then
+                stopFlash()
+                stopShake()
+                statusUI.frame.Visible = true
+                resetFrameVisual()
+                statusUI.label.TextColor3 = statusTheme.palette.match
+                statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
+                statusUI.label.Text = if typeof(payload.text) == "string" then payload.text else ""
+                statusUI.labelStroke.Transparency = 0.2
+        elseif action == "DeathMatchTransition" then
+                stopFlash()
+                stopShake()
+                statusUI.frame.Visible = true
+                statusUI.frame.BackgroundColor3 = statusTheme.palette.deathMatchBackground
+                statusUI.stroke.Color = statusTheme.palette.deathMatchStroke
+                statusUI.stroke.Transparency = 0
+                statusUI.label.TextColor3 = statusTheme.palette.match
+                statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
+                statusUI.label.Text = "Death Match"
+                statusUI.frame.BackgroundTransparency = 1
 		statusUI.labelStroke.Transparency = 0
 
 		local duration = tonumber(payload.duration) or 3
@@ -4408,12 +4412,12 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		stopDeathMatchTransition()
 		stopFlash()
 		stopShake()
-		resetFrameVisual()
-		setHotTouchActive(false)
-		statusUI.frame.Visible = true
-                statusUI.label.TextColor3 = colorPalette.countdown
-		statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
-		statusUI.label.Text = "Intermission"
+                resetFrameVisual()
+                setHotTouchActive(false)
+                statusUI.frame.Visible = true
+                statusUI.label.TextColor3 = statusTheme.palette.countdown
+                statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
+                statusUI.label.Text = "Intermission"
 		statusUI.labelStroke.Transparency = 0.3
 		updateMapLabel(nil)
 		specialEventState.active = false
