@@ -871,7 +871,7 @@ do
 			local BOT_MATERIAL = Enum.Material.Neon
 			local BOT_COUNT = 3
 			local MISSILE_DELAY = 0.75
-			local MISSILE_SPEED = 35
+                        local MISSILE_SPEED = 55
 			local MISSILE_DAMAGE = 50
 			local MISSILE_BLAST_RADIUS = 15
 			local MOVE_INTERVAL = 2.0
@@ -1071,47 +1071,23 @@ do
                                 rocket.Massless = true
 
                                 local spawnPosition = botPart.Position
+                                local targetClamped = clampToHorizontalRadius(Vector3.new(targetPosition.X, spawnPosition.Y, targetPosition.Z))
+                                targetPosition = Vector3.new(targetClamped.X, targetPosition.Y, targetClamped.Z)
 
-                                local function positionToAngle(position: Vector3): number
-                                        local normalizedX = (position.X - origin.X) / horizontalRadiusX
-                                        local normalizedZ = (position.Z - origin.Z) / horizontalRadiusZ
-                                        return math.atan2(normalizedZ, normalizedX)
+                                local travelVector = targetPosition - spawnPosition
+                                local travelDistance = travelVector.Magnitude
+                                if travelDistance < 1e-3 then
+                                        travelVector = Vector3.new(0, -1, 0)
+                                        travelDistance = 1
                                 end
 
-                                local startOnEnvelope = clampToHorizontalRadius(Vector3.new(spawnPosition.X, spawnPosition.Y, spawnPosition.Z))
-                                local startAngle = positionToAngle(startOnEnvelope)
+                                local travelDirection = travelVector.Unit
 
-                                local targetOnEnvelope = clampToHorizontalRadius(Vector3.new(targetPosition.X, spawnPosition.Y, targetPosition.Z))
-                                local targetAngle = positionToAngle(targetOnEnvelope)
-                                local angleDiff = math.atan2(math.sin(targetAngle - startAngle), math.cos(targetAngle - startAngle))
+                                rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + travelDirection)
+                                rocket.Parent = Workspace
 
-                                local tangentVector = Vector3.new(-math.sin(startAngle) * horizontalRadiusX, 0, math.cos(startAngle) * horizontalRadiusZ)
-                                if tangentVector.Magnitude < 1e-3 then
-                                        tangentVector = botPart.CFrame.RightVector * horizontalRadiusX
-                                end
-                                tangentVector = tangentVector.Unit
-
-                                local approximateArc = math.abs(angleDiff) * 0.5 * (horizontalRadiusX + horizontalRadiusZ)
-                                local controlDistance = math.clamp(approximateArc, 30, 150)
-
-                                local controlBase = Vector3.new(startOnEnvelope.X, spawnPosition.Y, startOnEnvelope.Z) + tangentVector * controlDistance
-                                controlBase = clampToHorizontalRadius(Vector3.new(controlBase.X, spawnPosition.Y, controlBase.Z))
-
-                                local controlHeight = math.max(spawnPosition.Y, targetPosition.Y) + 35
-                                local controlPoint1 = Vector3.new(controlBase.X, controlHeight, controlBase.Z)
-                                local midHeight = math.max(targetPosition.Y + 10, (spawnPosition.Y + controlHeight) * 0.5)
-                                local controlPoint2 = Vector3.new(targetOnEnvelope.X, midHeight, targetOnEnvelope.Z)
-
-                                local pathLength = (spawnPosition - controlPoint1).Magnitude
-                                        + (controlPoint1 - controlPoint2).Magnitude
-                                        + (controlPoint2 - targetPosition).Magnitude
-                                local travelTime = math.max(pathLength / MISSILE_SPEED, 0.5)
-
-                                 rocket.CFrame = CFrame.lookAt(spawnPosition, controlPoint1)
-                                 rocket.Parent = Workspace
-
-                                 rocket.Anchored = false
-                                 rocket:SetNetworkOwner(nil)
+                                rocket.Anchored = false
+                                rocket:SetNetworkOwner(nil)
 
                                 local flightSound = Instance.new("Sound")
                                 flightSound.Name = "KillBotRocketFlight"
@@ -1135,27 +1111,8 @@ do
 
                                 local detonated = false
                                 local flightConnection: RBXScriptConnection? = nil
-                                local elapsed = 0
+                                local traveledDistance = 0
                                 local lastPosition = spawnPosition
-
-                                local function evaluateCubic(t: number)
-                                        local inv = 1 - t
-                                        local p0 = spawnPosition
-                                        local p1 = controlPoint1
-                                        local p2 = controlPoint2
-                                        local p3 = targetPosition
-
-                                        local position = (inv * inv * inv) * p0
-                                                + (3 * inv * inv * t) * p1
-                                                + (3 * inv * t * t) * p2
-                                                + (t * t * t) * p3
-
-                                        local derivative = (3 * inv * inv) * (p1 - p0)
-                                                + (6 * inv * t) * (p2 - p1)
-                                                + (3 * t * t) * (p3 - p2)
-
-                                        return position, derivative
-                                end
 
                                 local function explode(hitInstance: Instance?, impactPosition: Vector3?)
                                         if detonated then
@@ -1264,15 +1221,15 @@ do
                                                 return
                                         end
 
-                                        elapsed += dt
-                                        local t = math.clamp(elapsed / travelTime, 0, 1)
-                                        local position, derivative = evaluateCubic(t)
+                                        local stepDistance = MISSILE_SPEED * dt
+                                        local nextDistance = math.clamp(traveledDistance + stepDistance, 0, travelDistance)
+                                        local position = spawnPosition + travelDirection * nextDistance
 
                                         local movement = position - lastPosition
                                         if movement.Magnitude > 0 then
                                                 local result = Workspace:Raycast(lastPosition, movement, raycastParams)
                                                 if result and result.Instance then
-                                                        local lookVector = derivative
+                                                        local lookVector = travelDirection
                                                         if lookVector.Magnitude < 1e-3 then
                                                                 lookVector = movement
                                                         end
@@ -1285,14 +1242,12 @@ do
                                                 end
                                         end
 
-                                        if derivative.Magnitude < 1e-3 then
-                                                derivative = Vector3.new(0, -1, 0)
-                                        end
-
-                                        rocket.CFrame = CFrame.lookAt(position, position + derivative.Unit)
+                                        rocket.CFrame = CFrame.lookAt(position, position + travelDirection)
                                         lastPosition = position
 
-                                        if t >= 1 then
+                                        traveledDistance = nextDistance
+
+                                        if traveledDistance >= travelDistance - 1e-3 then
                                                 explode(nil, position)
                                         end
                                 end)
