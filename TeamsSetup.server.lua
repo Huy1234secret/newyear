@@ -1052,6 +1052,47 @@ do
                                 end
                         end
 
+                        local function getRocketCFrame(position: Vector3, direction: Vector3): CFrame
+                                local xAxis: Vector3
+                                if direction.Magnitude > 1e-3 then
+                                        xAxis = direction.Unit
+                                else
+                                        xAxis = Vector3.xAxis
+                                end
+
+                                local zAxis = xAxis:Cross(Vector3.yAxis)
+                                if zAxis.Magnitude < 1e-3 then
+                                        zAxis = xAxis:Cross(Vector3.xAxis)
+                                end
+                                if zAxis.Magnitude < 1e-3 then
+                                        zAxis = xAxis:Cross(Vector3.zAxis)
+                                end
+                                if zAxis.Magnitude < 1e-3 then
+                                        zAxis = Vector3.zAxis
+                                else
+                                        zAxis = zAxis.Unit
+                                end
+
+                                local yAxis = zAxis:Cross(xAxis)
+                                if yAxis.Magnitude < 1e-3 then
+                                        yAxis = Vector3.yAxis
+                                end
+                                yAxis = yAxis - yAxis:Dot(xAxis) * xAxis
+                                if yAxis.Magnitude < 1e-3 then
+                                        yAxis = xAxis:Cross(Vector3.zAxis)
+                                        if yAxis.Magnitude < 1e-3 then
+                                                yAxis = xAxis:Cross(Vector3.xAxis)
+                                        end
+                                end
+                                if yAxis.Magnitude < 1e-3 then
+                                        yAxis = Vector3.yAxis
+                                else
+                                        yAxis = yAxis.Unit
+                                end
+
+                                return CFrame.fromMatrix(position, xAxis, yAxis, zAxis)
+                        end
+
                         local function createRocket(botState, targetPosition: Vector3)
                                 local botPart = botState.part
                                 if not botPart or not botPart.Parent then
@@ -1083,7 +1124,7 @@ do
 
                                 local travelDirection = travelVector.Unit
 
-                                rocket.CFrame = CFrame.lookAt(spawnPosition, spawnPosition + travelDirection)
+                                rocket.CFrame = getRocketCFrame(spawnPosition, travelDirection)
                                 rocket.Parent = Workspace
 
                                 rocket.Anchored = false
@@ -1236,13 +1277,13 @@ do
                                                         if lookVector.Magnitude < 1e-3 then
                                                                 lookVector = Vector3.new(0, -1, 0)
                                                         end
-                                                        rocket.CFrame = CFrame.lookAt(result.Position, result.Position + lookVector.Unit)
+                                                        rocket.CFrame = getRocketCFrame(result.Position, lookVector.Unit)
                                                         explode(result.Instance, result.Position)
                                                         return
                                                 end
                                         end
 
-                                        rocket.CFrame = CFrame.lookAt(position, position + travelDirection)
+                                        rocket.CFrame = getRocketCFrame(position, travelDirection)
                                         lastPosition = position
 
                                         traveledDistance = nextDistance
