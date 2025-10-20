@@ -802,12 +802,7 @@ do
         registerSpecialEvent({
                 id = "RainingBomb",
                 displayName = "💣 Raining Bomb",
-                onCountdownComplete = function(context)
-                        local state = context.state
-                        if state.RainingBomb and state.RainingBomb.active then
-                                return
-                        end
-
+                onRoundPrepared = function(context)
                         local difficultySettings = {
                                 {spawnInterval = 1, blastRadius = 10, countdownTime = 3},
                                 {spawnInterval = 0.6, blastRadius = 10, countdownTime = 2.5},
@@ -816,6 +811,12 @@ do
                                 {spawnInterval = 0.1, blastRadius = 15, countdownTime = 1},
                                 {spawnInterval = 0.25, blastRadius = 20, countdownTime = 0, explodeOnImpact = true},
                         }
+
+                        local state = context.state
+                        local eventState = state.RainingBomb
+                        if eventState and eventState.active then
+                                return
+                        end
 
                         local difficultyRng = Random.new()
                         local overrideIndex = getOwnerDifficultyOverride(context, #difficultySettings)
@@ -829,6 +830,13 @@ do
 
                         local config = difficultySettings[difficultyIndex] or difficultySettings[1]
 
+                        eventState = eventState or {}
+                        eventState.difficulty = difficultyIndex
+                        eventState.config = config
+                        eventState.difficultyBroadcasted = true
+                        eventState.active = false
+                        state.RainingBomb = eventState
+
                         sendStatusUpdate({
                                 action = "SpecialEventDifficulty",
                                 id = context.definition.id,
@@ -838,6 +846,65 @@ do
                                 displaySeconds = 3,
                                 flashCritical = difficultyIndex == 6,
                         })
+                end,
+                onCountdownComplete = function(context)
+                        local state = context.state
+                        local eventState = state.RainingBomb
+
+                        local difficultySettings = {
+                                {spawnInterval = 1, blastRadius = 10, countdownTime = 3},
+                                {spawnInterval = 0.6, blastRadius = 10, countdownTime = 2.5},
+                                {spawnInterval = 0.45, blastRadius = 12, countdownTime = 2},
+                                {spawnInterval = 0.3, blastRadius = 12, countdownTime = 1.5},
+                                {spawnInterval = 0.1, blastRadius = 15, countdownTime = 1},
+                                {spawnInterval = 0.25, blastRadius = 20, countdownTime = 0, explodeOnImpact = true},
+                        }
+
+                        local difficultyIndex
+                        local config
+
+                        if eventState and eventState.config then
+                                difficultyIndex = eventState.difficulty or 1
+                                config = eventState.config
+                        else
+                                local difficultyRng = Random.new()
+                                local overrideIndex = getOwnerDifficultyOverride(context, #difficultySettings)
+                                local maxRandomDifficulty = math.min(#difficultySettings, 5)
+                                if overrideIndex then
+                                        difficultyIndex = overrideIndex
+                                else
+                                        difficultyIndex = difficultyRng:NextInteger(1, math.max(1, maxRandomDifficulty))
+                                end
+
+                                config = difficultySettings[difficultyIndex] or difficultySettings[1]
+
+                                eventState = eventState or {}
+                                eventState.difficulty = difficultyIndex
+                                eventState.config = config
+                                state.RainingBomb = eventState
+                        end
+
+                        if not eventState then
+                                eventState = {}
+                                state.RainingBomb = eventState
+                        end
+
+                        if not eventState.difficultyBroadcasted then
+                                sendStatusUpdate({
+                                        action = "SpecialEventDifficulty",
+                                        id = context.definition.id,
+                                        name = context.definition.displayName,
+                                        difficulty = difficultyIndex,
+                                        rollDuration = 2.4,
+                                        displaySeconds = 3,
+                                        flashCritical = difficultyIndex == 6,
+                                })
+                                eventState.difficultyBroadcasted = true
+                        end
+
+                        if eventState.active then
+                                return
+                        end
 
                         local running = true
                         local activeBombs: {[BasePart]: boolean} = {}
@@ -888,22 +955,20 @@ do
                                 removeBomb(bomb)
                         end
 
-                        state.RainingBomb = {
-                                active = true,
-                                bombs = activeBombs,
-                                difficulty = difficultyIndex,
-                                config = config,
-                                stop = function()
-                                        running = false
-                                        for part in pairs(activeBombs) do
-                                                removeBomb(part)
-                                        end
-				end,
-			}
+                        eventState.active = true
+                        eventState.bombs = activeBombs
+                        eventState.stop = function()
+                                running = false
+                                for part in pairs(activeBombs) do
+                                        removeBomb(part)
+                                end
+                        end
+                        eventState.difficulty = difficultyIndex
+                        eventState.config = config
 
-			local stormSize = getStormHorizontalSize()
-			local cf, _ = getActiveMapBounds()
-			local origin = cf.Position
+                        local stormSize = getStormHorizontalSize()
+                        local cf, _ = getActiveMapBounds()
+                        local origin = cf.Position
 
                         task.spawn(function()
                                 local spawnDelay = math.max(config.spawnInterval or 0.5, 0.1)
@@ -913,36 +978,37 @@ do
                                         local offsetZ = rng:NextNumber(-stormSize.Y / 2, stormSize.Y / 2)
                                         local spawnPosition = Vector3.new(origin.X + offsetX, origin.Y + 120, origin.Z + offsetZ)
 
-					local bomb = Instance.new("Part")
-					bomb.Shape = Enum.PartType.Ball
-					bomb.Name = "EventBomb"
-					bomb.Size = Vector3.new(2.5, 2.5, 2.5)
-					bomb.Material = Enum.Material.SmoothPlastic
-					bomb.Color = Color3.fromRGB(0, 0, 0)
-					bomb.Transparency = 0
-					bomb.CanCollide = true
-					bomb.CanQuery = true
-					bomb.CanTouch = true
-					bomb.Anchored = false
-					bomb.Position = spawnPosition
-					bomb.Parent = Workspace
-					bomb:SetNetworkOwner(nil)
+                                        local bomb = Instance.new("Part")
+                                        bomb.Name = "RainingBomb"
+                                        bomb.Shape = Enum.PartType.Ball
+                                        bomb.Material = Enum.Material.Neon
+                                        bomb.Color = Color3.fromRGB(255, 0, 0)
+                                        bomb.Size = Vector3.new(4, 4, 4)
+                                        bomb.TopSurface = Enum.SurfaceType.Smooth
+                                        bomb.BottomSurface = Enum.SurfaceType.Smooth
+                                        bomb.CastShadow = false
+                                        bomb.Anchored = true
+                                        bomb.CanCollide = false
+                                        bomb.CanTouch = true
+                                        bomb.CanQuery = true
+                                        bomb.Position = spawnPosition
+                                        bomb.Parent = Workspace
 
-					activeBombs[bomb] = true
+                                        activeBombs[bomb] = true
 
-					bomb.Destroying:Connect(function()
-						removeBomb(bomb, true)
-					end)
+                                        bomb.Destroying:Connect(function()
+                                                removeBomb(bomb, true)
+                                        end)
 
-					local countdownStarted = false
-					local exploded = false
-					local function explode()
-						if exploded or not bomb.Parent then
-							return
-						end
-						exploded = true
-						createExplosion(bomb)
-					end
+                                        local countdownStarted = false
+                                        local exploded = false
+                                        local function explode()
+                                                if exploded or not bomb.Parent then
+                                                        return
+                                                end
+                                                exploded = true
+                                                createExplosion(bomb)
+                                        end
 
                                         local function startCountdown()
                                                 if countdownStarted or exploded then
@@ -997,12 +1063,12 @@ do
                                                         end
                                                 end)
 
-						task.delay(totalDuration, function()
-							if not exploded and bomb.Parent then
-								explode()
-							end
-						end)
-					end
+                                                task.delay(totalDuration, function()
+                                                        if not exploded and bomb.Parent then
+                                                                explode()
+                                                        end
+                                                end)
+                                        end
 
                                         bomb.Touched:Connect(function(hit)
                                                 if not hit or not hit:IsA("BasePart") then
@@ -1020,24 +1086,6 @@ do
                                 end
                         end)
                 end,
-		onRoundEnded = function(context)
-			local state = context.state.RainingBomb
-			if state then
-				if state.stop then
-					state.stop()
-				end
-				if state.bombs then
-					for part in pairs(state.bombs) do
-						if part and part.Parent then
-							part:Destroy()
-						end
-					end
-				end
-			end
-			context.state.RainingBomb = nil
-		end,
-	})
-
         registerSpecialEvent({
                 id = "KillBot",
                 displayName = "🤖 KillBot",
@@ -1903,60 +1951,135 @@ do
 
 	registerSpecialEvent({
 		id = "HotTouch",
-                displayName = "🔥 Hot Touch",
-                ignoreDefaultGear = true,
-                onCountdownComplete = function(context)
-                        local state = context.state
-                        if state.HotTouch then
-                                return
-                        end
+		displayName = "🔥 Hot Touch",
+		ignoreDefaultGear = true,
+		onRoundPrepared = function(context)
+			local difficultySettings = {
+				{initialTimer = 60, speedBonus = 2},
+				{initialTimer = 50, speedBonus = 3},
+				{initialTimer = 40, speedBonus = 4},
+				{initialTimer = 30, speedBonus = 7},
+				{initialTimer = 20, speedBonus = 10},
+				{initialTimer = 30, speedBonus = 15},
+			}
 
-                        local difficultySettings = {
-                                {initialTimer = 60, speedBonus = 2},
-                                {initialTimer = 50, speedBonus = 3},
-                                {initialTimer = 40, speedBonus = 4},
-                                {initialTimer = 30, speedBonus = 7},
-                                {initialTimer = 20, speedBonus = 10},
-                                {initialTimer = 30, speedBonus = 15},
-                        }
+			local state = context.state
+			local eventState = state.HotTouch
+			if eventState and eventState.running then
+				return
+			end
 
-                        local rng = Random.new()
-                        local overrideIndex = getOwnerDifficultyOverride(context, #difficultySettings)
-                        local randomMax = math.min(#difficultySettings, 5)
-                        local difficultyIndex
-                        if overrideIndex then
-                                difficultyIndex = overrideIndex
-                        else
-                                difficultyIndex = rng:NextInteger(1, math.max(1, randomMax))
-                        end
+			local rng = Random.new()
+			local overrideIndex = getOwnerDifficultyOverride(context, #difficultySettings)
+			local randomMax = math.min(#difficultySettings, 5)
+			local difficultyIndex
+			if overrideIndex then
+				difficultyIndex = overrideIndex
+			else
+				difficultyIndex = rng:NextInteger(1, math.max(1, randomMax))
+			end
 
-                        local difficultyConfig = difficultySettings[difficultyIndex] or difficultySettings[1]
+			local difficultyConfig = difficultySettings[difficultyIndex] or difficultySettings[1]
+			local initialTimer = math.max(difficultyConfig.initialTimer or 30, 5)
+			local speedBonus = math.max(difficultyConfig.speedBonus or 0, 0)
 
-                        sendStatusUpdate({
-                                action = "SpecialEventDifficulty",
-                                id = context.definition.id,
-                                name = context.definition.displayName,
-                                difficulty = difficultyIndex,
-                                rollDuration = 2.4,
-                                displaySeconds = 3,
-                                flashCritical = difficultyIndex == 6,
-                        })
+			eventState = eventState or {}
+			eventState.difficulty = difficultyIndex
+			eventState.pendingConfig = difficultyConfig
+			eventState.initialTimer = initialTimer
+			eventState.speedBonus = speedBonus
+			eventState.difficultyBroadcasted = true
+			eventState.running = false
+			state.HotTouch = eventState
 
-                        local initialTimer = math.max(difficultyConfig.initialTimer or 30, 5)
-                        local speedBonus = math.max(difficultyConfig.speedBonus or 0, 0)
+			sendStatusUpdate({
+				action = "SpecialEventDifficulty",
+				id = context.definition.id,
+				name = context.definition.displayName,
+				difficulty = difficultyIndex,
+				rollDuration = 2.4,
+				displaySeconds = 3,
+				flashCritical = difficultyIndex == 6,
+			})
+		end,
+		onCountdownComplete = function(context)
+			local state = context.state
+			local eventState = state.HotTouch
+			if eventState and eventState.running then
+				return
+			end
 
-                        local hotState = {
-                                holder = nil :: ParticipantRecord?,
-                                timer = initialTimer,
-                                initialTimer = initialTimer,
-                                maxTimer = initialTimer,
-                                speedBonus = speedBonus,
-                                difficulty = difficultyIndex,
-                                running = true,
-                                connections = {},
-                                disableRoundTimer = true,
-                        }
-                        state.HotTouch = hotState
+			local difficultySettings = {
+				{initialTimer = 60, speedBonus = 2},
+				{initialTimer = 50, speedBonus = 3},
+				{initialTimer = 40, speedBonus = 4},
+				{initialTimer = 30, speedBonus = 7},
+				{initialTimer = 20, speedBonus = 10},
+				{initialTimer = 30, speedBonus = 15},
+			}
+
+			local difficultyIndex
+			local difficultyConfig
+			local initialTimer
+			local speedBonus
+
+			if eventState and eventState.pendingConfig then
+				difficultyIndex = eventState.difficulty or 1
+				difficultyConfig = eventState.pendingConfig
+				initialTimer = eventState.initialTimer
+				speedBonus = eventState.speedBonus
+			else
+				local rng = Random.new()
+				local overrideIndex = getOwnerDifficultyOverride(context, #difficultySettings)
+				local randomMax = math.min(#difficultySettings, 5)
+				if overrideIndex then
+					difficultyIndex = overrideIndex
+				else
+					difficultyIndex = rng:NextInteger(1, math.max(1, randomMax))
+				end
+
+				difficultyConfig = difficultySettings[difficultyIndex] or difficultySettings[1]
+				initialTimer = math.max(difficultyConfig.initialTimer or 30, 5)
+				speedBonus = math.max(difficultyConfig.speedBonus or 0, 0)
+
+				eventState = eventState or {}
+				eventState.difficulty = difficultyIndex
+				eventState.pendingConfig = difficultyConfig
+				eventState.initialTimer = initialTimer
+				eventState.speedBonus = speedBonus
+				state.HotTouch = eventState
+			end
+
+			if not eventState then
+				eventState = {}
+				state.HotTouch = eventState
+			end
+
+			if not eventState.difficultyBroadcasted then
+				sendStatusUpdate({
+					action = "SpecialEventDifficulty",
+					id = context.definition.id,
+					name = context.definition.displayName,
+					difficulty = difficultyIndex,
+					rollDuration = 2.4,
+					displaySeconds = 3,
+					flashCritical = difficultyIndex == 6,
+				})
+				eventState.difficultyBroadcasted = true
+			end
+
+			local hotState = {
+				holder = nil :: ParticipantRecord?,
+				timer = initialTimer,
+				initialTimer = initialTimer,
+				maxTimer = initialTimer,
+				speedBonus = speedBonus,
+				difficulty = difficultyIndex,
+				running = true,
+				connections = {},
+				disableRoundTimer = true,
+			}
+			state.HotTouch = hotState
 
 			forEachActiveParticipant(function(_, participant)
 				clearPVPTools(participant.player)
