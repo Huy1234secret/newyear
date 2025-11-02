@@ -2931,10 +2931,10 @@ local function updateCursorForGearState()
 end
 
 local function getToolIcon(tool: Tool): string
-	local textureId = tool.TextureId
-	if textureId and textureId ~= "" then
-		return textureId
-	end
+        local textureId = tool.TextureId
+        if textureId and textureId ~= "" then
+                return textureId
+        end
 
 	local handle = tool:FindFirstChild("Handle")
 	if handle and handle:IsA("BasePart") then
@@ -2951,14 +2951,46 @@ local function getToolIcon(tool: Tool): string
 		end
 	end
 
-	return ""
+        return ""
+end
+
+local function getToolEmoji(tool: Tool): string?
+        local attributeCandidates = {
+                tool:GetAttribute("ItemEmoji"),
+                tool:GetAttribute("DisplayEmoji"),
+                tool:GetAttribute("Emoji"),
+        }
+
+        for _, value in ipairs(attributeCandidates) do
+                if typeof(value) == "string" and value ~= "" then
+                        return value
+                end
+        end
+
+        local emojiValue = tool:FindFirstChild("ItemEmoji")
+                or tool:FindFirstChild("DisplayEmoji")
+                or tool:FindFirstChild("Emoji")
+        if emojiValue and emojiValue:IsA("StringValue") and emojiValue.Value ~= "" then
+                return emojiValue.Value
+        end
+
+        return nil
+end
+
+local function getToolDisplayName(tool: Tool): string
+        local attribute = tool:GetAttribute("DisplayName")
+        if typeof(attribute) == "string" and attribute ~= "" then
+                return attribute
+        end
+
+        return tool.Name
 end
 
 updateInventorySlots = function()
-	local cleanedOrder: {Tool} = {}
-	for _, tool in ipairs(trackedGearOrder) do
-		if trackedGearTools[tool] then
-			table.insert(cleanedOrder, tool)
+        local cleanedOrder: {Tool} = {}
+        for _, tool in ipairs(trackedGearOrder) do
+                if trackedGearTools[tool] then
+                        table.insert(cleanedOrder, tool)
 		end
 	end
 	trackedGearOrder = cleanedOrder
@@ -2977,16 +3009,26 @@ updateInventorySlots = function()
 			local tool = trackedGearOrder[slotIndex]
 			slotToolMapping[slotIndex] = tool
 
-			if tool then
-				local iconId = getToolIcon(tool)
-				slot.icon.Image = iconId
-				slot.icon.Visible = iconId ~= ""
-				slot.label.Text = tool.Name
-				slot.frame.BackgroundTransparency = 0.15
-				slot.button.Active = true
-				slot.button.Selectable = true
-				slot.numberLabel.TextColor3 = Color3.fromRGB(210, 220, 240)
-			else
+                        if tool then
+                                local iconId = getToolIcon(tool)
+                                local emoji = getToolEmoji(tool)
+                                local displayName = getToolDisplayName(tool)
+                                slot.icon.Image = iconId
+                                slot.icon.Visible = iconId ~= ""
+                                if emoji and emoji ~= "" then
+                                        if displayName ~= "" then
+                                                slot.label.Text = string.format("%s %s", emoji, displayName)
+                                        else
+                                                slot.label.Text = emoji
+                                        end
+                                else
+                                        slot.label.Text = displayName
+                                end
+                                slot.frame.BackgroundTransparency = 0.15
+                                slot.button.Active = true
+                                slot.button.Selectable = true
+                                slot.numberLabel.TextColor3 = Color3.fromRGB(210, 220, 240)
+                        else
 				slot.icon.Image = ""
 				slot.icon.Visible = false
 				slot.label.Text = ""
