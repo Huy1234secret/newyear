@@ -81,8 +81,9 @@ local mapDisplayNames = {
 	RocketArena = "Rocket Arena",
 	HauntedMansion = "Haunted Mansion",
 	BowlingAlley = "Bowling Alley",
-	HappyHomeOfRobloxia = "Happy Home of Robloxia",
-	RavenRock = "Raven Rock",
+        HappyHomeOfRobloxia = "Happy Home of Robloxia",
+        RavenRock = "Raven Rock",
+        PirateBay = "Pirate Bay",
 
 }
 
@@ -1244,6 +1245,14 @@ local matchState = {
         remaining = 0,
         flashConnection = nil :: RBXScriptConnection?,
         shakeConnection = nil :: RBXScriptConnection?,
+}
+
+local apocalypseState = {
+        active = false,
+        wave = 0,
+        totalWaves = 0,
+        countdown = 0,
+        hearts = {} :: {[number]: number},
 }
 
 type NeutralButtonShakeTarget = {
@@ -3642,6 +3651,39 @@ local function startFlash()
         end)
 end
 
+local function startGreenFlash()
+        stopFlash()
+
+        statusUI.labelStroke.Color = Color3.fromRGB(120, 255, 150)
+        statusUI.labelStroke.Transparency = 0
+
+        matchState.flashConnection = RunService.RenderStepped:Connect(function()
+                local pulse = math.abs(math.sin(os.clock() * 4))
+                local green = 180 + math.floor(70 * pulse)
+                statusUI.label.TextColor3 = Color3.fromRGB(80, green, 110)
+        end)
+end
+
+local function showApocalypseMessage(text: string, color: Color3?, emphasized: boolean)
+        stopFlash()
+        resetFrameVisual()
+        statusUI.frame.Visible = true
+        statusUI.label.Text = text
+        statusUI.label.TextColor3 = color or statusTheme.palette.match
+        statusUI.label.TextSize = if emphasized then UI_CONFIG.EMPHASIZED_TEXT_SIZE else UI_CONFIG.DEFAULT_TEXT_SIZE
+        statusUI.labelStroke.Transparency = 0.15
+end
+
+local function clearApocalypseState()
+        apocalypseState.active = false
+        apocalypseState.wave = 0
+        apocalypseState.totalWaves = 0
+        apocalypseState.countdown = 0
+        apocalypseState.hearts = {}
+end
+
+clearApocalypseState()
+
 local function resetNeutralButtonShakeTargets()
 	for _, target in neutralButtonShakeTargets do
 		local instance = target.instance
@@ -4373,6 +4415,72 @@ statusRemote.OnClientEvent:Connect(function(payload)
                 statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
                 statusUI.label.Text = if typeof(payload.text) == "string" then payload.text else ""
                 statusUI.labelStroke.Transparency = 0.2
+        elseif action == "ApocalypseStatus" then
+                apocalypseState.active = true
+                local phase = if typeof(payload.phase) == "string" then payload.phase else nil
+                if phase == "ApocalypseReady" then
+                        apocalypseState.totalWaves = math.max(tonumber(payload.totalWaves) or apocalypseState.totalWaves or 0, 0)
+                        showApocalypseMessage("Pirate Bay Survival", statusTheme.palette.countdown, true)
+                elseif phase == "WaveStart" or phase == "Wave" then
+                        local wave = math.max(tonumber(payload.wave) or apocalypseState.wave or 0, 0)
+                        apocalypseState.wave = wave
+                        showApocalypseMessage(string.format("Wave %d", wave), statusTheme.palette.match, true)
+                elseif phase == "Countdown" then
+                        local wave = math.max(tonumber(payload.wave) or (apocalypseState.wave + 1), 1)
+                        local remaining = math.max(tonumber(payload.remaining) or 0, 0)
+                        apocalypseState.countdown = remaining
+                        showApocalypseMessage(string.format("Wave %d in %ds", wave, remaining), statusTheme.palette.countdown, true)
+                elseif phase == "WaveComplete" then
+                        local wave = math.max(tonumber(payload.wave) or apocalypseState.wave, 0)
+                        showApocalypseMessage(string.format("Wave %d Cleared", wave), statusTheme.palette.countdown, true)
+                elseif phase == "FinalWave" then
+                        local wave = math.max(tonumber(payload.wave) or apocalypseState.wave, 0)
+                        apocalypseState.wave = wave
+                        showApocalypseMessage(string.format("Wave %d", wave), Color3.fromRGB(255, 110, 110), true)
+                        startFlash()
+                elseif phase == "Victory" then
+                        apocalypseState.active = false
+                        local text = if typeof(payload.message) == "string" then payload.message else "GG"
+                        showApocalypseMessage(text, Color3.fromRGB(140, 255, 170), true)
+                        startGreenFlash()
+                elseif phase == "Failure" then
+                        apocalypseState.active = false
+                        showApocalypseMessage("All Survivors Down", Color3.fromRGB(255, 120, 120), true)
+                        startFlash()
+                elseif phase == "Cleanup" then
+                        clearApocalypseState()
+                        stopFlash()
+                        resetFrameVisual()
+                        statusUI.frame.Visible = false
+                elseif phase == "Hearts" then
+                        if typeof(payload.hearts) == "table" then
+                                local heartMap: {[number]: number} = {}
+                                for userId, value in pairs(payload.hearts) do
+                                        if typeof(userId) == "number" and typeof(value) == "number" then
+                                                heartMap[userId] = value
+                                        end
+                                end
+                                apocalypseState.hearts = heartMap
+                        end
+                elseif phase == "HeartMessage" then
+                        local text = if typeof(payload.message) == "string" then payload.message else nil
+                        if text then
+                                local ok = pcall(function()
+                                        StarterGui:SetCore("SendNotification", {
+                                                Title = "Survival",
+                                                Text = text,
+                                                Duration = 3,
+                                        })
+                                end)
+                                if not ok then
+                                        print(text)
+                                end
+                        end
+                elseif phase == "Warning" then
+                        if typeof(payload.message) == "string" then
+                                print(payload.message)
+                        end
+                end
         elseif action == "DeathMatchTransition" then
                 stopFlash()
                 stopShake()
@@ -4406,21 +4514,22 @@ statusRemote.OnClientEvent:Connect(function(payload)
 			resetFrameVisual()
 			statusUI.frame.Visible = false
 		end
-	elseif action == "RoundEnded" then
-		deathMatchHighlightActive = false
-		updateHighlightActivation()
-		stopDeathMatchTransition()
-		stopFlash()
-		stopShake()
+        elseif action == "RoundEnded" then
+                deathMatchHighlightActive = false
+                updateHighlightActivation()
+                stopDeathMatchTransition()
+                stopFlash()
+                stopShake()
                 resetFrameVisual()
                 setHotTouchActive(false)
                 statusUI.frame.Visible = true
                 statusUI.label.TextColor3 = statusTheme.palette.countdown
                 statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
                 statusUI.label.Text = "Intermission"
-		statusUI.labelStroke.Transparency = 0.3
-		updateMapLabel(nil)
-		specialEventState.active = false
+                statusUI.labelStroke.Transparency = 0.3
+                updateMapLabel(nil)
+                clearApocalypseState()
+                specialEventState.active = false
 		specialEventState.id = nil
 		specialEventState.displayName = nil
                 specialEventState.randomized = false
