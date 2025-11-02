@@ -75,11 +75,16 @@ local mapDefinitions: {MapDefinition} = {
 		displayName = "Happy Home of Robloxia",
 		modelName = "HappyHomeOfRobloxia",
 	},
-	{
-		id = "RavenRock",
-		displayName = "Raven Rock",
-		modelName = "RavenRock",
-	},
+        {
+                id = "RavenRock",
+                displayName = "Raven Rock",
+                modelName = "RavenRock",
+        },
+        {
+                id = "PirateBay",
+                displayName = "Pirate Bay",
+                modelName = "PirateBay",
+        },
 
 }
 
