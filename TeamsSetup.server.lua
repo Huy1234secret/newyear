@@ -28,11 +28,592 @@ local spectateTeam = getOrCreateTeam("Spectate", Color3.fromRGB(85, 170, 255), t
 
 spectateTeam.AutoAssignable = true
 
+local survivalTeam = getOrCreateTeam("Survival", Color3.fromRGB(255, 170, 0), false)
+survivalTeam.AutoAssignable = false
+
+local ghostTeam = getOrCreateTeam("Ghost", Color3.fromRGB(170, 170, 170), false)
+ghostTeam.AutoAssignable = false
+
 do
-	local existingNeutralTeam = TeamsService:FindFirstChild("Neutral")
-	if existingNeutralTeam and existingNeutralTeam:IsA("Team") then
-		existingNeutralTeam:Destroy()
-	end
+        local PIRATE_APOCALYPSE_WAVES = {
+                {musicId = "114905649764615", spawns = {{name = "Zombie", count = 6, interval = 0.5}}},
+                {spawns = {{name = "Zombie", count = 10, interval = 0.25}}},
+                {spawns = {{name = "SpeedZombie", count = 5, interval = 0.5}}},
+                {spawns = {{name = "Zombie", count = 7, interval = 0.5}, {name = "SpeedZombie", count = 10, interval = 0.3}}},
+                {spawns = {{name = "Zombie", count = 30, interval = 0.5}}},
+                {spawns = {{name = "Zombie", count = 10, interval = 1}, {name = "SpeedZombie", count = 20, interval = 0.5}}},
+                {spawns = {{name = "FireZombie", count = 3, interval = 3}, {name = "Zombie", count = 15, interval = 0.5}}},
+                {spawns = {{name = "FireZombie", count = 10, interval = 1}}},
+                {spawns = {{name = "Zombie", count = 10, interval = 1}, {name = "SpeedZombie", count = 10, interval = 0.5}, {name = "FireZombie", count = 10, interval = 1}}},
+                {musicId = "123764887251796", spawns = {{name = "DemonZombie", count = 5, interval = 2}}},
+                {spawns = {{name = "FireZombie", count = 5, interval = 0.5}, {name = "Zombie", count = 10, interval = 0.5}, {name = "DemonZombie", count = 2, interval = 1}}},
+                {spawns = {{name = "FireZombie", count = 10, interval = 0.25}, {name = "SpeedZombie", count = 20, interval = 0.25}}},
+                {spawns = {{name = "HazmatZombie", count = 3, interval = 1}, {name = "FireZombie", count = 10, interval = 1}, {name = "DemonZombie", count = 5, interval = 1}}},
+                {spawns = {{name = "HazmatZombie", count = 10, interval = 0.5}}},
+                {spawns = {{name = "Zombie", count = 100, interval = 0.1}}},
+                {spawns = {{name = "SpeedZombie", count = 50, interval = 0.25}}},
+                {spawns = {{name = "FireZombie", count = 25, interval = 1}}},
+                {spawns = {{name = "DemonZombie", count = 20, interval = 1}}},
+                {spawns = {{name = "HazmatZombie", count = 20, interval = 1}}},
+                {musicId = "78606778500481", spawns = {{name = "ShadowZombie", count = 5, interval = 1}}},
+                {spawns = {{name = "Zombie", count = 10, interval = 0.25}, {name = "SpeedZombie", count = 15, interval = 0.1}, {name = "HazmatZombie", count = 5, interval = 0.1}, {name = "DemonZombie", count = 5, interval = 0.1}, {name = "ShadowZombie", count = 2, interval = 3}}},
+                {spawns = {{name = "GiantZombie", count = 1, interval = 1}, {name = "FireZombie", count = 20, interval = 1}, {name = "SpeedZombie", count = 15, interval = 0.5}}},
+                {spawns = {{name = "ShadowZombie", count = 10, interval = 0.5}, {name = "GiantZombie", count = 3, interval = 1}}},
+                {spawns = {{name = "GiantSpeedZombie", count = 1, interval = 1}, {name = "GiantZombie", count = 10, interval = 1}}},
+                {spawns = {{name = "HazmatZombie", count = 5, interval = 0.2}, {name = "DemonZombie", count = 5, interval = 0.2}, {name = "FireZombie", count = 5, interval = 0.2}, {name = "ShadowZombie", count = 5, interval = 0.2}, {name = "GiantZombie", count = 5, interval = 1}, {name = "GiantSpeedZombie", count = 2, interval = 1}, {name = "Zombie", count = 25, interval = 1}, {name = "SpeedZombie", count = 20, interval = 1}}},
+                {spawns = {{name = "CrystalZombie", count = 3, interval = 1}, {name = "SpeedZombie", count = 15, interval = 0.1}}},
+                {spawns = {{name = "GiantZombie", count = 20, interval = 2}, {name = "Zombie", count = 25, interval = 0.1}}},
+                {spawns = {{name = "CrystalZombie", count = 5, interval = 0.25}, {name = "SpeedZombie", count = 20, interval = 0.1}, {name = "GiantSpeedZombie", count = 5, interval = 0.5}}},
+                {spawns = {{name = "HazmatZombie", count = 5, interval = 1}, {name = "GiantZombie", count = 10, interval = 1}, {name = "CrystalZombie", count = 3, interval = 1}, {name = "ShadowZombie", count = 10, interval = 1}}},
+                {musicId = "78708644418174", spawns = {{name = "DiamondZombie", count = 1, interval = 1}}},
+                {spawns = {{name = "LightningZombie", count = 3, interval = 1}, {name = "DiamondZombie", count = 2, interval = 1}, {name = "GiantZombie", count = 5, interval = 1}}},
+                {spawns = {{name = "DemonZombie", count = 10, interval = 0.2}, {name = "HazmatZombie", count = 10, interval = 0.2}, {name = "GiantSpeedZombie", count = 10, interval = 0.2}}},
+                {spawns = {{name = "DiamondZombie", count = 10, interval = 1}, {name = "SpeedZombie", count = 50, interval = 0.1}}},
+                {spawns = {{name = "FireZombie", count = 25, interval = 0.25}, {name = "LightningZombie", count = 10, interval = 0.5}}},
+                {spawns = {{name = "CrystalZombie", count = 25, interval = 1}, {name = "LightningZombie", count = 10, interval = 1}, {name = "DemonZombie", count = 25, interval = 1}}},
+                {spawns = {{name = "AngelZombie", count = 5, interval = 1}, {name = "DiamondZombie", count = 10, interval = 1}}},
+                {spawns = {{name = "ShadowZombie", count = 25, interval = 0.5}, {name = "DemonZombie", count = 25, interval = 0.5}, {name = "LightningZombie", count = 10, interval = 1}}},
+                {spawns = {{name = "RedValkZombie", count = 1, interval = 1}, {name = "DiamondZombie", count = 20, interval = 1}}},
+                {spawns = {{name = "RedValkZombie", count = 5, interval = 0.5}, {name = "AngelZombie", count = 10, interval = 0.5}}},
+                {musicId = "106663800872288", spawns = {{name = "NormalZombie", count = 10, interval = 0.1}, {name = "SpeedZombie", count = 10, interval = 0.1}, {name = "GiantZombie", count = 10, interval = 0.1}, {name = "GiantSpeedZombie", count = 10, interval = 0.1}, {name = "DemonZombie", count = 10, interval = 0.1}, {name = "FireZombie", count = 10, interval = 0.1}, {name = "HazmatZombie", count = 10, interval = 0.1}, {name = "CrystalZombie", count = 10, interval = 0.1}, {name = "ShadowZombie", count = 10, interval = 0.1}, {name = "DiamondZombie", count = 10, interval = 0.1}, {name = "LightningZombie", count = 10, interval = 0.1}, {name = "RedValkZombie", count = 5, interval = 1}, {name = "FrostBossZombie", count = 1, interval = 1}}},
+        }
+
+        local PIRATE_APOCALYPSE_GEAR_REWARDS = {
+                [0] = {"Pistol", "Assault Rifle"},
+                [10] = {"Tommy Gun"},
+                [20] = {"Shotgun"},
+                [30] = {"HexSpitter"},
+        }
+
+        local PIRATE_APOCALYPSE_HEART_RESTORE_INTERVAL = 5
+
+        local function pirateApocalypseNormalizeName(name: string): string
+                local lowered = string.lower(name)
+                return lowered:gsub("%s+", "")
+        end
+
+        local function pirateApocalypseGetTemplate(cache: {[string]: Instance?}, folder: Instance?, name: string): Instance?
+                if not folder then
+                        return nil
+                end
+
+                local normalized = pirateApocalypseNormalizeName(name)
+                if cache[normalized] ~= nil then
+                        return cache[normalized]
+                end
+
+                local matched: Instance? = nil
+                for _, child in folder:GetChildren() do
+                        if child:IsA("Tool") or child:IsA("Model") then
+                                local candidate = pirateApocalypseNormalizeName(child.Name)
+                                if candidate == normalized then
+                                        matched = child
+                                        break
+                                end
+                        end
+                end
+
+                cache[normalized] = matched
+                return matched
+        end
+
+        local function pirateApocalypseCollectSpawnPoints(container: Instance?): {BasePart}
+                local points: {BasePart} = {}
+                if not container then
+                        return points
+                end
+
+                for _, child in container:GetDescendants() do
+                        if child:IsA("BasePart") then
+                                table.insert(points, child)
+                        end
+                end
+
+                return points
+        end
+
+        local function pirateApocalypseAssignTeam(player: Player, team: Team?)
+                if not player then
+                        return
+                end
+
+                player.Team = team
+                player.Neutral = team == nil
+        end
+
+        local function pirateApocalypseSendStatus(payload: {[string]: any})
+                payload.action = "ApocalypseStatus"
+                sendStatusUpdate(payload)
+        end
+
+        local function pirateApocalypseSendPersonal(player: Player, payload: {[string]: any})
+                if not player then
+                        return
+                end
+
+                payload.action = "ApocalypseStatus"
+                statusUpdateRemote:FireClient(player, payload)
+        end
+
+        local function pirateApocalypseDisconnectConnections(connections: {RBXScriptConnection}?)
+                if not connections then
+                        return
+                end
+
+                for index, conn in ipairs(connections) do
+                        if conn.Connected then
+                                conn:Disconnect()
+                        end
+                        connections[index] = nil
+                end
+        end
+
+        local function pirateApocalypseEnsureState(context: SpecialEventContext, mapModel: Model?): {[string]: any}
+                local state = context.state.PirateApocalypse
+                if state then
+                        return state
+                end
+
+                local spawnContainer = if mapModel then mapModel:FindFirstChild("ZombieSpawn") else nil
+                state = {
+                        roundId = context.roundId,
+                        hearts = {},
+                        ghostPlayers = {},
+                        playerStatus = {},
+                        unlockedGear = {},
+                        gearCache = {},
+                        zombieCache = {},
+                        activeZombies = {},
+                        pendingSpawns = 0,
+                        running = false,
+                        completed = false,
+                        currentWave = 0,
+                        spawnPoints = pirateApocalypseCollectSpawnPoints(spawnContainer),
+                        zombieFolder = ReplicatedStorage:FindFirstChild("Zombies"),
+                        gearFolder = ReplicatedStorage:FindFirstChild("SurvivalGear"),
+                        zombieConnections = {},
+                        random = Random.new(),
+                }
+
+                context.state.PirateApocalypse = state
+                return state
+        end
+
+        local function pirateApocalypseUnlockRewards(state: {[string]: any}, waveNumber: number)
+                local rewards = PIRATE_APOCALYPSE_GEAR_REWARDS[waveNumber]
+                if not rewards then
+                        return
+                end
+
+                for _, gearName in ipairs(rewards) do
+                        local normalized = pirateApocalypseNormalizeName(gearName)
+                        state.unlockedGear[normalized] = gearName
+                end
+        end
+
+        local function pirateApocalypseFindTool(player: Player, toolName: string): Tool?
+                local normalized = pirateApocalypseNormalizeName(toolName)
+
+                local function matchTool(container: Instance?): Tool?
+                        if not container then
+                                return nil
+                        end
+
+                        for _, child in container:GetChildren() do
+                                if child:IsA("Tool") then
+                                        local candidate = pirateApocalypseNormalizeName(child.Name)
+                                        if candidate == normalized then
+                                                return child
+                                        end
+                                end
+                        end
+
+                        return nil
+                end
+
+                local backpack = player:FindFirstChildOfClass("Backpack")
+                local character = player.Character
+                local starter = player:FindFirstChild("StarterGear")
+
+                return matchTool(character) or matchTool(backpack) or matchTool(starter)
+        end
+
+        local function pirateApocalypseGiveTool(player: Player, template: Instance, toolName: string)
+                if not player or not template then
+                        return
+                end
+
+                local backpack = player:FindFirstChildOfClass("Backpack") or player:FindFirstChild("Backpack")
+                local starter = player:FindFirstChild("StarterGear")
+
+                if backpack and template:IsA("Tool") then
+                        local toolClone = template:Clone()
+                        toolClone.Name = template.Name
+                        toolClone:SetAttribute("PVPGenerated", true)
+                        toolClone.Parent = backpack
+                end
+
+                if starter and template:IsA("Tool") then
+                        local starterClone = template:Clone()
+                        starterClone.Name = template.Name
+                        starterClone:SetAttribute("PVPGenerated", true)
+                        starterClone.Parent = starter
+                end
+        end
+
+        local function pirateApocalypseProvideGear(state: {[string]: any}, record: ParticipantRecord)
+                local player = record.player
+                if not player then
+                        return
+                end
+
+                local gearFolder = state.gearFolder
+                if not gearFolder then
+                        return
+                end
+
+                if state.ghostPlayers[player] then
+                        return
+                end
+
+                for normalized, originalName in pairs(state.unlockedGear) do
+                        if not pirateApocalypseFindTool(player, originalName) then
+                                local template = pirateApocalypseGetTemplate(state.gearCache, gearFolder, originalName)
+                                if template and template:IsA("Tool") then
+                                        pirateApocalypseGiveTool(player, template, originalName)
+                                end
+                        end
+                end
+        end
+
+        local function pirateApocalypseAdjustCharacterCollision(character: Model?, enabled: boolean)
+                if not character then
+                        return
+                end
+
+                for _, part in character:GetDescendants() do
+                        if part:IsA("BasePart") then
+                                part.CanCollide = enabled
+                                part.CanTouch = enabled
+                                part.CanQuery = enabled
+                        elseif part:IsA("Decal") or part:IsA("Texture") then
+                                part.Transparency = if enabled then part.Transparency else 1
+                        end
+                end
+        end
+
+        local function pirateApocalypseSetGhostVisual(record: ParticipantRecord, isGhost: boolean)
+                local player = record.player
+                if not player then
+                        return
+                end
+
+                local character = player.Character
+                pirateApocalypseAdjustCharacterCollision(character, not isGhost)
+
+                if character then
+                        for _, part in character:GetDescendants() do
+                                if part:IsA("BasePart") then
+                                        if isGhost then
+                                                part.Transparency = 1
+                                        else
+                                                part.Transparency = 0
+                                        end
+                                elseif part:IsA("Accessory") then
+                                        for _, descendant in part:GetDescendants() do
+                                                if descendant:IsA("BasePart") then
+                                                        descendant.Transparency = if isGhost then 1 else 0
+                                                end
+                                        end
+                                end
+                        end
+                end
+        end
+
+        local function pirateApocalypseEnsureHeartEntry(state: {[string]: any}, player: Player)
+                local hearts = state.hearts[player]
+                if typeof(hearts) ~= "number" then
+                        state.hearts[player] = 3
+                end
+        end
+
+        local function pirateApocalypseBroadcastHearts(state: {[string]: any})
+                local payload: {[string]: any} = {phase = "Hearts", hearts = {}}
+                for player, value in pairs(state.hearts) do
+                        if typeof(value) == "number" then
+                                payload.hearts[player.UserId] = value
+                        end
+                end
+                pirateApocalypseSendStatus(payload)
+        end
+
+        local function pirateApocalypseHandlePlayerDeath(context: SpecialEventContext, state: {[string]: any}, record: ParticipantRecord): boolean
+                local player = record.player
+                if not player then
+                        return true
+                end
+
+                pirateApocalypseEnsureHeartEntry(state, player)
+
+                local remaining = math.max((state.hearts[player] or 0) - 1, 0)
+                state.hearts[player] = remaining
+
+                local message: string? = nil
+                if remaining >= 2 then
+                        message = string.format("You have %d hearts left", remaining)
+                elseif remaining == 1 then
+                        message = "You have 1 heart left"
+                else
+                        message = "This is your last chance"
+                end
+
+                if message then
+                        pirateApocalypseSendPersonal(player, {
+                                phase = "HeartMessage",
+                                message = message,
+                        })
+                end
+
+                pirateApocalypseBroadcastHearts(state)
+
+                local statusTable = state.playerStatus
+                statusTable[player] = statusTable[player] or {}
+                local status = statusTable[player]
+
+                if remaining <= 0 then
+                        state.ghostPlayers[player] = true
+                        status.isGhost = true
+                        pirateApocalypseAssignTeam(player, ghostTeam)
+                        player:LoadCharacter()
+                        pirateApocalypseCheckRoundFailure(context, state)
+                        return true
+                end
+
+                state.ghostPlayers[player] = nil
+                status.isGhost = false
+                pirateApocalypseAssignTeam(player, survivalTeam)
+                player:LoadCharacter()
+                pirateApocalypseCheckRoundFailure(context, state)
+                return true
+        end
+
+        local function pirateApocalypseHasActiveSurvivors(state: {[string]: any}): boolean
+                for player, hearts in pairs(state.hearts) do
+                        if typeof(hearts) == "number" and hearts > 0 and not state.ghostPlayers[player] then
+                                return true
+                        end
+                end
+                return false
+        end
+
+        local function pirateApocalypseCheckRoundFailure(context: SpecialEventContext, state: {[string]: any})
+                if pirateApocalypseHasActiveSurvivors(state) then
+                        return
+                end
+
+                pirateApocalypseSendStatus({phase = "Failure"})
+                task.defer(function()
+                        endRound(context.roundId)
+                end)
+        end
+
+        local function pirateApocalypseClearZombieTracking(state: {[string]: any})
+                for zombie in pairs(state.activeZombies) do
+                        state.activeZombies[zombie] = nil
+                end
+                pirateApocalypseDisconnectConnections(state.zombieConnections)
+                state.zombieConnections = {}
+        end
+
+        local function pirateApocalypseStartWave(context: SpecialEventContext, state: {[string]: any}, waveNumber: number)
+                if not roundInProgress or currentRoundId ~= context.roundId then
+                        return
+                end
+
+                pirateApocalypseClearZombieTracking(state)
+                pirateApocalypseSendStatus({phase = "Wave", wave = waveNumber})
+                state.currentWave = waveNumber
+                state.waveInProgress = true
+
+                local waveConfig = PIRATE_APOCALYPSE_WAVES[waveNumber]
+                if waveConfig and waveConfig.musicId then
+                        playMusic(waveConfig.musicId)
+                end
+
+                if waveNumber == #PIRATE_APOCALYPSE_WAVES then
+                        pirateApocalypseSendStatus({phase = "FinalWave", wave = waveNumber})
+                        applyDeathMatchAtmosphere(activeMapConfig)
+                end
+
+                state.pendingSpawns = 0
+                if waveConfig then
+                        for _, spawnInfo in ipairs(waveConfig.spawns or {}) do
+                                local spawnCount = math.max(spawnInfo.count or 0, 0)
+                                state.pendingSpawns += spawnCount
+                                task.spawn(function()
+                                        for spawnIndex = 1, spawnCount do
+                                                if not roundInProgress or currentRoundId ~= context.roundId then
+                                                        break
+                                                end
+
+                                                local spawnPoints = state.spawnPoints
+                                                if not spawnPoints or #spawnPoints == 0 then
+                                                        pirateApocalypseSendStatus({phase = "Warning", message = "Zombie spawn points unavailable."})
+                                                        state.pendingSpawns = math.max(state.pendingSpawns - (spawnCount - spawnIndex + 1), 0)
+                                                        break
+                                                end
+
+                                                local random = state.random or Random.new()
+                                                state.random = random
+                                                local index = random:NextInteger(1, #spawnPoints)
+                                                local spawnPart = spawnPoints[index]
+                                                local template = pirateApocalypseGetTemplate(state.zombieCache, state.zombieFolder, spawnInfo.name or "")
+                                                if template and spawnPart then
+                                                        local zombieClone = template:Clone()
+                                                        if zombieClone:IsA("Model") then
+                                                                zombieClone:PivotTo(spawnPart.CFrame)
+                                                                zombieClone.Parent = Workspace
+                                                        else
+                                                                zombieClone.Parent = Workspace
+                                                                if zombieClone:IsA("BasePart") then
+                                                                        zombieClone.CFrame = spawnPart.CFrame
+                                                                end
+                                                        end
+
+                                                        state.activeZombies[zombieClone] = true
+
+                                                        local function onZombieRemoved()
+                                                                state.activeZombies[zombieClone] = nil
+                                                                pirateApocalypseCheckWaveComplete(context, state)
+                                                        end
+
+                                                        local bundle = {}
+                                                        local humanoid = zombieClone:FindFirstChildOfClass("Humanoid")
+                                                        if humanoid then
+                                                                local conn = humanoid.Died:Connect(onZombieRemoved)
+                                                                table.insert(bundle, conn)
+                                                        end
+
+                                                        local destroyingConn = zombieClone.Destroying:Connect(onZombieRemoved)
+                                                        table.insert(bundle, destroyingConn)
+
+                                                        for _, conn in ipairs(bundle) do
+                                                                table.insert(state.zombieConnections, conn)
+                                                        end
+                                                else
+                                                        pirateApocalypseSendStatus({phase = "Warning", message = string.format("Missing zombie template '%s'", spawnInfo.name or "?")})
+                                                end
+
+                                                state.pendingSpawns = math.max(state.pendingSpawns - 1, 0)
+                                                pirateApocalypseCheckWaveComplete(context, state)
+
+                                                local interval = spawnInfo.interval or 1
+                                                if interval > 0 then
+                                                        task.wait(interval)
+                                                end
+                                        end
+                                end)
+                        end
+                end
+
+                pirateApocalypseCheckWaveComplete(context, state)
+        end
+
+        local function pirateApocalypseCheckWaveComplete(context: SpecialEventContext, state: {[string]: any})
+                if state.pendingSpawns > 0 then
+                        return
+                end
+
+                for zombie in pairs(state.activeZombies) do
+                        if zombie and zombie.Parent then
+                                return
+                        end
+                end
+
+                if not state.waveInProgress then
+                        return
+                end
+
+                state.waveInProgress = false
+
+                local waveNumber = state.currentWave
+                pirateApocalypseUnlockRewards(state, waveNumber)
+                forEachActiveParticipant(function(_, participantRecord)
+                        pirateApocalypseProvideGear(state, participantRecord)
+                end)
+                pirateApocalypseSendStatus({phase = "WaveComplete", wave = waveNumber})
+
+                if waveNumber % PIRATE_APOCALYPSE_HEART_RESTORE_INTERVAL == 0 then
+                        forEachActiveParticipant(function(player, _record)
+                                pirateApocalypseEnsureHeartEntry(state, player)
+                                local current = state.hearts[player] or 0
+                                if current < 3 then
+                                        state.hearts[player] = math.min(3, current + 1)
+                                end
+                                if state.ghostPlayers[player] and state.hearts[player] > 0 then
+                                        state.ghostPlayers[player] = nil
+                                        local statusTable = state.playerStatus
+                                        statusTable[player] = statusTable[player] or {}
+                                        statusTable[player].isGhost = false
+                                        pirateApocalypseAssignTeam(player, survivalTeam)
+                                        player:LoadCharacter()
+                                end
+                        end)
+                        pirateApocalypseBroadcastHearts(state)
+                end
+
+                if waveNumber >= #PIRATE_APOCALYPSE_WAVES then
+                        state.completed = true
+                        state.intermissionToken = (state.intermissionToken or 0) + 1
+                        pirateApocalypseSendStatus({phase = "Victory", message = "GG"})
+                        restoreSkybox()
+                        restoreAtmosphere()
+                        task.delay(5, function()
+                                endRound(context.roundId)
+                        end)
+                        return
+                end
+
+                state.intermissionToken = (state.intermissionToken or 0) + 1
+                local token = state.intermissionToken
+                local nextWave = waveNumber + 1
+                state.countdownThread = task.spawn(function()
+                        for remaining = 10, 0, -1 do
+                                if not roundInProgress or currentRoundId ~= context.roundId then
+                                        return
+                                end
+                                if state.intermissionToken ~= token then
+                                        return
+                                end
+
+                                pirateApocalypseSendStatus({
+                                        phase = "Countdown",
+                                        wave = nextWave,
+                                        remaining = remaining,
+                                })
+
+                                if remaining > 0 then
+                                        task.wait(1)
+                                end
+                        end
+
+                        if not roundInProgress or currentRoundId ~= context.roundId then
+                                return
+                        end
+                        if state.intermissionToken ~= token then
+                                return
+                        end
+
+                        pirateApocalypseSendStatus({phase = "WaveStart", wave = nextWave})
+                        state.countdownThread = nil
+                        pirateApocalypseStartWave(context, state, nextWave)
+                end)
+        end
+
+        local existingNeutralTeam = TeamsService:FindFirstChild("Neutral")
+        if existingNeutralTeam and existingNeutralTeam:IsA("Team") then
+                existingNeutralTeam:Destroy()
+        end
 end
 
 local function assignPlayerToNeutralState(player: Player)
@@ -184,6 +765,7 @@ type MapConfig = {
         deathMatchAtmosphereDecay: Color3?,
         deathMatchAtmosphereGlare: number?,
         deathMatchAtmosphereHaze: number?,
+        forcedSpecialEventId: string?,
 }
 
 local mapConfigurations: {[string]: MapConfig} = {
@@ -309,17 +891,26 @@ local mapConfigurations: {[string]: MapConfig} = {
 		deathMatchStormSize = Vector2.new(500, 500),
 		deathMatchShrinkDuration = 100,
 	},
-	RavenRock = {
-		id = "RavenRock",
-		displayName = "Raven Rock",
-		modelName = "RavenRock",
-		spawnContainer = "RavenSpawns",
-		skyboxName = "",
-		musicId = "1837755509",
-		deathMatchMusicId = "113109916386013",
-		deathMatchStormSize = Vector2.new(400, 400),
-		deathMatchShrinkDuration = 100,
-	},
+        RavenRock = {
+                id = "RavenRock",
+                displayName = "Raven Rock",
+                modelName = "RavenRock",
+                spawnContainer = "RavenSpawns",
+                skyboxName = "",
+                musicId = "1837755509",
+                deathMatchMusicId = "113109916386013",
+                deathMatchStormSize = Vector2.new(400, 400),
+                deathMatchShrinkDuration = 100,
+        },
+        PirateBay = {
+                id = "PirateBay",
+                displayName = "Pirate Bay",
+                modelName = "PirateBay",
+                spawnContainer = "PirateBaySpawn",
+                skyboxName = "PirateBaySky",
+                musicId = "114905649764615",
+                forcedSpecialEventId = "PirateBayApocalypse",
+        },
 
 }
 
@@ -400,18 +991,22 @@ local function registerSpecialEvent(definition: SpecialEventDefinition)
 end
 
 local function callSpecialEventCallback(context: SpecialEventContext?, methodName: string, ...)
-	if not context then
-		return
-	end
+        if not context then
+                return nil
+        end
 
-	local definition = context.definition
-	local callback = (definition :: any)[methodName]
-	if typeof(callback) == "function" then
-		local ok, err = pcall(callback, context, ...)
-		if not ok then
-			warn(string.format("Special event '%s' %s error: %s", definition.id, methodName, err))
-		end
-	end
+        local definition = context.definition
+        local callback = (definition :: any)[methodName]
+        if typeof(callback) == "function" then
+                local ok, result = pcall(callback, context, ...)
+                if not ok then
+                        warn(string.format("Special event '%s' %s error: %s", definition.id, methodName, result))
+                        return nil
+                end
+                return result
+        end
+
+        return nil
 end
 
 local function setActiveSpecialEvent(eventId: string?, roundId: number, difficultyOverride: number?): SpecialEventContext?
@@ -2499,18 +3094,109 @@ do
 				end
 			end
 		end,
-		onRoundEnded = function(context)
-			local state = context.state.HotTouch
-			if not state then
-				return
-			end
+                onRoundEnded = function(context)
+                        local state = context.state.HotTouch
+                        if not state then
+                                return
+                        end
 
-			if state.cleanup then
-				state.cleanup()
-			end
-			context.state.HotTouch = nil
-		end,
-	})
+                        if state.cleanup then
+                                state.cleanup()
+                        end
+                        context.state.HotTouch = nil
+                end,
+        })
+
+        registerSpecialEvent({
+                id = "PirateBayApocalypse",
+                displayName = "🏴‍☠️ Pirate Bay Apocalypse",
+                ignoreDefaultGear = true,
+                onRoundPrepared = function(context, _config, mapModel)
+                        local state = pirateApocalypseEnsureState(context, mapModel)
+                        state.hearts = {}
+                        state.ghostPlayers = {}
+                        state.playerStatus = {}
+                        state.running = false
+                        state.completed = false
+                        state.currentWave = 0
+                        state.pendingSpawns = 0
+                        state.spawnPoints = pirateApocalypseCollectSpawnPoints(if mapModel then mapModel:FindFirstChild("ZombieSpawn") else nil)
+                        pirateApocalypseUnlockRewards(state, 0)
+                        pirateApocalypseBroadcastHearts(state)
+                        pirateApocalypseSendStatus({phase = "ApocalypseReady", totalWaves = #PIRATE_APOCALYPSE_WAVES})
+                        context.state.DisableRoundTimer = true
+                        context.state.DisableCompletionCheck = true
+                end,
+                onParticipantCharacter = function(context, record, _character, _humanoid)
+                        local state = pirateApocalypseEnsureState(context, activeMapModel)
+                        local player = record.player
+                        pirateApocalypseEnsureHeartEntry(state, player)
+
+                        local statusTable = state.playerStatus
+                        statusTable[player] = statusTable[player] or {}
+                        local isGhost = state.ghostPlayers[player] or statusTable[player].isGhost
+                        statusTable[player].isGhost = isGhost
+
+                        if isGhost then
+                                pirateApocalypseAssignTeam(player, ghostTeam)
+                                pirateApocalypseSetGhostVisual(record, true)
+                        else
+                                pirateApocalypseAssignTeam(player, survivalTeam)
+                                pirateApocalypseSetGhostVisual(record, false)
+                                pirateApocalypseProvideGear(state, record)
+                        end
+                end,
+                provideGear = function(context, record)
+                        local state = pirateApocalypseEnsureState(context, activeMapModel)
+                        pirateApocalypseProvideGear(state, record)
+                end,
+                onCountdownComplete = function(context)
+                        local state = pirateApocalypseEnsureState(context, activeMapModel)
+                        if state.running then
+                                return
+                        end
+
+                        state.running = true
+                        context.state.DisableRoundTimer = true
+                        context.state.DisableCompletionCheck = true
+                        pirateApocalypseUnlockRewards(state, 0)
+
+                        forEachActiveParticipant(function(player, participantRecord)
+                                pirateApocalypseEnsureHeartEntry(state, player)
+                                state.playerStatus[player] = state.playerStatus[player] or {}
+                                state.playerStatus[player].isGhost = false
+                                state.ghostPlayers[player] = nil
+                                pirateApocalypseAssignTeam(player, survivalTeam)
+                                pirateApocalypseProvideGear(state, participantRecord)
+                        end)
+
+                        pirateApocalypseBroadcastHearts(state)
+                        pirateApocalypseSendStatus({phase = "WaveStart", wave = 1})
+                        pirateApocalypseStartWave(context, state, 1)
+                end,
+                onParticipantEliminating = function(context, record)
+                        local state = pirateApocalypseEnsureState(context, activeMapModel)
+                        return pirateApocalypseHandlePlayerDeath(context, state, record)
+                end,
+                onParticipantCleanup = function(_context, record)
+                        pirateApocalypseSetGhostVisual(record, false)
+                end,
+                onRoundEnded = function(context)
+                        context.state.DisableRoundTimer = nil
+                        context.state.DisableCompletionCheck = nil
+                        local state = context.state.PirateApocalypse
+                        if not state then
+                                return
+                        end
+
+                        pirateApocalypseDisconnectConnections(state.zombieConnections)
+                        state.zombieConnections = {}
+                        state.activeZombies = {}
+                        state.intermissionToken = (state.intermissionToken or 0) + 1
+                        state.running = false
+                        pirateApocalypseSendStatus({phase = "Cleanup"})
+                end,
+        })
 end
 
 local mapsFolder = ReplicatedStorage:FindFirstChild("Maps")
@@ -3311,16 +3997,21 @@ local function prepareParticipant(record: ParticipantRecord, spawnPart: BasePart
 end
 
 handleElimination = function(player: Player, roundId: number)
-	local record = participantRecords[player]
-	if not record or record.roundId ~= roundId then
-		return
-	end
+        local record = participantRecords[player]
+        if not record or record.roundId ~= roundId then
+                return
+        end
 
-	callSpecialEventCallback(activeSpecialEvent, "onParticipantEliminated", record)
-	cleanupParticipant(player)
-	clearPVPTools(player)
-	player.Team = spectateTeam
-	player.Neutral = false
+        local prevented = callSpecialEventCallback(activeSpecialEvent, "onParticipantEliminating", record)
+        if prevented then
+                return
+        end
+
+        callSpecialEventCallback(activeSpecialEvent, "onParticipantEliminated", record)
+        cleanupParticipant(player)
+        clearPVPTools(player)
+        player.Team = spectateTeam
+        player.Neutral = false
 
 	task.defer(function()
 		checkRoundCompletion(roundId)
@@ -3328,15 +4019,22 @@ handleElimination = function(player: Player, roundId: number)
 end
 
 checkRoundCompletion = function(roundId: number)
-	if roundId ~= currentRoundId or not roundInProgress then
-		return
-	end
+        if roundId ~= currentRoundId or not roundInProgress then
+                return
+        end
 
-	for player, record in participantRecords do
-		if record.roundId == roundId and isPlayerInNeutralState(player) then
-			local humanoid = record.humanoid
-			if not humanoid then
-				local character = player.Character
+        if activeSpecialEvent and activeSpecialEvent.state then
+                local stateTable = activeSpecialEvent.state
+                if (stateTable :: any).DisableCompletionCheck then
+                        return
+                end
+        end
+
+        for player, record in participantRecords do
+                if record.roundId == roundId and isPlayerInNeutralState(player) then
+                        local humanoid = record.humanoid
+                        if not humanoid then
+                                local character = player.Character
 				if character then
 					humanoid = character:FindFirstChildOfClass("Humanoid")
 					record.humanoid = humanoid
@@ -3666,18 +4364,18 @@ local function startRound(player: Player, mapId: string, requestedEventId: strin
 		return
 	end
 
-	clearActiveSpecialEvent()
+        clearActiveSpecialEvent()
 
-	local resolvedEventId: string? = nil
-	local requestedEventRaw = if typeof(requestedEventId) == "string" then requestedEventId else nil
-	local rolledRandomEvent = false
+        local resolvedEventId: string? = config.forcedSpecialEventId
+        local requestedEventRaw = if typeof(requestedEventId) == "string" then requestedEventId else nil
+        local rolledRandomEvent = false
 
-	if requestedEventRaw and requestedEventRaw ~= "" then
-		if string.upper(requestedEventRaw) == "RANDOM" then
-			rolledRandomEvent = true
-			resolvedEventId = getRandomSpecialEventId()
-		else
-			if specialEventDefinitions[requestedEventRaw] then
+        if not resolvedEventId and requestedEventRaw and requestedEventRaw ~= "" then
+                if string.upper(requestedEventRaw) == "RANDOM" then
+                        rolledRandomEvent = true
+                        resolvedEventId = getRandomSpecialEventId()
+                else
+                        if specialEventDefinitions[requestedEventRaw] then
 				resolvedEventId = requestedEventRaw
 			else
 				local searchKey = string.upper(requestedEventRaw)
@@ -3691,11 +4389,16 @@ local function startRound(player: Player, mapId: string, requestedEventId: strin
 		end
 	end
 
-	if rolledRandomEvent and not resolvedEventId then
-		resolvedEventId = getRandomSpecialEventId()
-	end
+        if rolledRandomEvent and not resolvedEventId then
+                resolvedEventId = getRandomSpecialEventId()
+        end
 
-	roundInProgress = true
+        if config.forcedSpecialEventId then
+                resolvedEventId = config.forcedSpecialEventId
+                rolledRandomEvent = false
+        end
+
+        roundInProgress = true
 	currentRoundId += 1
 	local roundId = currentRoundId
 
@@ -3915,25 +4618,41 @@ local function startRound(player: Player, mapId: string, requestedEventId: strin
 		return
 	end
 
-	local skipRoundTimer = false
-	if activeSpecialEvent and activeSpecialEvent.state then
-		local stateTable = activeSpecialEvent.state
-		local hotTouchState = (stateTable :: any).HotTouch
-		if hotTouchState and hotTouchState.disableRoundTimer then
-			skipRoundTimer = true
-		end
-	end
+        local skipRoundTimer = false
+        if activeSpecialEvent and activeSpecialEvent.state then
+                local stateTable = activeSpecialEvent.state
+                local disableToken = (stateTable :: any).DisableRoundTimer
+                if disableToken then
+                        skipRoundTimer = true
+                end
+                local hotTouchState = (stateTable :: any).HotTouch
+                if hotTouchState and hotTouchState.disableRoundTimer then
+                        skipRoundTimer = true
+                end
+        end
 
-	if skipRoundTimer then
-		while roundInProgress and currentRoundId == roundId do
-			task.wait(1)
-			if not roundInProgress or currentRoundId ~= roundId then
-				break
-			end
-			checkRoundCompletion(roundId)
-		end
-		return
-	end
+        if skipRoundTimer then
+                local disableCompletion = false
+                if activeSpecialEvent and activeSpecialEvent.state then
+                        local stateTable = activeSpecialEvent.state
+                        if (stateTable :: any).DisableCompletionCheck then
+                                disableCompletion = true
+                        end
+                end
+
+                if disableCompletion then
+                        return
+                end
+
+                while roundInProgress and currentRoundId == roundId do
+                        task.wait(1)
+                        if not roundInProgress or currentRoundId ~= roundId then
+                                break
+                        end
+                        checkRoundCompletion(roundId)
+                end
+                return
+        end
 
 	for remaining = 120, 0, -1 do
 		if not roundInProgress or currentRoundId ~= roundId then
