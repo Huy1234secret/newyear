@@ -236,6 +236,25 @@ do
 		end
 	end
 
+        local PIRATE_APOCALYPSE_ZOMBIE_FOLDER_NAME = "PirateApocalypseZombies"
+
+        local function pirateApocalypseEnsureZombieParentFolder(state: {[string]: any}): Folder
+                local folder = state.zombieParentFolder
+                if folder and folder.Parent then
+                        return folder
+                end
+
+                local existing = Workspace:FindFirstChild(PIRATE_APOCALYPSE_ZOMBIE_FOLDER_NAME)
+                if not existing or not existing:IsA("Folder") then
+                        existing = Instance.new("Folder")
+                        existing.Name = PIRATE_APOCALYPSE_ZOMBIE_FOLDER_NAME
+                        existing.Parent = Workspace
+                end
+
+                state.zombieParentFolder = existing
+                return existing
+        end
+
         function pirateApocalypseEnsureState(context: SpecialEventContext, mapModel: Model?): {[string]: any}
                 local state = context.state.PirateApocalypse
                 local spawnPoints = pirateApocalypseResolveSpawnPoints(mapModel)
@@ -252,6 +271,8 @@ do
                                 state.gearFolder = ReplicatedStorage:FindFirstChild("SurvivalGear")
                         end
 
+                        pirateApocalypseEnsureZombieParentFolder(state)
+
                         return state
                 end
 
@@ -262,22 +283,25 @@ do
                         playerStatus = {},
 			unlockedGear = {},
 			gearCache = {},
-			zombieCache = {},
-			activeZombies = {},
-			pendingSpawns = 0,
-			running = false,
-			completed = false,
-			currentWave = 0,
+                        zombieCache = {},
+                        activeZombies = {},
+                        pendingSpawns = 0,
+                        running = false,
+                        completed = false,
+                        currentWave = 0,
                         spawnPoints = spawnPoints,
                         zombieFolder = ReplicatedStorage:FindFirstChild("Zombies"),
                         gearFolder = ReplicatedStorage:FindFirstChild("SurvivalGear"),
+                        zombieParentFolder = nil,
                         zombieConnections = {},
                         random = Random.new(),
                 }
 
-		context.state.PirateApocalypse = state
-		return state
-	end
+                pirateApocalypseEnsureZombieParentFolder(state)
+
+                context.state.PirateApocalypse = state
+                return state
+        end
 
 	function pirateApocalypseUnlockRewards(state: {[string]: any}, waveNumber: number)
 		local rewards = PIRATE_APOCALYPSE_GEAR_REWARDS[waveNumber]
@@ -559,13 +583,22 @@ do
 		end)
 	end
 
-	local function pirateApocalypseClearZombieTracking(state: {[string]: any})
-		for zombie in pairs(state.activeZombies) do
-			state.activeZombies[zombie] = nil
-		end
-		pirateApocalypseDisconnectConnections(state.zombieConnections)
-		state.zombieConnections = {}
-	end
+        local function pirateApocalypseClearZombieTracking(state: {[string]: any})
+                for zombie in pairs(state.activeZombies) do
+                        state.activeZombies[zombie] = nil
+                end
+                pirateApocalypseDisconnectConnections(state.zombieConnections)
+                state.zombieConnections = {}
+
+                local parentFolder = state.zombieParentFolder
+                if parentFolder and parentFolder.Parent then
+                        for _, child in ipairs(parentFolder:GetChildren()) do
+                                if child:GetAttribute("PVPGenerated") then
+                                        child:Destroy()
+                                end
+                        end
+                end
+        end
 
 	function pirateApocalypseStartWave(context: SpecialEventContext, state: {[string]: any}, waveNumber: number)
 		-- Allow starting during prep; just ensure round id matches
@@ -608,11 +641,11 @@ do
 						state.random = random
 						local index = random:NextInteger(1, #spawnPoints)
 						local spawnPart = spawnPoints[index]
-						local template = pirateApocalypseGetTemplate(state.zombieCache, state.zombieFolder, spawnInfo.name or "")
+                                                local template = pirateApocalypseGetTemplate(state.zombieCache, state.zombieFolder, spawnInfo.name or "")
                                                 if template and spawnPart then
                                                         local zombieClone = template:Clone()
                                                         zombieClone:SetAttribute("PVPGenerated", true)
-                                                        local zombieParent = state.zombieFolder or Workspace
+                                                        local zombieParent = pirateApocalypseEnsureZombieParentFolder(state)
                                                         if zombieClone:IsA("Model") then
                                                                 zombieClone:PivotTo(spawnPart.CFrame)
                                                                 zombieClone.Parent = zombieParent
