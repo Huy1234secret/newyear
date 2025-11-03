@@ -104,6 +104,10 @@ do
 
 		local matched: Instance? = nil
 		for _, child in folder:GetChildren() do
+			if child:GetAttribute("PVPGenerated") == true then
+				continue
+			end
+
 			if child:IsA("Tool") or child:IsA("Model") then
 				local candidate = pirateApocalypseNormalizeName(child.Name)
 				if candidate == normalized then
@@ -605,17 +609,19 @@ do
 						local index = random:NextInteger(1, #spawnPoints)
 						local spawnPart = spawnPoints[index]
 						local template = pirateApocalypseGetTemplate(state.zombieCache, state.zombieFolder, spawnInfo.name or "")
-						if template and spawnPart then
-							local zombieClone = template:Clone()
-							if zombieClone:IsA("Model") then
-								zombieClone:PivotTo(spawnPart.CFrame)
-								zombieClone.Parent = Workspace
-							else
-								zombieClone.Parent = Workspace
-								if zombieClone:IsA("BasePart") then
-									zombieClone.CFrame = spawnPart.CFrame
-								end
-							end
+                                                if template and spawnPart then
+                                                        local zombieClone = template:Clone()
+                                                        zombieClone:SetAttribute("PVPGenerated", true)
+                                                        local zombieParent = state.zombieFolder or Workspace
+                                                        if zombieClone:IsA("Model") then
+                                                                zombieClone:PivotTo(spawnPart.CFrame)
+                                                                zombieClone.Parent = zombieParent
+                                                        else
+                                                                zombieClone.Parent = zombieParent
+                                                                if zombieClone:IsA("BasePart") then
+                                                                        zombieClone.CFrame = spawnPart.CFrame
+                                                                end
+                                                        end
 
 							state.activeZombies[zombieClone] = true
 
