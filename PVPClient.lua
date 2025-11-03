@@ -81,9 +81,9 @@ local mapDisplayNames = {
 	RocketArena = "Rocket Arena",
 	HauntedMansion = "Haunted Mansion",
 	BowlingAlley = "Bowling Alley",
-        HappyHomeOfRobloxia = "Happy Home of Robloxia",
-        RavenRock = "Raven Rock",
-        PirateBay = "Pirate Bay",
+	HappyHomeOfRobloxia = "Happy Home of Robloxia",
+	RavenRock = "Raven Rock",
+	PirateBay = "Pirate Bay",
 
 }
 
@@ -100,8 +100,8 @@ local function createInstance(className: string, props: {[string]: any})
 end
 
 local playerControlState = {
-        module = nil :: any,
-        controls = nil :: any,
+	module = nil :: any,
+	controls = nil :: any,
 }
 
 local function setBackpackCoreGuiEnabled(enabled: boolean)
@@ -133,14 +133,14 @@ else
 end
 
 local function getPlayerControls()
-        local existingControls = playerControlState.controls
-        if existingControls then
-                return existingControls
-        end
+	local existingControls = playerControlState.controls
+	if existingControls then
+		return existingControls
+	end
 
-        local success, moduleOrErr = pcall(function()
-                local playerScripts = localPlayer:WaitForChild("PlayerScripts", 5)
-                if not playerScripts then
+	local success, moduleOrErr = pcall(function()
+		local playerScripts = localPlayer:WaitForChild("PlayerScripts", 5)
+		if not playerScripts then
 			return nil
 		end
 		local moduleScript = playerScripts:FindFirstChild("PlayerModule")
@@ -154,21 +154,21 @@ local function getPlayerControls()
 	end)
 
 	if not success or not moduleOrErr then
-                warn("Unable to load PlayerModule for inverted controls.")
-                return nil
-        end
+		warn("Unable to load PlayerModule for inverted controls.")
+		return nil
+	end
 
-        playerControlState.module = moduleOrErr
-        local controls = nil
-        local ok, result = pcall(function()
-                return moduleOrErr:GetControls()
-        end)
-        if ok then
-                controls = result
-        end
+	playerControlState.module = moduleOrErr
+	local controls = nil
+	local ok, result = pcall(function()
+		return moduleOrErr:GetControls()
+	end)
+	if ok then
+		controls = result
+	end
 
-        playerControlState.controls = controls
-        return controls
+	playerControlState.controls = controls
+	return controls
 end
 
 local GEAR_CURSOR_IMAGE_ASSET = "rbxassetid://9925913476"
@@ -211,13 +211,13 @@ type StatusUI = {
 }
 
 type SpecialEventUI = {
-        frame: Frame,
-        stroke: UIStroke,
-        gradient: UIGradient,
-        header: TextLabel,
-        title: TextLabel,
-        rollLabel: TextLabel,
-        scale: UIScale,
+	frame: Frame,
+	stroke: UIStroke,
+	gradient: UIGradient,
+	header: TextLabel,
+	title: TextLabel,
+	rollLabel: TextLabel,
+	scale: UIScale,
 }
 
 type SprintDefaults = {
@@ -277,14 +277,14 @@ local uiRefs: UiRefs = {
 }
 
 local inventoryVisibility = {
-        isVisible = true,
-        autoOpened = false,
+	isVisible = true,
+	autoOpened = false,
 }
 local setInventoryVisibility: (boolean) -> ()
 
 local hotTouchState = {
-        active = false,
-        holderId = nil :: number?,
+	active = false,
+	holderId = nil :: number?,
 }
 
 local function refreshHotTouchStatusVisibility()
@@ -299,11 +299,11 @@ local function refreshHotTouchStatusVisibility()
 		return
 	end
 
-        if not hotTouchState.active or label.Text == "" then
-                label.Visible = false
-        else
-                label.Visible = true
-        end
+	if not hotTouchState.active or label.Text == "" then
+		label.Visible = false
+	else
+		label.Visible = true
+	end
 end
 
 local function setHotTouchStatusText(text: string?)
@@ -675,54 +675,54 @@ local function createSpecialEventUI(parent: ScreenGui, isTouch: boolean): Specia
 		Parent = frame,
 	})
 
-        local title = createInstance("TextLabel", {
-                Name = "Title",
-                Size = UDim2.new(1, -60, 0, 64),
-                Position = UDim2.new(0, 30, 0, 66),
-                BackgroundTransparency = 1,
-                Font = Enum.Font.GothamBlack,
-                Text = "",
-                TextScaled = true,
-                TextWrapped = true,
-                TextColor3 = Color3.fromRGB(255, 255, 255),
-                ZIndex = frame.ZIndex + 1,
-                Parent = frame,
-        })
+	local title = createInstance("TextLabel", {
+		Name = "Title",
+		Size = UDim2.new(1, -60, 0, 64),
+		Position = UDim2.new(0, 30, 0, 66),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBlack,
+		Text = "",
+		TextScaled = true,
+		TextWrapped = true,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		ZIndex = frame.ZIndex + 1,
+		Parent = frame,
+	})
 
-        local rollLabel = createInstance("TextLabel", {
-                Name = "RollText",
-                Size = UDim2.new(1, -60, 0, 26),
-                Position = UDim2.new(0, 30, 0, 128),
-                BackgroundTransparency = 1,
-                Font = Enum.Font.GothamSemibold,
-                Text = "",
-                TextScaled = false,
-                TextSize = if isTouch then 18 else 16,
-                TextColor3 = Color3.fromRGB(215, 225, 255),
-                TextTransparency = 0.1,
-                TextWrapped = true,
-                TextXAlignment = Enum.TextXAlignment.Center,
-                TextYAlignment = Enum.TextYAlignment.Top,
-                Visible = false,
-                ZIndex = frame.ZIndex + 1,
-                Parent = frame,
-        })
+	local rollLabel = createInstance("TextLabel", {
+		Name = "RollText",
+		Size = UDim2.new(1, -60, 0, 26),
+		Position = UDim2.new(0, 30, 0, 128),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamSemibold,
+		Text = "",
+		TextScaled = false,
+		TextSize = if isTouch then 18 else 16,
+		TextColor3 = Color3.fromRGB(215, 225, 255),
+		TextTransparency = 0.1,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Visible = false,
+		ZIndex = frame.ZIndex + 1,
+		Parent = frame,
+	})
 
-        local scale = createInstance("UIScale", {
-                Name = "Scale",
-                Scale = 1,
-                Parent = frame,
+	local scale = createInstance("UIScale", {
+		Name = "Scale",
+		Scale = 1,
+		Parent = frame,
 	})
 
 	return {
 		frame = frame,
-                stroke = stroke,
-                gradient = gradient,
-                header = header,
-                title = title,
-                rollLabel = rollLabel,
-                scale = scale,
-        }
+		stroke = stroke,
+		gradient = gradient,
+		header = header,
+		title = title,
+		rollLabel = rollLabel,
+		scale = scale,
+	}
 end
 
 local function createSprintUI(parent: ScreenGui, refs: UiRefs, isTouch: boolean, layout: LayoutConfig): SprintUI
@@ -907,21 +907,21 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 				return
 			end
 
-                        if inventoryVisibility.isVisible then
-                                button.ImageTransparency = 0
-                                button.ImageColor3 = Color3.fromRGB(255, 255, 255)
-                        else
-                                button.ImageTransparency = 0.2
-                                button.ImageColor3 = Color3.fromRGB(200, 205, 220)
+			if inventoryVisibility.isVisible then
+				button.ImageTransparency = 0
+				button.ImageColor3 = Color3.fromRGB(255, 255, 255)
+			else
+				button.ImageTransparency = 0.2
+				button.ImageColor3 = Color3.fromRGB(200, 205, 220)
 			end
 		end
 
-                state.setVisibility = function(visible: boolean)
-                        inventoryVisibility.isVisible = visible
+		state.setVisibility = function(visible: boolean)
+			inventoryVisibility.isVisible = visible
 
-                        if refs.inventoryFrame then
-                                refs.inventoryFrame.Visible = visible
-                        end
+			if refs.inventoryFrame then
+				refs.inventoryFrame.Visible = visible
+			end
 
 			updateInventoryToggleVisual()
 		end
@@ -941,12 +941,12 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 			})
 
 			refs.inventoryToggleButton.Activated:Connect(function()
-                                if state.setVisibility then
-                                        state.setVisibility(not inventoryVisibility.isVisible)
-                                end
-                                inventoryVisibility.autoOpened = true
-                        end)
-                end
+				if state.setVisibility then
+					state.setVisibility(not inventoryVisibility.isVisible)
+				end
+				inventoryVisibility.autoOpened = true
+			end)
+		end
 
 		if state.setVisibility then
 			state.setVisibility(not isTouch)
@@ -1087,11 +1087,11 @@ local function createInventoryUI(parent: ScreenGui, refs: UiRefs, isTouch: boole
 
 			inventorySlots[slotIndex] = slotUI
 		end
-        else
-                state.setVisibility = function(visible: boolean)
-                        inventoryVisibility.isVisible = visible
-                end
-        end
+	else
+		state.setVisibility = function(visible: boolean)
+			inventoryVisibility.isVisible = visible
+		end
+	end
 
 	return state
 end
@@ -1200,59 +1200,59 @@ local function showHotTouchAlert()
 end
 
 local function setHotTouchActive(active: boolean)
-        if hotTouchState.active == active then
-                refreshHotTouchStatusVisibility()
-                return
-        end
+	if hotTouchState.active == active then
+		refreshHotTouchStatusVisibility()
+		return
+	end
 
-        hotTouchState.active = active
-        if not hotTouchState.active then
-                hotTouchState.holderId = nil
-                setHotTouchStatusText(nil)
-                stopHotTouchAlert()
-        else
-                refreshHotTouchStatusVisibility()
-        end
+	hotTouchState.active = active
+	if not hotTouchState.active then
+		hotTouchState.holderId = nil
+		setHotTouchStatusText(nil)
+		stopHotTouchAlert()
+	else
+		refreshHotTouchStatusVisibility()
+	end
 end
 
 local statusTheme = {
-        defaultColor = statusUI.label.TextColor3,
-        palette = {
-                countdown = Color3.fromRGB(245, 245, 255),
-                match = Color3.fromRGB(210, 235, 255),
-                deathMatchBackground = Color3.fromRGB(60, 10, 10),
-                deathMatchStroke = Color3.fromRGB(255, 90, 90),
-        },
-        highlightStyles = {
-                Spectate = {
-                        outlineColor = Color3.fromRGB(255, 255, 255),
-                        fillColor = Color3.fromRGB(255, 255, 255),
-                        fillTransparency = 0.5,
-                },
-                DeathMatch = {
-                        outlineColor = Color3.fromRGB(255, 0, 0),
-                        fillColor = Color3.fromRGB(255, 0, 0),
-                        fillTransparency = 0.5,
-                },
-        },
-        baseFramePosition = statusUI.frame.Position,
-        baseLabelPosition = statusUI.label.Position,
+	defaultColor = statusUI.label.TextColor3,
+	palette = {
+		countdown = Color3.fromRGB(245, 245, 255),
+		match = Color3.fromRGB(210, 235, 255),
+		deathMatchBackground = Color3.fromRGB(60, 10, 10),
+		deathMatchStroke = Color3.fromRGB(255, 90, 90),
+	},
+	highlightStyles = {
+		Spectate = {
+			outlineColor = Color3.fromRGB(255, 255, 255),
+			fillColor = Color3.fromRGB(255, 255, 255),
+			fillTransparency = 0.5,
+		},
+		DeathMatch = {
+			outlineColor = Color3.fromRGB(255, 0, 0),
+			fillColor = Color3.fromRGB(255, 0, 0),
+			fillTransparency = 0.5,
+		},
+	},
+	baseFramePosition = statusUI.frame.Position,
+	baseLabelPosition = statusUI.label.Position,
 }
 
 local matchState = {
-        mapId = nil :: string?,
-        eventDisplayName = nil :: string?,
-        remaining = 0,
-        flashConnection = nil :: RBXScriptConnection?,
-        shakeConnection = nil :: RBXScriptConnection?,
+	mapId = nil :: string?,
+	eventDisplayName = nil :: string?,
+	remaining = 0,
+	flashConnection = nil :: RBXScriptConnection?,
+	shakeConnection = nil :: RBXScriptConnection?,
 }
 
 local apocalypseState = {
-        active = false,
-        wave = 0,
-        totalWaves = 0,
-        countdown = 0,
-        hearts = {} :: {[number]: number},
+	active = false,
+	wave = 0,
+	totalWaves = 0,
+	countdown = 0,
+	hearts = {} :: {[number]: number},
 }
 
 type NeutralButtonShakeTarget = {
@@ -1269,26 +1269,26 @@ local transitionState = {
 }
 
 local specialEventState = {
-        active = false,
-        id = nil :: string?,
-        displayName = nil :: string?,
-        randomized = false,
-        randomToken = 0,
-        hideToken = 0,
-        options = {} :: {{id: string?, name: string?}},
-        finalName = nil :: string?,
-        effects = {
-                sprintDisabled = false,
-                invisible = false,
-                inverted = false,
-        },
-        difficultyToken = 0,
+	active = false,
+	id = nil :: string?,
+	displayName = nil :: string?,
+	randomized = false,
+	randomToken = 0,
+	hideToken = 0,
+	options = {} :: {{id: string?, name: string?}},
+	finalName = nil :: string?,
+	effects = {
+		sprintDisabled = false,
+		invisible = false,
+		inverted = false,
+	},
+	difficultyToken = 0,
 }
 
 local DIFFICULTY_EVENT_IDS = {
-        HotTouch = true,
-        KillBot = true,
-        RainingBomb = true,
+	HotTouch = true,
+	KillBot = true,
+	RainingBomb = true,
 }
 
 local DIFFICULTY_NUMBERS = {1, 2, 3, 4, 5, 6}
@@ -1296,8 +1296,8 @@ local DIFFICULTY_CRITICAL_LEVEL = 6
 local DEFAULT_DIFFICULTY_ROLL_COLOR = Color3.fromRGB(215, 225, 255)
 local DEFAULT_DIFFICULTY_ROLL_TRANSPARENCY = 0.1
 local CRITICAL_DIFFICULTY_FLASH_STYLES = {
-        {color = Color3.fromRGB(255, 80, 80), transparency = 0.05},
-        {color = Color3.fromRGB(255, 200, 200), transparency = 0.2},
+	{color = Color3.fromRGB(255, 80, 80), transparency = 0.05},
+	{color = Color3.fromRGB(255, 200, 200), transparency = 0.2},
 }
 local difficultyFlashState = {token = 0}
 
@@ -1456,19 +1456,19 @@ local function startInvisibleCharacterFade(character: Model, owner: Player?, dur
 end
 
 local invertedControlState = {
-        active = false,
-        requested = false,
-        controlsDisabled = false,
-        keyboard = {
-                forward = false,
-                back = false,
-                left = false,
-                right = false,
-        },
-        thumbstick = Vector2.new(),
-        connections = {} :: {RBXScriptConnection},
-        heartbeatConn = nil :: RBXScriptConnection?,
-        jumpConn = nil :: RBXScriptConnection?,
+	active = false,
+	requested = false,
+	controlsDisabled = false,
+	keyboard = {
+		forward = false,
+		back = false,
+		left = false,
+		right = false,
+	},
+	thumbstick = Vector2.new(),
+	connections = {} :: {RBXScriptConnection},
+	heartbeatConn = nil :: RBXScriptConnection?,
+	jumpConn = nil :: RBXScriptConnection?,
 }
 
 local awaitingRespawnMovementReset = false
@@ -1639,11 +1639,11 @@ local function getHighlightStyleForContext(context: string?): HighlightStyle?
 	if context == "Spectate" then
 		local team = localPlayer.Team
 		if team and team.Name == "Spectate" then
-                        return statusTheme.highlightStyles.Spectate
+			return statusTheme.highlightStyles.Spectate
 		end
 	elseif context == "DeathMatch" then
 		if localPlayer.Neutral then
-                        return statusTheme.highlightStyles.DeathMatch
+			return statusTheme.highlightStyles.DeathMatch
 		end
 	end
 
@@ -1685,7 +1685,7 @@ local function updateHighlightForPlayer(targetPlayer: Player)
 		highlightState.highlights[targetPlayer] = highlight
 	end
 
-        local style = highlightState.style or statusTheme.highlightStyles.DeathMatch
+	local style = highlightState.style or statusTheme.highlightStyles.DeathMatch
 	highlight.OutlineColor = style.outlineColor
 	highlight.FillColor = style.fillColor
 	highlight.FillTransparency = style.fillTransparency
@@ -1839,64 +1839,64 @@ local function updateHighlightActivation()
 end
 
 local function setDifficultyFlashState(enabled: boolean)
-        difficultyFlashState.token += 1
-        local token = difficultyFlashState.token
+	difficultyFlashState.token += 1
+	local token = difficultyFlashState.token
 
-        local label = specialEventUI.rollLabel
-        if not label then
-                return
-        end
+	local label = specialEventUI.rollLabel
+	if not label then
+		return
+	end
 
-        if not enabled then
-                label.TextColor3 = DEFAULT_DIFFICULTY_ROLL_COLOR
-                label.TextTransparency = DEFAULT_DIFFICULTY_ROLL_TRANSPARENCY
-                return
-        end
+	if not enabled then
+		label.TextColor3 = DEFAULT_DIFFICULTY_ROLL_COLOR
+		label.TextTransparency = DEFAULT_DIFFICULTY_ROLL_TRANSPARENCY
+		return
+	end
 
-        task.spawn(function()
-                local index = 1
-                while difficultyFlashState.token == token and label.Parent do
-                        local style = CRITICAL_DIFFICULTY_FLASH_STYLES[index]
-                        if style then
-                                label.TextColor3 = style.color
-                                label.TextTransparency = style.transparency
-                        end
-                        index = (index % #CRITICAL_DIFFICULTY_FLASH_STYLES) + 1
-                        task.wait(0.22)
-                end
+	task.spawn(function()
+		local index = 1
+		while difficultyFlashState.token == token and label.Parent do
+			local style = CRITICAL_DIFFICULTY_FLASH_STYLES[index]
+			if style then
+				label.TextColor3 = style.color
+				label.TextTransparency = style.transparency
+			end
+			index = (index % #CRITICAL_DIFFICULTY_FLASH_STYLES) + 1
+			task.wait(0.22)
+		end
 
-                if label.Parent then
-                        label.TextColor3 = DEFAULT_DIFFICULTY_ROLL_COLOR
-                        label.TextTransparency = DEFAULT_DIFFICULTY_ROLL_TRANSPARENCY
-                end
-        end)
+		if label.Parent then
+			label.TextColor3 = DEFAULT_DIFFICULTY_ROLL_COLOR
+			label.TextTransparency = DEFAULT_DIFFICULTY_ROLL_TRANSPARENCY
+		end
+	end)
 end
 
 local function setSpecialEventRollText(text: string?)
-        if not text or text == "" then
-                setDifficultyFlashState(false)
-        end
+	if not text or text == "" then
+		setDifficultyFlashState(false)
+	end
 
-        if specialEventUI.rollLabel then
-                specialEventUI.rollLabel.Text = text or ""
-                specialEventUI.rollLabel.Visible = text ~= nil and text ~= ""
-        end
+	if specialEventUI.rollLabel then
+		specialEventUI.rollLabel.Text = text or ""
+		specialEventUI.rollLabel.Visible = text ~= nil and text ~= ""
+	end
 end
 
 local function hideSpecialEvent(immediate: boolean?)
-        specialEventState.hideToken += 1
-        local token = specialEventState.hideToken
+	specialEventState.hideToken += 1
+	local token = specialEventState.hideToken
 
-        if not specialEventUI.frame then
-                return
-        end
+	if not specialEventUI.frame then
+		return
+	end
 
-        setSpecialEventRollText(nil)
+	setSpecialEventRollText(nil)
 
-        if immediate then
-                specialEventUI.frame.Visible = false
-                return
-        end
+	if immediate then
+		specialEventUI.frame.Visible = false
+		return
+	end
 
 	local fadeTween = TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		BackgroundTransparency = 1,
@@ -1917,32 +1917,32 @@ local function hideSpecialEvent(immediate: boolean?)
 end
 
 local function showSpecialEvent(titleText: string, keepSeconds: number?, skipIntroAnimation: boolean?)
-        specialEventState.hideToken += 1
-        local token = specialEventState.hideToken
+	specialEventState.hideToken += 1
+	local token = specialEventState.hideToken
 
-        specialEventUI.title.Text = titleText
-        setSpecialEventRollText(nil)
-        specialEventUI.frame.Visible = true
-        if skipIntroAnimation then
-                specialEventUI.frame.BackgroundTransparency = 0.05
-                specialEventUI.scale.Scale = 1
-        else
-                specialEventUI.frame.BackgroundTransparency = 1
-                specialEventUI.scale.Scale = 0.2
+	specialEventUI.title.Text = titleText
+	setSpecialEventRollText(nil)
+	specialEventUI.frame.Visible = true
+	if skipIntroAnimation then
+		specialEventUI.frame.BackgroundTransparency = 0.05
+		specialEventUI.scale.Scale = 1
+	else
+		specialEventUI.frame.BackgroundTransparency = 1
+		specialEventUI.scale.Scale = 0.2
 
-                TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                        BackgroundTransparency = 0.05,
-                }):Play()
+		TweenService:Create(specialEventUI.frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			BackgroundTransparency = 0.05,
+		}):Play()
 
-                TweenService:Create(specialEventUI.scale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-                        Scale = 1,
-                }):Play()
-        end
+		TweenService:Create(specialEventUI.scale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Scale = 1,
+		}):Play()
+	end
 
-        if keepSeconds and keepSeconds > 0 then
-                task.delay(keepSeconds, function()
-                        if specialEventState.hideToken == token then
-                                hideSpecialEvent(false)
+	if keepSeconds and keepSeconds > 0 then
+		task.delay(keepSeconds, function()
+			if specialEventState.hideToken == token then
+				hideSpecialEvent(false)
 			end
 		end)
 	end
@@ -1987,93 +1987,93 @@ local function beginSpecialEventRandomization(options: {{id: string?, name: stri
 end
 
 local function completeSpecialEventRandomization(finalName: string)
-        if not specialEventState.randomized then
-                showSpecialEvent(finalName, 3)
-                setSpecialEventRollText(nil)
-                return
-        end
+	if not specialEventState.randomized then
+		showSpecialEvent(finalName, 3)
+		setSpecialEventRollText(nil)
+		return
+	end
 
-        specialEventState.randomized = false
-        specialEventUI.title.Text = finalName
-        setSpecialEventRollText(nil)
-        showSpecialEvent(finalName, 3)
+	specialEventState.randomized = false
+	specialEventUI.title.Text = finalName
+	setSpecialEventRollText(nil)
+	showSpecialEvent(finalName, 3)
 end
 
 local function showSpecialEventDifficulty(eventId: string, eventName: string, difficulty: number, rollDuration: number?, displaySeconds: number?, flashCritical: boolean?)
-        if not DIFFICULTY_EVENT_IDS[eventId] then
-                return
-        end
+	if not DIFFICULTY_EVENT_IDS[eventId] then
+		return
+	end
 
-        if specialEventState.id ~= eventId then
-                return
-        end
+	if specialEventState.id ~= eventId then
+		return
+	end
 
-        local baseName = eventName
-        if baseName == nil or baseName == "" then
-                baseName = specialEventState.displayName or "Special Event"
-        end
+	local baseName = eventName
+	if baseName == nil or baseName == "" then
+		baseName = specialEventState.displayName or "Special Event"
+	end
 
-        local clampedDifficulty = math.clamp(math.floor(difficulty), 1, #DIFFICULTY_NUMBERS)
-        local rollTime = rollDuration
-        if typeof(rollTime) ~= "number" or rollTime <= 0 then
-                rollTime = 2.4
-        end
+	local clampedDifficulty = math.clamp(math.floor(difficulty), 1, #DIFFICULTY_NUMBERS)
+	local rollTime = rollDuration
+	if typeof(rollTime) ~= "number" or rollTime <= 0 then
+		rollTime = 2.4
+	end
 
-        local holdTime = displaySeconds
-        if typeof(holdTime) ~= "number" or holdTime < 0 then
-                holdTime = 3
-        end
+	local holdTime = displaySeconds
+	if typeof(holdTime) ~= "number" or holdTime < 0 then
+		holdTime = 3
+	end
 
-        showSpecialEvent(baseName, nil, true)
-        setDifficultyFlashState(false)
-        setSpecialEventRollText("Difficulty ?")
-        local hideToken = specialEventState.hideToken
+	showSpecialEvent(baseName, nil, true)
+	setDifficultyFlashState(false)
+	setSpecialEventRollText("Difficulty ?")
+	local hideToken = specialEventState.hideToken
 
-        specialEventState.difficultyToken += 1
-        local token = specialEventState.difficultyToken
+	specialEventState.difficultyToken += 1
+	local token = specialEventState.difficultyToken
 
-        task.spawn(function()
-                local startTime = os.clock()
-                local index = 1
-                local step = 0.09
-                local totalNumbers = #DIFFICULTY_NUMBERS
+	task.spawn(function()
+		local startTime = os.clock()
+		local index = 1
+		local step = 0.09
+		local totalNumbers = #DIFFICULTY_NUMBERS
 
-                while specialEventState.difficultyToken == token and os.clock() - startTime < rollTime do
-                        local rollValue = DIFFICULTY_NUMBERS[((index - 1) % totalNumbers) + 1]
-                        setSpecialEventRollText(string.format("Difficulty %d", rollValue))
-                        index += 1
-                        task.wait(step)
-                        step = math.min(0.22, step + 0.01)
-                end
+		while specialEventState.difficultyToken == token and os.clock() - startTime < rollTime do
+			local rollValue = DIFFICULTY_NUMBERS[((index - 1) % totalNumbers) + 1]
+			setSpecialEventRollText(string.format("Difficulty %d", rollValue))
+			index += 1
+			task.wait(step)
+			step = math.min(0.22, step + 0.01)
+		end
 
-                if specialEventState.difficultyToken ~= token then
-                        return
-                end
+		if specialEventState.difficultyToken ~= token then
+			return
+		end
 
-                setSpecialEventRollText(string.format("Difficulty %d", clampedDifficulty))
+		setSpecialEventRollText(string.format("Difficulty %d", clampedDifficulty))
 
-                local shouldFlash = flashCritical and clampedDifficulty >= DIFFICULTY_CRITICAL_LEVEL
-                if shouldFlash then
-                        setDifficultyFlashState(true)
-                else
-                        setDifficultyFlashState(false)
-                end
+		local shouldFlash = flashCritical and clampedDifficulty >= DIFFICULTY_CRITICAL_LEVEL
+		if shouldFlash then
+			setDifficultyFlashState(true)
+		else
+			setDifficultyFlashState(false)
+		end
 
-                if holdTime and holdTime > 0 then
-                        task.delay(holdTime, function()
-                                if specialEventState.difficultyToken == token and specialEventState.hideToken == hideToken then
-                                        hideSpecialEvent(false)
-                                end
-                        end)
-                end
-        end)
+		if holdTime and holdTime > 0 then
+			task.delay(holdTime, function()
+				if specialEventState.difficultyToken == token and specialEventState.hideToken == hideToken then
+					hideSpecialEvent(false)
+				end
+			end)
+		end
+	end)
 end
 
 local function cancelInvisibleHighlightFade(highlight: Highlight)
-        local bundle = invisibleHighlightTweens[highlight]
-        if not bundle then
-                return
-        end
+	local bundle = invisibleHighlightTweens[highlight]
+	if not bundle then
+		return
+	end
 
 	if bundle.conn then
 		bundle.conn:Disconnect()
@@ -2574,23 +2574,23 @@ local function applyInvertedControlState()
 end
 
 local function setInvertedControlsEnabled(enabled: boolean)
-        invertedControlState.requested = enabled
-        applyInvertedControlState()
+	invertedControlState.requested = enabled
+	applyInvertedControlState()
 end
 
 local function restoreNormalMovementControls()
-        specialEventState.effects.inverted = false
+	specialEventState.effects.inverted = false
 
-        if invertedControlState.active or invertedControlState.requested or invertedControlState.controlsDisabled then
-                setInvertedControlsEnabled(false)
-        else
-                resetInvertedMovement()
-                enableDefaultControlsIfDisabled()
-        end
+	if invertedControlState.active or invertedControlState.requested or invertedControlState.controlsDisabled then
+		setInvertedControlsEnabled(false)
+	else
+		resetInvertedMovement()
+		enableDefaultControlsIfDisabled()
+	end
 end
 
 local function getSprintActionButton(): ImageButton?
-        local button = uiRefs.sprintActionButton
+	local button = uiRefs.sprintActionButton
 	if button and button.Parent then
 		return button
 	end
@@ -2931,10 +2931,10 @@ local function updateCursorForGearState()
 end
 
 local function getToolIcon(tool: Tool): string
-        local textureId = tool.TextureId
-        if textureId and textureId ~= "" then
-                return textureId
-        end
+	local textureId = tool.TextureId
+	if textureId and textureId ~= "" then
+		return textureId
+	end
 
 	local handle = tool:FindFirstChild("Handle")
 	if handle and handle:IsA("BasePart") then
@@ -2951,57 +2951,25 @@ local function getToolIcon(tool: Tool): string
 		end
 	end
 
-        return ""
-end
-
-local function getToolEmoji(tool: Tool): string?
-        local attributeCandidates = {
-                tool:GetAttribute("ItemEmoji"),
-                tool:GetAttribute("DisplayEmoji"),
-                tool:GetAttribute("Emoji"),
-        }
-
-        for _, value in ipairs(attributeCandidates) do
-                if typeof(value) == "string" and value ~= "" then
-                        return value
-                end
-        end
-
-        local emojiValue = tool:FindFirstChild("ItemEmoji")
-                or tool:FindFirstChild("DisplayEmoji")
-                or tool:FindFirstChild("Emoji")
-        if emojiValue and emojiValue:IsA("StringValue") and emojiValue.Value ~= "" then
-                return emojiValue.Value
-        end
-
-        return nil
-end
-
-local function getToolDisplayName(tool: Tool): string
-        local attribute = tool:GetAttribute("DisplayName")
-        if typeof(attribute) == "string" and attribute ~= "" then
-                return attribute
-        end
-
-        return tool.Name
+	return ""
 end
 
 updateInventorySlots = function()
-        local cleanedOrder: {Tool} = {}
-        for _, tool in ipairs(trackedGearOrder) do
-                if trackedGearTools[tool] then
-                        table.insert(cleanedOrder, tool)
+	local cleanedOrder: {Tool} = {}
+	for _, tool in ipairs(trackedGearOrder) do
+		if trackedGearTools[tool] then
+			table.insert(cleanedOrder, tool)
 		end
 	end
 	trackedGearOrder = cleanedOrder
 
 	local toolCount = #trackedGearOrder
-        if toolCount == 0 then
-                inventoryVisibility.autoOpened = false
-        elseif isTouchDevice and not inventoryVisibility.isVisible and not inventoryVisibility.autoOpened then
-                inventoryVisibility.autoOpened = true
-                setInventoryVisibility(true)
-        end
+	if toolCount == 0 then
+		inventoryVisibility.autoOpened = false
+	elseif isTouchDevice and not inventoryVisibility.isVisible and not inventoryVisibility.autoOpened then
+		inventoryVisibility.autoOpened = true
+		setInventoryVisibility(true)
+	end
 
 	for slotIndex = 1, 10 do
 		local slot = inventorySlots[slotIndex]
@@ -3009,26 +2977,16 @@ updateInventorySlots = function()
 			local tool = trackedGearOrder[slotIndex]
 			slotToolMapping[slotIndex] = tool
 
-                        if tool then
-                                local iconId = getToolIcon(tool)
-                                local emoji = getToolEmoji(tool)
-                                local displayName = getToolDisplayName(tool)
-                                slot.icon.Image = iconId
-                                slot.icon.Visible = iconId ~= ""
-                                if emoji and emoji ~= "" then
-                                        if displayName ~= "" then
-                                                slot.label.Text = string.format("%s %s", emoji, displayName)
-                                        else
-                                                slot.label.Text = emoji
-                                        end
-                                else
-                                        slot.label.Text = displayName
-                                end
-                                slot.frame.BackgroundTransparency = 0.15
-                                slot.button.Active = true
-                                slot.button.Selectable = true
-                                slot.numberLabel.TextColor3 = Color3.fromRGB(210, 220, 240)
-                        else
+			if tool then
+				local iconId = getToolIcon(tool)
+				slot.icon.Image = iconId
+				slot.icon.Visible = iconId ~= ""
+				slot.label.Text = tool.Name
+				slot.frame.BackgroundTransparency = 0.15
+				slot.button.Active = true
+				slot.button.Selectable = true
+				slot.numberLabel.TextColor3 = Color3.fromRGB(210, 220, 240)
+			else
 				slot.icon.Image = ""
 				slot.icon.Visible = false
 				slot.label.Text = ""
@@ -3338,7 +3296,7 @@ local function onHumanoidAdded(humanoid: Humanoid)
 	end
 
 	currentHumanoid = humanoid
-	
+
 	-- Force reset all movement effects when humanoid is added (player respawned)
 	task.wait(0.5) -- Wait for character to fully load
 	resetInvertedMovement()
@@ -3346,7 +3304,7 @@ local function onHumanoidAdded(humanoid: Humanoid)
 	setInvertedControlsEnabled(false)
 	setSprintEventDisabled(false)
 	setInvisibilityEnabled(false)
-	
+
 	if not invertedControlState.requested then
 		enableDefaultControlsIfDisabled()
 	end
@@ -3391,13 +3349,13 @@ local function onHumanoidAdded(humanoid: Humanoid)
 		sprintState.originalWalkSpeed = newSpeed
 	end)
 
-        humanoid.Died:Connect(function()
-                awaitingRespawnMovementReset = true
-                sprintState.keyboardIntent = false
-                sprintState.touchIntent = false
-                recomputeSprintIntent()
-                stopSprinting(true)
-                if invertedControlState.active then
+	humanoid.Died:Connect(function()
+		awaitingRespawnMovementReset = true
+		sprintState.keyboardIntent = false
+		sprintState.touchIntent = false
+		recomputeSprintIntent()
+		stopSprinting(true)
+		if invertedControlState.active then
 			resetInvertedMovement()
 		end
 	end)
@@ -3406,16 +3364,16 @@ local function onHumanoidAdded(humanoid: Humanoid)
 end
 
 local function onCharacterAdded(character: Model)
-        if awaitingRespawnMovementReset then
-                awaitingRespawnMovementReset = false
-                restoreNormalMovementControls()
-        end
+	if awaitingRespawnMovementReset then
+		awaitingRespawnMovementReset = false
+		restoreNormalMovementControls()
+	end
 
-        resetSprintState()
-        watchCharacterTools(character)
-        updateInventorySlots()
+	resetSprintState()
+	watchCharacterTools(character)
+	updateInventorySlots()
 
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		onHumanoidAdded(humanoid)
 	else
@@ -3437,15 +3395,15 @@ end
 localPlayer.CharacterAdded:Connect(onCharacterAdded)
 
 localPlayer.CharacterRemoving:Connect(function()
-        sprintState.keyboardIntent = false
-        sprintState.touchIntent = false
-        recomputeSprintIntent()
-        stopSprinting(true)
-        awaitingRespawnMovementReset = true
-        if humanoidSpeedChangedConn then
-                humanoidSpeedChangedConn:Disconnect()
-                humanoidSpeedChangedConn = nil
-        end
+	sprintState.keyboardIntent = false
+	sprintState.touchIntent = false
+	recomputeSprintIntent()
+	stopSprinting(true)
+	awaitingRespawnMovementReset = true
+	if humanoidSpeedChangedConn then
+		humanoidSpeedChangedConn:Disconnect()
+		humanoidSpeedChangedConn = nil
+	end
 	if humanoidSprintBonusConn then
 		humanoidSprintBonusConn:Disconnect()
 		humanoidSprintBonusConn = nil
@@ -3659,69 +3617,69 @@ local function resetFrameVisual()
 	statusUI.frame.BackgroundTransparency = UI_CONFIG.DEFAULT_BACKGROUND_TRANSPARENCY
 	statusUI.stroke.Color = Color3.fromRGB(120, 135, 200)
 	statusUI.stroke.Transparency = 0.35
-        statusUI.frame.Position = statusTheme.baseFramePosition
-        statusUI.label.TextColor3 = statusTheme.defaultColor
+	statusUI.frame.Position = statusTheme.baseFramePosition
+	statusUI.label.TextColor3 = statusTheme.defaultColor
 	statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
-        statusUI.label.Position = statusTheme.baseLabelPosition
+	statusUI.label.Position = statusTheme.baseLabelPosition
 	statusUI.label.Rotation = 0
 	statusUI.labelStroke.Transparency = 0.3
 end
 
 local function stopFlash()
-        if matchState.flashConnection then
-                matchState.flashConnection:Disconnect()
-                matchState.flashConnection = nil
-        end
+	if matchState.flashConnection then
+		matchState.flashConnection:Disconnect()
+		matchState.flashConnection = nil
+	end
 
-        statusUI.label.TextColor3 = statusTheme.palette.match
-        statusUI.labelStroke.Color = Color3.fromRGB(20, 20, 35)
-        statusUI.labelStroke.Transparency = 0.3
+	statusUI.label.TextColor3 = statusTheme.palette.match
+	statusUI.labelStroke.Color = Color3.fromRGB(20, 20, 35)
+	statusUI.labelStroke.Transparency = 0.3
 end
 
 local function startFlash()
-        stopFlash()
+	stopFlash()
 
-        statusUI.labelStroke.Color = Color3.fromRGB(255, 110, 110)
-        statusUI.labelStroke.Transparency = 0
+	statusUI.labelStroke.Color = Color3.fromRGB(255, 110, 110)
+	statusUI.labelStroke.Transparency = 0
 
-        matchState.flashConnection = RunService.RenderStepped:Connect(function()
-                local timeScale = math.clamp(matchState.remaining / 30, 0, 1)
-                local frequency = 3 + (1 - timeScale) * 6
-                local pulse = math.abs(math.sin(os.clock() * frequency))
-                local green = 60 + math.floor(140 * (1 - pulse))
-                statusUI.label.TextColor3 = Color3.fromRGB(255, green, green)
-        end)
+	matchState.flashConnection = RunService.RenderStepped:Connect(function()
+		local timeScale = math.clamp(matchState.remaining / 30, 0, 1)
+		local frequency = 3 + (1 - timeScale) * 6
+		local pulse = math.abs(math.sin(os.clock() * frequency))
+		local green = 60 + math.floor(140 * (1 - pulse))
+		statusUI.label.TextColor3 = Color3.fromRGB(255, green, green)
+	end)
 end
 
 local function startGreenFlash()
-        stopFlash()
+	stopFlash()
 
-        statusUI.labelStroke.Color = Color3.fromRGB(120, 255, 150)
-        statusUI.labelStroke.Transparency = 0
+	statusUI.labelStroke.Color = Color3.fromRGB(120, 255, 150)
+	statusUI.labelStroke.Transparency = 0
 
-        matchState.flashConnection = RunService.RenderStepped:Connect(function()
-                local pulse = math.abs(math.sin(os.clock() * 4))
-                local green = 180 + math.floor(70 * pulse)
-                statusUI.label.TextColor3 = Color3.fromRGB(80, green, 110)
-        end)
+	matchState.flashConnection = RunService.RenderStepped:Connect(function()
+		local pulse = math.abs(math.sin(os.clock() * 4))
+		local green = 180 + math.floor(70 * pulse)
+		statusUI.label.TextColor3 = Color3.fromRGB(80, green, 110)
+	end)
 end
 
 local function showApocalypseMessage(text: string, color: Color3?, emphasized: boolean)
-        stopFlash()
-        resetFrameVisual()
-        statusUI.frame.Visible = true
-        statusUI.label.Text = text
-        statusUI.label.TextColor3 = color or statusTheme.palette.match
-        statusUI.label.TextSize = if emphasized then UI_CONFIG.EMPHASIZED_TEXT_SIZE else UI_CONFIG.DEFAULT_TEXT_SIZE
-        statusUI.labelStroke.Transparency = 0.15
+	stopFlash()
+	resetFrameVisual()
+	statusUI.frame.Visible = true
+	statusUI.label.Text = text
+	statusUI.label.TextColor3 = color or statusTheme.palette.match
+	statusUI.label.TextSize = if emphasized then UI_CONFIG.EMPHASIZED_TEXT_SIZE else UI_CONFIG.DEFAULT_TEXT_SIZE
+	statusUI.labelStroke.Transparency = 0.15
 end
 
 local function clearApocalypseState()
-        apocalypseState.active = false
-        apocalypseState.wave = 0
-        apocalypseState.totalWaves = 0
-        apocalypseState.countdown = 0
-        apocalypseState.hearts = {}
+	apocalypseState.active = false
+	apocalypseState.wave = 0
+	apocalypseState.totalWaves = 0
+	apocalypseState.countdown = 0
+	apocalypseState.hearts = {}
 end
 
 clearApocalypseState()
@@ -3758,18 +3716,18 @@ local function collectNeutralButtonShakeTargets()
 end
 
 local function stopShake()
-        if matchState.shakeConnection then
-                matchState.shakeConnection:Disconnect()
-                matchState.shakeConnection = nil
-        end
+	if matchState.shakeConnection then
+		matchState.shakeConnection:Disconnect()
+		matchState.shakeConnection = nil
+	end
 
-        resetNeutralButtonShakeTargets()
+	resetNeutralButtonShakeTargets()
 
-        statusUI.frame.Position = statusTheme.baseFramePosition
-        statusUI.label.Position = statusTheme.baseLabelPosition
-        statusUI.label.Rotation = 0
-        statusUI.label.TextColor3 = statusTheme.defaultColor
-        statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
+	statusUI.frame.Position = statusTheme.baseFramePosition
+	statusUI.label.Position = statusTheme.baseLabelPosition
+	statusUI.label.Rotation = 0
+	statusUI.label.TextColor3 = statusTheme.defaultColor
+	statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
 
 	if uiRefs.inventoryFrame then
 		uiRefs.inventoryFrame.Position = inventoryState.basePosition
@@ -3797,10 +3755,10 @@ end
 
 local function startDeathMatchEffect()
 	stopFlash()
-        stopShake()
+	stopShake()
 
-        statusUI.frame.BackgroundColor3 = statusTheme.palette.deathMatchBackground
-        statusUI.stroke.Color = statusTheme.palette.deathMatchStroke
+	statusUI.frame.BackgroundColor3 = statusTheme.palette.deathMatchBackground
+	statusUI.stroke.Color = statusTheme.palette.deathMatchStroke
 	statusUI.stroke.Transparency = 0
 	statusUI.frame.BackgroundTransparency = 1
 	statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
@@ -3808,19 +3766,19 @@ local function startDeathMatchEffect()
 
 	collectNeutralButtonShakeTargets()
 
-        matchState.shakeConnection = RunService.RenderStepped:Connect(function()
-                local now = os.clock()
-                local frameMagnitude = 1 + math.abs(math.sin(now * 5)) * 1.4
-                local offsetX = math.noise(now * 8, 0, 0) * frameMagnitude * 4
-                local offsetY = math.noise(now * 9, 1, 0) * frameMagnitude * 3
-                statusUI.frame.Position = statusTheme.baseFramePosition + UDim2.fromOffset(offsetX, offsetY)
+	matchState.shakeConnection = RunService.RenderStepped:Connect(function()
+		local now = os.clock()
+		local frameMagnitude = 1 + math.abs(math.sin(now * 5)) * 1.4
+		local offsetX = math.noise(now * 8, 0, 0) * frameMagnitude * 4
+		local offsetY = math.noise(now * 9, 1, 0) * frameMagnitude * 3
+		statusUI.frame.Position = statusTheme.baseFramePosition + UDim2.fromOffset(offsetX, offsetY)
 
-                local textMagnitude = 0.5 + math.abs(math.sin(now * 12)) * 1.5
-                local textOffsetX = math.noise(now * 20, 2, 0) * textMagnitude * 4
-                local textOffsetY = math.noise(now * 18, 3, 0) * textMagnitude * 3
-                local buttonOffset = UDim2.fromOffset(textOffsetX, textOffsetY)
-                statusUI.label.Position = statusTheme.baseLabelPosition + buttonOffset
-                statusUI.label.Rotation = math.noise(now * 14, 4, 0) * 8
+		local textMagnitude = 0.5 + math.abs(math.sin(now * 12)) * 1.5
+		local textOffsetX = math.noise(now * 20, 2, 0) * textMagnitude * 4
+		local textOffsetY = math.noise(now * 18, 3, 0) * textMagnitude * 3
+		local buttonOffset = UDim2.fromOffset(textOffsetX, textOffsetY)
+		statusUI.label.Position = statusTheme.baseLabelPosition + buttonOffset
+		statusUI.label.Rotation = math.noise(now * 14, 4, 0) * 8
 
 		local pulse = (math.sin(now * 6) + 1) / 2
 		local colorOffset = math.floor(40 * pulse)
@@ -3920,25 +3878,25 @@ local function updateEventLabelText()
 		return
 	end
 
-        local displayName = matchState.eventDisplayName
-        if displayName and displayName ~= "" then
-                label.Text = string.format("Event: %s", displayName)
-        else
-                label.Text = "Event: None"
-        end
+	local displayName = matchState.eventDisplayName
+	if displayName and displayName ~= "" then
+		label.Text = string.format("Event: %s", displayName)
+	else
+		label.Text = "Event: None"
+	end
 end
 
 local function setCurrentEventDisplayName(name: string?)
-        if name and name ~= "" then
-                matchState.eventDisplayName = name
-        else
-                matchState.eventDisplayName = nil
-        end
-        updateEventLabelText()
+	if name and name ~= "" then
+		matchState.eventDisplayName = name
+	else
+		matchState.eventDisplayName = nil
+	end
+	updateEventLabelText()
 end
 
 local function updateMapLabel(mapId: string?)
-        matchState.mapId = mapId
+	matchState.mapId = mapId
 
 	local targetLabel = uiRefs.mapLabel
 	local container = uiRefs.mapLabelContainer
@@ -3972,28 +3930,28 @@ local function formatTimer(seconds: number): string
 	return string.format("%d:%02d", minutes, remainingSeconds)
 end
 
-local StormEffects = {
-        state = {
-                overlayGui = nil :: ScreenGui?,
-                gradientFrame = nil :: Frame?,
-                gradient = nil :: UIGradient?,
-                scanLine = nil :: Frame?,
-                animationConn = nil :: RBXScriptConnection?,
-                scanProgress = 0,
-                colorCorrection = nil :: ColorCorrectionEffect?,
-                depthOfField = nil :: DepthOfFieldEffect?,
-                equalizer = nil :: EqualizerSoundEffect?,
-                pitchShift = nil :: PitchShiftSoundEffect?,
-                reverb = nil :: ReverbSoundEffect?,
-                originalAmbientReverb = SoundService.AmbientReverb,
-                trackedPart = nil :: BasePart?,
-                visualActive = false,
-                audioActive = false,
-        },
+StormEffects = {
+	state = {
+		overlayGui = nil :: ScreenGui?,
+		gradientFrame = nil :: Frame?,
+		gradient = nil :: UIGradient?,
+		scanLine = nil :: Frame?,
+		animationConn = nil :: RBXScriptConnection?,
+		scanProgress = 0,
+		colorCorrection = nil :: ColorCorrectionEffect?,
+		depthOfField = nil :: DepthOfFieldEffect?,
+		equalizer = nil :: EqualizerSoundEffect?,
+		pitchShift = nil :: PitchShiftSoundEffect?,
+		reverb = nil :: ReverbSoundEffect?,
+		originalAmbientReverb = SoundService.AmbientReverb,
+		trackedPart = nil :: BasePart?,
+		visualActive = false,
+		audioActive = false,
+	},
 }
 
 function StormEffects.ensureOverlay()
-        local state = StormEffects.state
+	local state = StormEffects.state
 	local existingGui = state.overlayGui
 	if existingGui and not existingGui.Parent then
 		state.overlayGui = nil
@@ -4102,7 +4060,7 @@ function StormEffects.ensureOverlay()
 end
 
 function StormEffects.ensureLightingEffects()
-        local state = StormEffects.state
+	local state = StormEffects.state
 	local colorCorrection = state.colorCorrection
 	if not colorCorrection then
 		local existingEffect = Lighting:FindFirstChild("StormColorCorrection")
@@ -4139,11 +4097,11 @@ function StormEffects.ensureLightingEffects()
 		depthEffect.Enabled = false
 		depthEffect.Parent = Lighting
 	end
-        state.depthOfField = depthEffect
+	state.depthOfField = depthEffect
 end
 
 function StormEffects.ensureAudioEffects()
-        local state = StormEffects.state
+	local state = StormEffects.state
 	local equalizer = state.equalizer
 	if not equalizer then
 		local existingEqualizer = SoundService:FindFirstChild("StormEqualizer")
@@ -4207,215 +4165,215 @@ function StormEffects.ensureAudioEffects()
 end
 
 function StormEffects.startOverlayAnimation()
-        local state = StormEffects.state
-        if state.animationConn then
-                return
-        end
+	local state = StormEffects.state
+	if state.animationConn then
+		return
+	end
 
-        state.animationConn = RunService.RenderStepped:Connect(function(dt)
-                local scanLine = state.scanLine
-                if scanLine then
-                        state.scanProgress += dt * 0.4
-                        if state.scanProgress > 1 then
-                                state.scanProgress -= 1
-                        end
-                        scanLine.Position = UDim2.new(0, 0, state.scanProgress, 0)
-                end
-        end)
+	state.animationConn = RunService.RenderStepped:Connect(function(dt)
+		local scanLine = state.scanLine
+		if scanLine then
+			state.scanProgress += dt * 0.4
+			if state.scanProgress > 1 then
+				state.scanProgress -= 1
+			end
+			scanLine.Position = UDim2.new(0, 0, state.scanProgress, 0)
+		end
+	end)
 end
 
 function StormEffects.stopOverlayAnimation()
-        local state = StormEffects.state
-        if state.animationConn then
-                state.animationConn:Disconnect()
-                state.animationConn = nil
-        end
+	local state = StormEffects.state
+	if state.animationConn then
+		state.animationConn:Disconnect()
+		state.animationConn = nil
+	end
 end
 
 function StormEffects.enableVisualEffects()
-        local state = StormEffects.state
-        StormEffects.ensureOverlay()
-        StormEffects.ensureLightingEffects()
+	local state = StormEffects.state
+	StormEffects.ensureOverlay()
+	StormEffects.ensureLightingEffects()
 
-        local overlayGui = state.overlayGui
-        if overlayGui then
-                overlayGui.Enabled = true
-        end
-        local colorCorrection = state.colorCorrection
-        if colorCorrection then
-                colorCorrection.Enabled = true
-        end
-        local depthOfField = state.depthOfField
-        if depthOfField then
-                depthOfField.Enabled = true
-        end
+	local overlayGui = state.overlayGui
+	if overlayGui then
+		overlayGui.Enabled = true
+	end
+	local colorCorrection = state.colorCorrection
+	if colorCorrection then
+		colorCorrection.Enabled = true
+	end
+	local depthOfField = state.depthOfField
+	if depthOfField then
+		depthOfField.Enabled = true
+	end
 
-        local gradientFrame = state.gradientFrame
-        if gradientFrame then
-                gradientFrame.Rotation = 0
-        end
-        local gradient = state.gradient
-        if gradient then
-                gradient.Rotation = 0
-                gradient.Offset = Vector2.new(0, 0)
-        end
+	local gradientFrame = state.gradientFrame
+	if gradientFrame then
+		gradientFrame.Rotation = 0
+	end
+	local gradient = state.gradient
+	if gradient then
+		gradient.Rotation = 0
+		gradient.Offset = Vector2.new(0, 0)
+	end
 
-        StormEffects.startOverlayAnimation()
+	StormEffects.startOverlayAnimation()
 end
 
 function StormEffects.disableVisualEffects()
-        local state = StormEffects.state
-        local overlayGui = state.overlayGui
-        if overlayGui then
-                overlayGui.Enabled = false
-        end
-        local colorCorrection = state.colorCorrection
-        if colorCorrection then
-                colorCorrection.Enabled = false
-        end
-        local depthOfField = state.depthOfField
-        if depthOfField then
-                depthOfField.Enabled = false
-        end
+	local state = StormEffects.state
+	local overlayGui = state.overlayGui
+	if overlayGui then
+		overlayGui.Enabled = false
+	end
+	local colorCorrection = state.colorCorrection
+	if colorCorrection then
+		colorCorrection.Enabled = false
+	end
+	local depthOfField = state.depthOfField
+	if depthOfField then
+		depthOfField.Enabled = false
+	end
 
-        StormEffects.stopOverlayAnimation()
-        state.scanProgress = 0
-        local scanLine = state.scanLine
-        if scanLine then
-                scanLine.Position = UDim2.new(0, 0, 0, 0)
-        end
+	StormEffects.stopOverlayAnimation()
+	state.scanProgress = 0
+	local scanLine = state.scanLine
+	if scanLine then
+		scanLine.Position = UDim2.new(0, 0, 0, 0)
+	end
 end
 
 function StormEffects.enableAudioEffects()
-        local state = StormEffects.state
-        StormEffects.ensureAudioEffects()
+	local state = StormEffects.state
+	StormEffects.ensureAudioEffects()
 
-        local equalizer = state.equalizer
-        if equalizer then
-                equalizer.Enabled = true
-        end
-        local pitchShift = state.pitchShift
-        if pitchShift then
-                pitchShift.Enabled = true
-        end
-        local reverb = state.reverb
-        if reverb then
-                reverb.Enabled = true
-        end
-        if SoundService.AmbientReverb ~= Enum.ReverbType.Underwater then
-                state.originalAmbientReverb = state.originalAmbientReverb or SoundService.AmbientReverb
-                SoundService.AmbientReverb = Enum.ReverbType.Underwater
-        end
+	local equalizer = state.equalizer
+	if equalizer then
+		equalizer.Enabled = true
+	end
+	local pitchShift = state.pitchShift
+	if pitchShift then
+		pitchShift.Enabled = true
+	end
+	local reverb = state.reverb
+	if reverb then
+		reverb.Enabled = true
+	end
+	if SoundService.AmbientReverb ~= Enum.ReverbType.Underwater then
+		state.originalAmbientReverb = state.originalAmbientReverb or SoundService.AmbientReverb
+		SoundService.AmbientReverb = Enum.ReverbType.Underwater
+	end
 end
 
 function StormEffects.disableAudioEffects()
-        local state = StormEffects.state
-        local equalizer = state.equalizer
-        if equalizer then
-                equalizer.Enabled = false
-        end
-        local pitchShift = state.pitchShift
-        if pitchShift then
-                pitchShift.Enabled = false
-        end
-        local reverb = state.reverb
-        if reverb then
-                reverb.Enabled = false
-        end
-        local originalReverb = state.originalAmbientReverb
-        if originalReverb then
-                SoundService.AmbientReverb = originalReverb
-        end
+	local state = StormEffects.state
+	local equalizer = state.equalizer
+	if equalizer then
+		equalizer.Enabled = false
+	end
+	local pitchShift = state.pitchShift
+	if pitchShift then
+		pitchShift.Enabled = false
+	end
+	local reverb = state.reverb
+	if reverb then
+		reverb.Enabled = false
+	end
+	local originalReverb = state.originalAmbientReverb
+	if originalReverb then
+		SoundService.AmbientReverb = originalReverb
+	end
 end
 
 function StormEffects.updateExposure(visualActive: boolean, audioActive: boolean)
-        local state = StormEffects.state
-        if state.visualActive or visualActive then
-                StormEffects.disableVisualEffects()
-        end
+	local state = StormEffects.state
+	if state.visualActive or visualActive then
+		StormEffects.disableVisualEffects()
+	end
 
-        if state.audioActive or audioActive then
-                StormEffects.disableAudioEffects()
-        end
+	if state.audioActive or audioActive then
+		StormEffects.disableAudioEffects()
+	end
 
-        state.visualActive = false
-        state.audioActive = false
+	state.visualActive = false
+	state.audioActive = false
 end
 
 function StormEffects.refreshPartReference()
-        local state = StormEffects.state
-        local existing = Workspace:FindFirstChild("StormPart", true)
-        if existing and existing:IsA("BasePart") then
-                state.trackedPart = existing
-        else
-                state.trackedPart = nil
-                StormEffects.updateExposure(false, false)
-        end
+	local state = StormEffects.state
+	local existing = Workspace:FindFirstChild("StormPart", true)
+	if existing and existing:IsA("BasePart") then
+		state.trackedPart = existing
+	else
+		state.trackedPart = nil
+		StormEffects.updateExposure(false, false)
+	end
 end
 
 function StormEffects.onDescendantAdded(descendant: Instance)
-        if descendant:IsA("BasePart") and descendant.Name == "StormPart" then
-                StormEffects.state.trackedPart = descendant
-        end
+	if descendant:IsA("BasePart") and descendant.Name == "StormPart" then
+		StormEffects.state.trackedPart = descendant
+	end
 end
 
 function StormEffects.onDescendantRemoving(descendant: Instance)
-        local state = StormEffects.state
-        if descendant == state.trackedPart then
-                state.trackedPart = nil
-                StormEffects.updateExposure(false, false)
-        end
+	local state = StormEffects.state
+	if descendant == state.trackedPart then
+		state.trackedPart = nil
+		StormEffects.updateExposure(false, false)
+	end
 end
 
 function StormEffects.isPositionInsideStormXZ(stormPart: BasePart, halfSize: Vector3, position: Vector3): boolean
-        local relative = stormPart.CFrame:PointToObjectSpace(position)
-        return math.abs(relative.X) <= halfSize.X and math.abs(relative.Z) <= halfSize.Z
+	local relative = stormPart.CFrame:PointToObjectSpace(position)
+	return math.abs(relative.X) <= halfSize.X and math.abs(relative.Z) <= halfSize.Z
 end
 
 function StormEffects.onHeartbeat()
-        local state = StormEffects.state
-        local storm = state.trackedPart
-        if not storm or not storm.Parent then
-                if storm and not storm.Parent then
-                        state.trackedPart = nil
-                end
-                StormEffects.updateExposure(false, false)
-                return
-        end
+	local state = StormEffects.state
+	local storm = state.trackedPart
+	if not storm or not storm.Parent then
+		if storm and not storm.Parent then
+			state.trackedPart = nil
+		end
+		StormEffects.updateExposure(false, false)
+		return
+	end
 
-        local character = localPlayer.Character
-        if not character then
-                StormEffects.updateExposure(false, false)
-                return
-        end
+	local character = localPlayer.Character
+	if not character then
+		StormEffects.updateExposure(false, false)
+		return
+	end
 
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-                StormEffects.updateExposure(false, false)
-                return
-        end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		StormEffects.updateExposure(false, false)
+		return
+	end
 
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        if not rootPart or not rootPart:IsA("BasePart") then
-                StormEffects.updateExposure(false, false)
-                return
-        end
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart or not rootPart:IsA("BasePart") then
+		StormEffects.updateExposure(false, false)
+		return
+	end
 
-        local halfSize = storm.Size * 0.5
-        if halfSize.X <= 0 or halfSize.Z <= 0 then
-                StormEffects.updateExposure(false, false)
-                return
-        end
+	local halfSize = storm.Size * 0.5
+	if halfSize.X <= 0 or halfSize.Z <= 0 then
+		StormEffects.updateExposure(false, false)
+		return
+	end
 
-        local characterInStorm = StormEffects.isPositionInsideStormXZ(storm, halfSize, rootPart.Position)
+	local characterInStorm = StormEffects.isPositionInsideStormXZ(storm, halfSize, rootPart.Position)
 
-        local camera = Workspace.CurrentCamera
-        local cameraInStorm = false
-        if camera then
-                cameraInStorm = StormEffects.isPositionInsideStormXZ(storm, halfSize, camera.CFrame.Position)
-        end
+	local camera = Workspace.CurrentCamera
+	local cameraInStorm = false
+	if camera then
+		cameraInStorm = StormEffects.isPositionInsideStormXZ(storm, halfSize, camera.CFrame.Position)
+	end
 
-        StormEffects.updateExposure(characterInStorm, characterInStorm or cameraInStorm)
+	StormEffects.updateExposure(characterInStorm, characterInStorm or cameraInStorm)
 end
 
 StormEffects.refreshPartReference()
@@ -4431,118 +4389,118 @@ statusRemote.OnClientEvent:Connect(function(payload)
 	end
 
 	local action = payload.action
-        if action == "PrepCountdown" then
-                matchState.remaining = tonumber(payload.remaining) or 0
-                if typeof(payload.map) == "string" then
-                        updateMapLabel(payload.map)
-                end
+	if action == "PrepCountdown" then
+		matchState.remaining = tonumber(payload.remaining) or 0
+		if typeof(payload.map) == "string" then
+			updateMapLabel(payload.map)
+		end
 		stopShake()
 		stopFlash()
 		resetFrameVisual()
 		statusUI.frame.BackgroundTransparency = UI_CONFIG.DEFAULT_BACKGROUND_TRANSPARENCY
-                statusUI.frame.Visible = true
-                statusUI.label.TextColor3 = statusTheme.palette.countdown
-                statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
-                statusUI.label.Text = formatCountdown(matchState.remaining)
-                statusUI.labelStroke.Transparency = 0.1
-        elseif action == "MatchTimer" then
-                matchState.remaining = math.max(0, math.floor(tonumber(payload.remaining) or 0))
-                statusUI.frame.Visible = true
-                resetFrameVisual()
-                statusUI.label.TextColor3 = statusTheme.palette.match
-                statusUI.label.Text = formatTimer(matchState.remaining)
+		statusUI.frame.Visible = true
+		statusUI.label.TextColor3 = statusTheme.palette.countdown
+		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
+		statusUI.label.Text = formatCountdown(matchState.remaining)
+		statusUI.labelStroke.Transparency = 0.1
+	elseif action == "MatchTimer" then
+		matchState.remaining = math.max(0, math.floor(tonumber(payload.remaining) or 0))
+		statusUI.frame.Visible = true
+		resetFrameVisual()
+		statusUI.label.TextColor3 = statusTheme.palette.match
+		statusUI.label.Text = formatTimer(matchState.remaining)
 
-                if matchState.remaining <= 30 then
-                        startFlash()
-                else
-                        stopFlash()
-                end
-        elseif action == "MatchMessage" then
-                stopFlash()
-                stopShake()
-                statusUI.frame.Visible = true
-                resetFrameVisual()
-                statusUI.label.TextColor3 = statusTheme.palette.match
-                statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
-                statusUI.label.Text = if typeof(payload.text) == "string" then payload.text else ""
-                statusUI.labelStroke.Transparency = 0.2
-        elseif action == "ApocalypseStatus" then
-                apocalypseState.active = true
-                local phase = if typeof(payload.phase) == "string" then payload.phase else nil
-                if phase == "ApocalypseReady" then
-                        apocalypseState.totalWaves = math.max(tonumber(payload.totalWaves) or apocalypseState.totalWaves or 0, 0)
-                        showApocalypseMessage("Pirate Bay Survival", statusTheme.palette.countdown, true)
-                elseif phase == "WaveStart" or phase == "Wave" then
-                        local wave = math.max(tonumber(payload.wave) or apocalypseState.wave or 0, 0)
-                        apocalypseState.wave = wave
-                        showApocalypseMessage(string.format("Wave %d", wave), statusTheme.palette.match, true)
-                elseif phase == "Countdown" then
-                        local wave = math.max(tonumber(payload.wave) or (apocalypseState.wave + 1), 1)
-                        local remaining = math.max(tonumber(payload.remaining) or 0, 0)
-                        apocalypseState.countdown = remaining
-                        showApocalypseMessage(string.format("Wave %d in %ds", wave, remaining), statusTheme.palette.countdown, true)
-                elseif phase == "WaveComplete" then
-                        local wave = math.max(tonumber(payload.wave) or apocalypseState.wave, 0)
-                        showApocalypseMessage(string.format("Wave %d Cleared", wave), statusTheme.palette.countdown, true)
-                elseif phase == "FinalWave" then
-                        local wave = math.max(tonumber(payload.wave) or apocalypseState.wave, 0)
-                        apocalypseState.wave = wave
-                        showApocalypseMessage(string.format("Wave %d", wave), Color3.fromRGB(255, 110, 110), true)
-                        startFlash()
-                elseif phase == "Victory" then
-                        apocalypseState.active = false
-                        local text = if typeof(payload.message) == "string" then payload.message else "GG"
-                        showApocalypseMessage(text, Color3.fromRGB(140, 255, 170), true)
-                        startGreenFlash()
-                elseif phase == "Failure" then
-                        apocalypseState.active = false
-                        showApocalypseMessage("All Survivors Down", Color3.fromRGB(255, 120, 120), true)
-                        startFlash()
-                elseif phase == "Cleanup" then
-                        clearApocalypseState()
-                        stopFlash()
-                        resetFrameVisual()
-                        statusUI.frame.Visible = false
-                elseif phase == "Hearts" then
-                        if typeof(payload.hearts) == "table" then
-                                local heartMap: {[number]: number} = {}
-                                for userId, value in pairs(payload.hearts) do
-                                        if typeof(userId) == "number" and typeof(value) == "number" then
-                                                heartMap[userId] = value
-                                        end
-                                end
-                                apocalypseState.hearts = heartMap
-                        end
-                elseif phase == "HeartMessage" then
-                        local text = if typeof(payload.message) == "string" then payload.message else nil
-                        if text then
-                                local ok = pcall(function()
-                                        StarterGui:SetCore("SendNotification", {
-                                                Title = "Survival",
-                                                Text = text,
-                                                Duration = 3,
-                                        })
-                                end)
-                                if not ok then
-                                        print(text)
-                                end
-                        end
-                elseif phase == "Warning" then
-                        if typeof(payload.message) == "string" then
-                                print(payload.message)
-                        end
-                end
-        elseif action == "DeathMatchTransition" then
-                stopFlash()
-                stopShake()
-                statusUI.frame.Visible = true
-                statusUI.frame.BackgroundColor3 = statusTheme.palette.deathMatchBackground
-                statusUI.stroke.Color = statusTheme.palette.deathMatchStroke
-                statusUI.stroke.Transparency = 0
-                statusUI.label.TextColor3 = statusTheme.palette.match
-                statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
-                statusUI.label.Text = "Death Match"
-                statusUI.frame.BackgroundTransparency = 1
+		if matchState.remaining <= 30 then
+			startFlash()
+		else
+			stopFlash()
+		end
+	elseif action == "MatchMessage" then
+		stopFlash()
+		stopShake()
+		statusUI.frame.Visible = true
+		resetFrameVisual()
+		statusUI.label.TextColor3 = statusTheme.palette.match
+		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
+		statusUI.label.Text = if typeof(payload.text) == "string" then payload.text else ""
+		statusUI.labelStroke.Transparency = 0.2
+	elseif action == "ApocalypseStatus" then
+		apocalypseState.active = true
+		local phase = if typeof(payload.phase) == "string" then payload.phase else nil
+		if phase == "ApocalypseReady" then
+			apocalypseState.totalWaves = math.max(tonumber(payload.totalWaves) or apocalypseState.totalWaves or 0, 0)
+			showApocalypseMessage("Pirate Bay Survival", statusTheme.palette.countdown, true)
+		elseif phase == "WaveStart" or phase == "Wave" then
+			local wave = math.max(tonumber(payload.wave) or apocalypseState.wave or 0, 0)
+			apocalypseState.wave = wave
+			showApocalypseMessage(string.format("Wave %d", wave), statusTheme.palette.match, true)
+		elseif phase == "Countdown" then
+			local wave = math.max(tonumber(payload.wave) or (apocalypseState.wave + 1), 1)
+			local remaining = math.max(tonumber(payload.remaining) or 0, 0)
+			apocalypseState.countdown = remaining
+			showApocalypseMessage(string.format("Wave %d in %ds", wave, remaining), statusTheme.palette.countdown, true)
+		elseif phase == "WaveComplete" then
+			local wave = math.max(tonumber(payload.wave) or apocalypseState.wave, 0)
+			showApocalypseMessage(string.format("Wave %d Cleared", wave), statusTheme.palette.countdown, true)
+		elseif phase == "FinalWave" then
+			local wave = math.max(tonumber(payload.wave) or apocalypseState.wave, 0)
+			apocalypseState.wave = wave
+			showApocalypseMessage(string.format("Wave %d", wave), Color3.fromRGB(255, 110, 110), true)
+			startFlash()
+		elseif phase == "Victory" then
+			apocalypseState.active = false
+			local text = if typeof(payload.message) == "string" then payload.message else "GG"
+			showApocalypseMessage(text, Color3.fromRGB(140, 255, 170), true)
+			startGreenFlash()
+		elseif phase == "Failure" then
+			apocalypseState.active = false
+			showApocalypseMessage("All Survivors Down", Color3.fromRGB(255, 120, 120), true)
+			startFlash()
+		elseif phase == "Cleanup" then
+			clearApocalypseState()
+			stopFlash()
+			resetFrameVisual()
+			statusUI.frame.Visible = false
+		elseif phase == "Hearts" then
+			if typeof(payload.hearts) == "table" then
+				local heartMap: {[number]: number} = {}
+				for userId, value in pairs(payload.hearts) do
+					if typeof(userId) == "number" and typeof(value) == "number" then
+						heartMap[userId] = value
+					end
+				end
+				apocalypseState.hearts = heartMap
+			end
+		elseif phase == "HeartMessage" then
+			local text = if typeof(payload.message) == "string" then payload.message else nil
+			if text then
+				local ok = pcall(function()
+					StarterGui:SetCore("SendNotification", {
+						Title = "Survival",
+						Text = text,
+						Duration = 3,
+					})
+				end)
+				if not ok then
+					print(text)
+				end
+			end
+		elseif phase == "Warning" then
+			if typeof(payload.message) == "string" then
+				print(payload.message)
+			end
+		end
+	elseif action == "DeathMatchTransition" then
+		stopFlash()
+		stopShake()
+		statusUI.frame.Visible = true
+		statusUI.frame.BackgroundColor3 = statusTheme.palette.deathMatchBackground
+		statusUI.stroke.Color = statusTheme.palette.deathMatchStroke
+		statusUI.stroke.Transparency = 0
+		statusUI.label.TextColor3 = statusTheme.palette.match
+		statusUI.label.TextSize = UI_CONFIG.EMPHASIZED_TEXT_SIZE
+		statusUI.label.Text = "Death Match"
+		statusUI.frame.BackgroundTransparency = 1
 		statusUI.labelStroke.Transparency = 0
 
 		local duration = tonumber(payload.duration) or 3
@@ -4565,33 +4523,33 @@ statusRemote.OnClientEvent:Connect(function(payload)
 			resetFrameVisual()
 			statusUI.frame.Visible = false
 		end
-        elseif action == "RoundEnded" then
-                deathMatchHighlightActive = false
-                updateHighlightActivation()
-                stopDeathMatchTransition()
-                stopFlash()
-                stopShake()
-                resetFrameVisual()
-                setHotTouchActive(false)
-                statusUI.frame.Visible = true
-                statusUI.label.TextColor3 = statusTheme.palette.countdown
-                statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
-                statusUI.label.Text = "Intermission"
-                statusUI.labelStroke.Transparency = 0.3
-                updateMapLabel(nil)
-                clearApocalypseState()
-                specialEventState.active = false
+	elseif action == "RoundEnded" then
+		deathMatchHighlightActive = false
+		updateHighlightActivation()
+		stopDeathMatchTransition()
+		stopFlash()
+		stopShake()
+		resetFrameVisual()
+		setHotTouchActive(false)
+		statusUI.frame.Visible = true
+		statusUI.label.TextColor3 = statusTheme.palette.countdown
+		statusUI.label.TextSize = UI_CONFIG.DEFAULT_TEXT_SIZE
+		statusUI.label.Text = "Intermission"
+		statusUI.labelStroke.Transparency = 0.3
+		updateMapLabel(nil)
+		clearApocalypseState()
+		specialEventState.active = false
 		specialEventState.id = nil
 		specialEventState.displayName = nil
-                specialEventState.randomized = false
-                specialEventState.options = {}
-                specialEventState.finalName = nil
-                specialEventState.difficultyToken += 1
-                specialEventState.effects.sprintDisabled = false
-                specialEventState.effects.invisible = false
-                specialEventState.effects.inverted = false
-                setSprintEventDisabled(false)
-                setInvisibilityEnabled(false)
+		specialEventState.randomized = false
+		specialEventState.options = {}
+		specialEventState.finalName = nil
+		specialEventState.difficultyToken += 1
+		specialEventState.effects.sprintDisabled = false
+		specialEventState.effects.invisible = false
+		specialEventState.effects.inverted = false
+		setSprintEventDisabled(false)
+		setInvisibilityEnabled(false)
 		setInvertedControlsEnabled(false)
 		hideSpecialEvent(true)
 		setCurrentEventDisplayName(nil)
@@ -4623,28 +4581,28 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		specialEventUI.header.Text = headerText
 
 		local isActive = payload.active
-                if isActive == false then
-                        specialEventState.active = false
-                        specialEventState.id = nil
-                        specialEventState.displayName = nil
-                        specialEventState.randomized = false
-                        specialEventState.options = {}
-                        specialEventState.finalName = nil
-                        specialEventState.difficultyToken += 1
-                        setSprintEventDisabled(false)
-                        setInvisibilityEnabled(false)
-                        setInvertedControlsEnabled(false)
-                        hideSpecialEvent(true)
-                        setHotTouchActive(false)
-                        setCurrentEventDisplayName(nil)
-                else
-                        local eventId = if typeof(payload.id) == "string" then payload.id else nil
-                        local eventName = if typeof(payload.name) == "string" then payload.name elseif eventId then eventId else "Special Event"
-                        specialEventState.difficultyToken += 1
-                        specialEventState.active = true
-                        specialEventState.id = eventId
-                        specialEventState.displayName = eventName
-                        setCurrentEventDisplayName(eventName)
+		if isActive == false then
+			specialEventState.active = false
+			specialEventState.id = nil
+			specialEventState.displayName = nil
+			specialEventState.randomized = false
+			specialEventState.options = {}
+			specialEventState.finalName = nil
+			specialEventState.difficultyToken += 1
+			setSprintEventDisabled(false)
+			setInvisibilityEnabled(false)
+			setInvertedControlsEnabled(false)
+			hideSpecialEvent(true)
+			setHotTouchActive(false)
+			setCurrentEventDisplayName(nil)
+		else
+			local eventId = if typeof(payload.id) == "string" then payload.id else nil
+			local eventName = if typeof(payload.name) == "string" then payload.name elseif eventId then eventId else "Special Event"
+			specialEventState.difficultyToken += 1
+			specialEventState.active = true
+			specialEventState.id = eventId
+			specialEventState.displayName = eventName
+			setCurrentEventDisplayName(eventName)
 
 			if eventId == "HotTouch" then
 				setHotTouchActive(true)
@@ -4655,34 +4613,34 @@ statusRemote.OnClientEvent:Connect(function(payload)
 			if payload.randomized then
 				completeSpecialEventRandomization(eventName)
 			else
-                                specialEventState.randomized = false
-                                showSpecialEvent(eventName, 3)
-                        end
-                end
-        elseif action == "SpecialEventDifficulty" then
-                local eventId = if typeof(payload.id) == "string" then payload.id else nil
-                if eventId then
-                        local difficultyValue = tonumber(payload.difficulty)
-                        if difficultyValue then
-                                local eventName = if typeof(payload.name) == "string" then payload.name else specialEventState.displayName or eventId
-                                local rollDuration = tonumber(payload.rollDuration)
-                                local displaySeconds = tonumber(payload.displaySeconds)
-                                local flashValue = payload.flashCritical
-                                local flashCritical = false
-                                if typeof(flashValue) == "boolean" then
-                                        flashCritical = flashValue
-                                elseif typeof(flashValue) == "number" then
-                                        flashCritical = flashValue ~= 0
-                                elseif typeof(flashValue) == "string" then
-                                        flashCritical = string.lower(flashValue) == "true"
-                                end
-                                showSpecialEventDifficulty(eventId, eventName, difficultyValue, rollDuration, displaySeconds, flashCritical)
-                        end
-                end
-        elseif action == "SpecialEventEffect" then
-                if payload.sprintDisabled ~= nil then
-                        local disabled = payload.sprintDisabled == true
-                        specialEventState.effects.sprintDisabled = disabled
+				specialEventState.randomized = false
+				showSpecialEvent(eventName, 3)
+			end
+		end
+	elseif action == "SpecialEventDifficulty" then
+		local eventId = if typeof(payload.id) == "string" then payload.id else nil
+		if eventId then
+			local difficultyValue = tonumber(payload.difficulty)
+			if difficultyValue then
+				local eventName = if typeof(payload.name) == "string" then payload.name else specialEventState.displayName or eventId
+				local rollDuration = tonumber(payload.rollDuration)
+				local displaySeconds = tonumber(payload.displaySeconds)
+				local flashValue = payload.flashCritical
+				local flashCritical = false
+				if typeof(flashValue) == "boolean" then
+					flashCritical = flashValue
+				elseif typeof(flashValue) == "number" then
+					flashCritical = flashValue ~= 0
+				elseif typeof(flashValue) == "string" then
+					flashCritical = string.lower(flashValue) == "true"
+				end
+				showSpecialEventDifficulty(eventId, eventName, difficultyValue, rollDuration, displaySeconds, flashCritical)
+			end
+		end
+	elseif action == "SpecialEventEffect" then
+		if payload.sprintDisabled ~= nil then
+			local disabled = payload.sprintDisabled == true
+			specialEventState.effects.sprintDisabled = disabled
 			setSprintEventDisabled(disabled)
 		end
 
@@ -4699,27 +4657,27 @@ statusRemote.OnClientEvent:Connect(function(payload)
 		end
 	elseif action == "HotTouchStatus" then
 		local state = if typeof(payload.state) == "string" then payload.state else ""
-                if state == "Holder" then
-                        local userId = if typeof(payload.userId) == "number" then payload.userId elseif typeof(payload.userId) == "string" then tonumber(payload.userId) else nil
-                        hotTouchState.holderId = userId
-                        local name = if typeof(payload.displayName) == "string" then payload.displayName elseif typeof(payload.name) == "string" then payload.name else "Someone"
-                        setHotTouchActive(true)
-                        setHotTouchStatusText(string.format("%s has the BOMB!", name))
-                elseif state == "Selecting" then
-                        hotTouchState.holderId = nil
-                        setHotTouchActive(true)
-                        setHotTouchStatusText("Selecting random...")
-                elseif state == "Complete" then
-                        hotTouchState.holderId = nil
-                        setHotTouchActive(true)
-                        setHotTouchStatusText("GG")
-                elseif state == "Clear" then
-                        hotTouchState.holderId = nil
-                        setHotTouchActive(false)
-                else
-                        hotTouchState.holderId = nil
-                        setHotTouchStatusText(nil)
-                end
+		if state == "Holder" then
+			local userId = if typeof(payload.userId) == "number" then payload.userId elseif typeof(payload.userId) == "string" then tonumber(payload.userId) else nil
+			hotTouchState.holderId = userId
+			local name = if typeof(payload.displayName) == "string" then payload.displayName elseif typeof(payload.name) == "string" then payload.name else "Someone"
+			setHotTouchActive(true)
+			setHotTouchStatusText(string.format("%s has the BOMB!", name))
+		elseif state == "Selecting" then
+			hotTouchState.holderId = nil
+			setHotTouchActive(true)
+			setHotTouchStatusText("Selecting random...")
+		elseif state == "Complete" then
+			hotTouchState.holderId = nil
+			setHotTouchActive(true)
+			setHotTouchStatusText("GG")
+		elseif state == "Clear" then
+			hotTouchState.holderId = nil
+			setHotTouchActive(false)
+		else
+			hotTouchState.holderId = nil
+			setHotTouchStatusText(nil)
+		end
 	elseif action == "HotTouchTagged" then
 		local taggedUserId = if typeof(payload.userId) == "number" then payload.userId elseif typeof(payload.userId) == "string" then tonumber(payload.userId) else nil
 		if taggedUserId and localPlayer.UserId == taggedUserId then
