@@ -178,8 +178,12 @@ do
                 end
 
                 local zombieSpawnModel = mapModel:FindFirstChild(TARGET_ZOMBIE_SPAWN_MODEL_NAME)
+                if (not zombieSpawnModel or not zombieSpawnModel:IsA("Model")) then
+                        zombieSpawnModel = mapModel:FindFirstChild(TARGET_ZOMBIE_SPAWN_MODEL_NAME, true)
+                end
+
                 if zombieSpawnModel and zombieSpawnModel:IsA("Model") then
-                        addFrom(zombieSpawnModel, true)
+                        addFrom(zombieSpawnModel, false)
                 end
 
                 for _, containerName in ipairs(ZOMBIE_SPAWN_CONTAINER_NAMES) do
@@ -187,7 +191,7 @@ do
                         if not container then
                                 container = mapModel:FindFirstChild(containerName, true)
                         end
-                        local onlyTargetParts = containerName == TARGET_ZOMBIE_SPAWN_MODEL_NAME
+                        local onlyTargetParts = containerName ~= TARGET_ZOMBIE_SPAWN_MODEL_NAME
                         addFrom(container, onlyTargetParts)
                 end
 
@@ -259,6 +263,24 @@ do
 
         local PIRATE_APOCALYPSE_ZOMBIE_FOLDER_NAME = "PirateApocalypseZombies"
 
+        local function pirateApocalypseResolveZombieFolder(): Folder?
+                local folder = ReplicatedStorage:FindFirstChild("Zombies")
+                if not folder then
+                        local ok, result = pcall(function()
+                                return ReplicatedStorage:WaitForChild("Zombies", 5)
+                        end)
+                        if ok then
+                                folder = result
+                        end
+                end
+
+                if folder and folder:IsA("Folder") then
+                        return folder
+                end
+
+                return nil
+        end
+
         local function pirateApocalypseEnsureZombieParentFolder(state: {[string]: any}): Folder
                 local folder = state.zombieParentFolder
                 if folder and folder.Parent then
@@ -285,7 +307,7 @@ do
                         end
 
                         if not state.zombieFolder or not state.zombieFolder.Parent then
-                                state.zombieFolder = ReplicatedStorage:FindFirstChild("Zombies")
+                                state.zombieFolder = pirateApocalypseResolveZombieFolder()
                         end
 
                         if not state.gearFolder or not state.gearFolder.Parent then
@@ -311,7 +333,7 @@ do
                         completed = false,
                         currentWave = 0,
                         spawnPoints = spawnPoints,
-                        zombieFolder = ReplicatedStorage:FindFirstChild("Zombies"),
+                        zombieFolder = pirateApocalypseResolveZombieFolder(),
                         gearFolder = ReplicatedStorage:FindFirstChild("SurvivalGear"),
                         zombieParentFolder = nil,
                         zombieConnections = {},
@@ -662,7 +684,13 @@ do
 						state.random = random
 						local index = random:NextInteger(1, #spawnPoints)
 						local spawnPart = spawnPoints[index]
-                                                local template = pirateApocalypseGetTemplate(state.zombieCache, state.zombieFolder, spawnInfo.name or "")
+                                                local zombieFolder = state.zombieFolder
+                                                if not zombieFolder or not zombieFolder.Parent then
+                                                        zombieFolder = pirateApocalypseResolveZombieFolder()
+                                                        state.zombieFolder = zombieFolder
+                                                end
+
+                                                local template = pirateApocalypseGetTemplate(state.zombieCache, zombieFolder, spawnInfo.name or "")
                                                 if template and spawnPart then
                                                         local zombieClone = template:Clone()
                                                         zombieClone:SetAttribute("PVPGenerated", true)
