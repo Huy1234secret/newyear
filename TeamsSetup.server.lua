@@ -2782,27 +2782,28 @@ do
 					playTagSound(record)
 				end
 
-				local function broadcastCompletion(winner: ParticipantRecord?)
-					local payload: {[string]: any} = {
-						action = "HotTouchStatus",
-						state = "Complete",
-					}
+                                local function broadcastCompletion(winner: ParticipantRecord?)
+                                        local payload: {[string]: any} = {
+                                                action = "HotTouchStatus",
+                                                state = "Complete",
+                                        }
 
-					if winner and winner.player then
-						local player = winner.player
-						payload.userId = player.UserId
-						payload.name = player.Name
-						payload.displayName = player.DisplayName
-					end
+                                        if winner and winner.player then
+                                                local player = winner.player
+                                                payload.userId = player.UserId
+                                                payload.name = player.Name
+                                                payload.displayName = player.DisplayName
+                                        end
 
+                                        sendStatusUpdate(payload)
 
+                                        sendStatusUpdate({
+                                                action = "MatchMessage",
+                                                text = "Survive",
+                                        })
+                                end
 
-					sendStatusUpdate({
-						action = "MatchMessage",
-						text = "Survive",
-					})
-
-					local function clearConnections()
+                                local function clearConnections()
 						for _, conn in pairs(hotState.connections) do
 							conn:Disconnect()
 						end
