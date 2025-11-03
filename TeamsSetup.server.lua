@@ -4958,40 +4958,41 @@ do
 		onPlayerAdded(player)
 	end
 
-	startRoundRemote.OnServerEvent:Connect(function(player, payload)
-		if not isGameOwner(player) then
-			return
-		end
+        startRoundRemote.OnServerEvent:Connect(function(player, payload)
+                if not isGameOwner(player) then
+                        return
+                end
 
-		local mapId: string? = nil
-		local eventId: string? = nil
-		local difficultyOverride: number? = nil
+                local mapId: string? = nil
+                local eventId: string? = nil
+                local difficultyOverride: number? = nil
 
-		if typeof(payload) == "table" then
-			mapId = payload.mapId or payload.modelName or payload.id
-			local eventValue = payload.eventId or payload.event
-			if typeof(eventValue) == "string" then
-				eventId = eventValue
-			end
+                if typeof(payload) == "table" then
+                        mapId = payload.mapId or payload.modelName or payload.id
+                        local eventValue = payload.eventId or payload.event
+                        if typeof(eventValue) == "string" then
+                                eventId = eventValue
+                        end
 
-			local difficultyValue = payload.difficulty or payload.difficultyOverride
-			local numericDifficulty = tonumber(difficultyValue)
-			if numericDifficulty then
-				local floored = math.floor(numericDifficulty)
-				if floored >= 1 then
-					difficultyOverride = floored
-				end
-			end
-		elseif typeof(payload) == "string" then
-			mapId = payload
-		end
+                        local difficultyValue = payload.difficulty or payload.difficultyOverride
+                        local numericDifficulty = tonumber(difficultyValue)
+                        if numericDifficulty then
+                                local floored = math.floor(numericDifficulty)
+                                if floored >= 1 then
+                                        difficultyOverride = floored
+                                end
+                        end
+                elseif typeof(payload) == "string" then
+                        mapId = payload
+                end
 
-		if typeof(mapId) ~= "string" then
-			sendRoundState("Error", {
-				message = "Select a map before starting the round.",
-			})
-			return
-		end
+                if typeof(mapId) ~= "string" then
+                        sendRoundState("Error", {
+                                message = "Select a map before starting the round.",
+                        })
+                        return
+                end
 
-		startRound(player, mapId, eventId, difficultyOverride)
-	end)
+                startRound(player, mapId, eventId, difficultyOverride)
+        end)
+end
