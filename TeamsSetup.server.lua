@@ -117,20 +117,69 @@ do
 		return matched
 	end
 
-	local function pirateApocalypseCollectSpawnPoints(container: Instance?): {BasePart}
-		local points: {BasePart} = {}
-		if not container then
-			return points
-		end
+        local function pirateApocalypseCollectSpawnPoints(container: Instance?): {BasePart}
+                local points: {BasePart} = {}
+                if not container then
+                        return points
+                end
 
-		for _, child in container:GetDescendants() do
-			if child:IsA("BasePart") then
-				table.insert(points, child)
-			end
-		end
+                if container:IsA("BasePart") then
+                        table.insert(points, container)
+                end
 
-		return points
-	end
+                for _, child in container:GetDescendants() do
+                        if child:IsA("BasePart") then
+                                table.insert(points, child)
+                        end
+                end
+
+                return points
+        end
+
+        local ZOMBIE_SPAWN_CONTAINER_NAMES = {"ZombieSpawn", "ZombieSpawns", "ZombieSpawnPoints"}
+
+        local function pirateApocalypseResolveSpawnPoints(mapModel: Model?): {BasePart}
+                local resolved: {BasePart} = {}
+                local seen: {[BasePart]: boolean} = {}
+
+                if not mapModel then
+                        return resolved
+                end
+
+                local function addFrom(instance: Instance?)
+                        if not instance then
+                                return
+                        end
+
+                        for _, part in ipairs(pirateApocalypseCollectSpawnPoints(instance)) do
+                                if not seen[part] then
+                                        seen[part] = true
+                                        table.insert(resolved, part)
+                                end
+                        end
+                end
+
+                for _, containerName in ipairs(ZOMBIE_SPAWN_CONTAINER_NAMES) do
+                        local container = mapModel:FindFirstChild(containerName)
+                        if not container then
+                                container = mapModel:FindFirstChild(containerName, true)
+                        end
+                        addFrom(container)
+                end
+
+                if #resolved == 0 then
+                        for _, descendant in mapModel:GetDescendants() do
+                                if descendant:IsA("BasePart") then
+                                        local loweredName = string.lower(descendant.Name)
+                                        if string.find(loweredName, "zombie") and string.find(loweredName, "spawn") then
+                                                addFrom(descendant)
+                                        end
+                                end
+                        end
+                end
+
+                return resolved
+        end
 
 	function pirateApocalypseAssignTeam(player: Player, team: Team?)
 		if not player then
@@ -183,18 +232,30 @@ do
 		end
 	end
 
-	function pirateApocalypseEnsureState(context: SpecialEventContext, mapModel: Model?): {[string]: any}
-		local state = context.state.PirateApocalypse
-		if state then
-			return state
-		end
+        function pirateApocalypseEnsureState(context: SpecialEventContext, mapModel: Model?): {[string]: any}
+                local state = context.state.PirateApocalypse
+                local spawnPoints = pirateApocalypseResolveSpawnPoints(mapModel)
+                if state then
+                        if mapModel then
+                                state.spawnPoints = spawnPoints
+                        end
 
-		local spawnContainer = if mapModel then mapModel:FindFirstChild("ZombieSpawn") else nil
-		state = {
-			roundId = context.roundId,
-			hearts = {},
-			ghostPlayers = {},
-			playerStatus = {},
+                        if not state.zombieFolder or not state.zombieFolder.Parent then
+                                state.zombieFolder = ReplicatedStorage:FindFirstChild("Zombies")
+                        end
+
+                        if not state.gearFolder or not state.gearFolder.Parent then
+                                state.gearFolder = ReplicatedStorage:FindFirstChild("SurvivalGear")
+                        end
+
+                        return state
+                end
+
+                state = {
+                        roundId = context.roundId,
+                        hearts = {},
+                        ghostPlayers = {},
+                        playerStatus = {},
 			unlockedGear = {},
 			gearCache = {},
 			zombieCache = {},
@@ -203,12 +264,12 @@ do
 			running = false,
 			completed = false,
 			currentWave = 0,
-			spawnPoints = pirateApocalypseCollectSpawnPoints(spawnContainer),
-			zombieFolder = ReplicatedStorage:FindFirstChild("Zombies"),
-			gearFolder = ReplicatedStorage:FindFirstChild("SurvivalGear"),
-			zombieConnections = {},
-			random = Random.new(),
-		}
+                        spawnPoints = spawnPoints,
+                        zombieFolder = ReplicatedStorage:FindFirstChild("Zombies"),
+                        gearFolder = ReplicatedStorage:FindFirstChild("SurvivalGear"),
+                        zombieConnections = {},
+                        random = Random.new(),
+                }
 
 		context.state.PirateApocalypse = state
 		return state
@@ -750,12 +811,37 @@ do
 		return false
 	end
 
-	local function ensureRigIsR6(player: Player, character: Model)
-		local humanoid = character:FindFirstChildOfClass("Humanoid")
-		if not humanoid then
-			local existing = character:FindFirstChild("Humanoid")
-			if existing and existing:IsA("Humanoid") then
-				humanoid = existing
+        local R15_PART_NAMES = {
+                UpperTorso = true,
+                LowerTorso = true,
+                LeftUpperArm = true,
+                LeftLowerArm = true,
+                LeftHand = true,
+                RightUpperArm = true,
+                RightLowerArm = true,
+                RightHand = true,
+                LeftUpperLeg = true,
+                LeftLowerLeg = true,
+                LeftFoot = true,
+                RightUpperLeg = true,
+                RightLowerLeg = true,
+                RightFoot = true,
+        }
+
+        local function cleanupResidualRigParts(character: Model)
+                for _, child in ipairs(character:GetChildren()) do
+                        if child:IsA("BasePart") and R15_PART_NAMES[child.Name] then
+                                child:Destroy()
+                        end
+                end
+        end
+
+        local function ensureRigIsR6(player: Player, character: Model)
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                if not humanoid then
+                        local existing = character:FindFirstChild("Humanoid")
+                        if existing and existing:IsA("Humanoid") then
+                                humanoid = existing
 			else
 				local waitResult = character:WaitForChild("Humanoid", HUMANOID_WAIT_TIMEOUT)
 				if waitResult and waitResult:IsA("Humanoid") then
@@ -764,12 +850,17 @@ do
 			end
 		end
 
-		if not humanoid or humanoid.RigType == Enum.HumanoidRigType.R6 then
-			return
-		end
+                if not humanoid then
+                        return
+                end
 
-		local description: HumanoidDescription? = nil
-		local success, result = pcall(function()
+                if humanoid.RigType == Enum.HumanoidRigType.R6 then
+                        cleanupResidualRigParts(character)
+                        return
+                end
+
+                local description: HumanoidDescription? = nil
+                local success, result = pcall(function()
 			return Players:GetHumanoidDescriptionFromUserId(player.UserId)
 		end)
 
@@ -777,16 +868,20 @@ do
 			description = result
 		end
 
-		if description then
-			pcall(function()
-				humanoid:ApplyDescription(description :: HumanoidDescription, Enum.HumanoidRigType.R6)
-			end)
-		else
-			pcall(function()
-				humanoid.RigType = Enum.HumanoidRigType.R6
-			end)
-		end
-	end
+                if description then
+                        pcall(function()
+                                humanoid:ApplyDescription(description :: HumanoidDescription, Enum.HumanoidRigType.R6)
+                        end)
+                else
+                        pcall(function()
+                                humanoid.RigType = Enum.HumanoidRigType.R6
+                        end)
+                end
+
+                task.defer(function()
+                        cleanupResidualRigParts(character)
+                end)
+        end
 
 	type MusicCycleSound = {
 		id: string | number,
