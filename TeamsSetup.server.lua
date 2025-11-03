@@ -121,20 +121,31 @@ do
 		return matched
 	end
 
-        local function pirateApocalypseCollectSpawnPoints(container: Instance?): {BasePart}
+        local TARGET_ZOMBIE_SPAWN_MODEL_NAME = "ZombieSpawn"
+        local TARGET_ZOMBIE_SPAWN_PART_NAME = "Part"
+
+        local function pirateApocalypseCollectSpawnPoints(container: Instance?, onlyTargetParts: boolean?): {BasePart}
                 local points: {BasePart} = {}
                 if not container then
                         return points
                 end
 
-                if container:IsA("BasePart") then
-                        table.insert(points, container)
+                local function consider(instance: Instance)
+                        if not instance:IsA("BasePart") then
+                                return
+                        end
+
+                        if onlyTargetParts and instance.Name ~= TARGET_ZOMBIE_SPAWN_PART_NAME then
+                                return
+                        end
+
+                        table.insert(points, instance)
                 end
 
+                consider(container)
+
                 for _, child in container:GetDescendants() do
-                        if child:IsA("BasePart") then
-                                table.insert(points, child)
-                        end
+                        consider(child)
                 end
 
                 return points
@@ -150,12 +161,12 @@ do
                         return resolved
                 end
 
-                local function addFrom(instance: Instance?)
+                local function addFrom(instance: Instance?, onlyTargetParts: boolean?)
                         if not instance then
                                 return
                         end
 
-                        for _, part in ipairs(pirateApocalypseCollectSpawnPoints(instance)) do
+                        for _, part in ipairs(pirateApocalypseCollectSpawnPoints(instance, onlyTargetParts)) do
                                 if not seen[part] then
                                         seen[part] = true
                                         table.insert(resolved, part)
@@ -163,12 +174,18 @@ do
                         end
                 end
 
+                local zombieSpawnModel = mapModel:FindFirstChild(TARGET_ZOMBIE_SPAWN_MODEL_NAME)
+                if zombieSpawnModel and zombieSpawnModel:IsA("Model") then
+                        addFrom(zombieSpawnModel, true)
+                end
+
                 for _, containerName in ipairs(ZOMBIE_SPAWN_CONTAINER_NAMES) do
                         local container = mapModel:FindFirstChild(containerName)
                         if not container then
                                 container = mapModel:FindFirstChild(containerName, true)
                         end
-                        addFrom(container)
+                        local onlyTargetParts = containerName == TARGET_ZOMBIE_SPAWN_MODEL_NAME
+                        addFrom(container, onlyTargetParts)
                 end
 
                 if #resolved == 0 then
@@ -176,7 +193,8 @@ do
                                 if descendant:IsA("BasePart") then
                                         local loweredName = string.lower(descendant.Name)
                                         if string.find(loweredName, "zombie") and string.find(loweredName, "spawn") then
-                                                addFrom(descendant)
+                                                local onlyTargetParts = descendant.Parent and descendant.Parent:IsA("Model") and descendant.Parent.Name == TARGET_ZOMBIE_SPAWN_MODEL_NAME
+                                                addFrom(descendant, onlyTargetParts)
                                         end
                                 end
                         end
