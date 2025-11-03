@@ -4907,15 +4907,79 @@ do
 		table.clear(lobbyConnections)
 	end
 
+        -- Certain lobby models include kill bricks or other hazards alongside decorative
+        -- geometry. Filtering by keyword helps avoid teleporting players onto those parts.
+        local HAZARD_KEYWORDS = {
+                kill = true,
+                lava = true,
+                damage = true,
+                acid = true,
+        }
+
+        local function isPreferredLobbySpawnPart(part: BasePart): boolean
+                if part:GetAttribute("LobbySpawnPoint") then
+                        return true
+                end
+
+                if part:IsA("SpawnLocation") then
+                        return true
+                end
+
+                local lowerName = string.lower(part.Name)
+                return string.find(lowerName, "spawn") ~= nil
+        end
+
+        local function isValidLobbySpawnPart(part: BasePart, preferred: boolean): boolean
+                if not part.CanCollide then
+                        return false
+                end
+
+                if part.Size.Magnitude <= 0 then
+                        return false
+                end
+
+                if part:GetAttribute("LobbySpawnExcluded") then
+                        return false
+                end
+
+                if not preferred and part.Transparency >= 1 then
+                        return false
+                end
+
+                local lowerName = string.lower(part.Name)
+                for keyword in pairs(HAZARD_KEYWORDS) do
+                        if string.find(lowerName, keyword, 1, true) then
+                                return false
+                        end
+                end
+
+                return true
+        end
+
         local function refreshLobbyParts()
                 table.clear(lobbyParts)
                 if not currentLobbyModel then
                         return
                 end
 
+                local preferredParts: {BasePart} = {}
+                local fallbackParts: {BasePart} = {}
+
                 local function registerPart(instance: Instance)
-                        if instance:IsA("BasePart") then
-                                table.insert(lobbyParts, instance)
+                        if not instance:IsA("BasePart") then
+                                return
+                        end
+
+                        local part = instance :: BasePart
+                        local isPreferred = isPreferredLobbySpawnPart(part)
+                        if not isValidLobbySpawnPart(part, isPreferred) then
+                                return
+                        end
+
+                        if isPreferred then
+                                table.insert(preferredParts, part)
+                        else
+                                table.insert(fallbackParts, part)
                         end
                 end
 
@@ -4925,6 +4989,11 @@ do
 
                 for _, descendant in currentLobbyModel:GetDescendants() do
                         registerPart(descendant)
+                end
+
+                local source = if #preferredParts > 0 then preferredParts else fallbackParts
+                for _, part in ipairs(source) do
+                        table.insert(lobbyParts, part)
                 end
         end
 
