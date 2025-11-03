@@ -122,7 +122,10 @@ do
 	end
 
         local TARGET_ZOMBIE_SPAWN_MODEL_NAME = "ZombieSpawn"
-        local TARGET_ZOMBIE_SPAWN_PART_NAME = "Part"
+        local TARGET_ZOMBIE_SPAWN_PART_NAMES = {
+                Part = true,
+                SpawnLocation = true,
+        }
 
         local function pirateApocalypseCollectSpawnPoints(container: Instance?, onlyTargetParts: boolean?): {BasePart}
                 local points: {BasePart} = {}
@@ -135,7 +138,7 @@ do
                                 return
                         end
 
-                        if onlyTargetParts and instance.Name ~= TARGET_ZOMBIE_SPAWN_PART_NAME then
+                        if onlyTargetParts and not TARGET_ZOMBIE_SPAWN_PART_NAMES[instance.Name] then
                                 return
                         end
 
