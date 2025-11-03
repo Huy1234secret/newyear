@@ -829,9 +829,9 @@ do
         }
 
         local function cleanupResidualRigParts(character: Model)
-                for _, child in ipairs(character:GetChildren()) do
-                        if child:IsA("BasePart") and R15_PART_NAMES[child.Name] then
-                                child:Destroy()
+                for _, descendant in ipairs(character:GetDescendants()) do
+                        if descendant:IsA("BasePart") and R15_PART_NAMES[descendant.Name] then
+                                descendant:Destroy()
                         end
                 end
         end
