@@ -75,70 +75,70 @@ local mapDefinitions: {MapDefinition} = {
 		displayName = "Happy Home of Robloxia",
 		modelName = "HappyHomeOfRobloxia",
 	},
-        {
-                id = "RavenRock",
-                displayName = "Raven Rock",
-                modelName = "RavenRock",
-        },
-        {
-                id = "PirateBay",
-                displayName = "Pirate Bay",
-                modelName = "PirateBay",
-        },
+	{
+		id = "RavenRock",
+		displayName = "Raven Rock",
+		modelName = "RavenRock",
+	},
+	{
+		id = "PirateBay",
+		displayName = "Pirate Bay",
+		modelName = "PirateBay",
+	},
 
 }
 
 local specialEventOptions: {EventDefinition} = {
 	{
 		id = "RANDOM",
-		displayName = "🎲 RANDOM",
+		displayName = "?? RANDOM",
 		description = "Pick a surprise event when the round begins.",
 	},
 	{
 		id = "ShatteredHeart",
-		displayName = "💔 Shattered Heart",
+		displayName = "?? Shattered Heart",
 		description = "Neutral players cling to a single hit point.",
 	},
 	{
 		id = "SprintProhibit",
-		displayName = "🚫 Sprint Prohibit",
+		displayName = "?? Sprint Prohibit",
 		description = "Neutral players cannot sprint.",
 	},
 	{
 		id = "Retro",
-		displayName = "🕹️ RETRO",
+		displayName = "??? RETRO",
 		description = "Neutral players receive retro gear only.",
 	},
 	{
 		id = "Invisible",
-		displayName = "👻 Invisible",
+		displayName = "?? Invisible",
 		description = "Neutral players turn translucent ninjas.",
 	},
 	{
 		id = "Bunny",
-		displayName = "🐰 Bunny",
+		displayName = "?? Bunny",
 		description = "Neutral players are powered by pogo legs.",
 	},
 	{
 		id = "Slippery",
-		displayName = "🧊 Slippery",
+		displayName = "?? Slippery",
 		description = "The arena loses all traction.",
 	},
 	{
 		id = "KillBot",
-		displayName = "🤖 KillBot",
+		displayName = "?? KillBot",
 		description = "Three rogue bots patrol the arena.",
 	},
-        {
-                id = "RainingBomb",
-                displayName = "💣 Raining Bomb",
-                description = "Explosive hail falls from the sky.",
-        },
-        {
-                id = "HotTouch",
-                displayName = "🔥 Hot Touch",
-                description = "Pass the explosive countdown or perish.",
-        },
+	{
+		id = "RainingBomb",
+		displayName = "?? Raining Bomb",
+		description = "Explosive hail falls from the sky.",
+	},
+	{
+		id = "HotTouch",
+		displayName = "?? Hot Touch",
+		description = "Pass the explosive countdown or perish.",
+	},
 }
 
 local eventDefinitionById: {[string]: EventDefinition} = {}
@@ -377,7 +377,7 @@ pvpTitle.Size = UDim2.new(1, -40, 0, 35)
 pvpTitle.Position = UDim2.new(0, 20, 0, 15)
 pvpTitle.BackgroundTransparency = 1
 pvpTitle.Font = Enum.Font.GothamBold
-pvpTitle.Text = "⚔️ PVP MATCH"
+pvpTitle.Text = "?? PVP MATCH"
 pvpTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 pvpTitle.TextSize = 24
 pvpTitle.TextXAlignment = Enum.TextXAlignment.Center
@@ -452,8 +452,8 @@ local function createRowSection(
 	return section, list
 end
 
-local mapSection, mapList = createRowSection("MapSection", "🗺️ Map Selection", 60, 160, 120)
-local eventSection, eventList = createRowSection("EventSection", "🎲 Special Events", 240, 260, 120)
+local mapSection, mapList = createRowSection("MapSection", "??? Map Selection", 60, 160, 120)
+local eventSection, eventList = createRowSection("EventSection", "?? Special Events", 240, 260, 120)
 
 local eventDescriptionLabel = Instance.new("TextLabel")
 eventDescriptionLabel.Name = "EventDescription"
@@ -476,55 +476,55 @@ local selectedDifficulty: number? = nil
 local difficultyStatusLabel: TextLabel? = nil
 
 local function applySelectionVisual(button: TextButton, isSelected: boolean)
-        button.BackgroundColor3 = isSelected and mapButtonSelectedColor or mapButtonDefaultColor
-        button.TextColor3 = mapButtonTextColor
-        button.AutoButtonColor = not isSelected
+	button.BackgroundColor3 = isSelected and mapButtonSelectedColor or mapButtonDefaultColor
+	button.TextColor3 = mapButtonTextColor
+	button.AutoButtonColor = not isSelected
 
-        local stroke = button:FindFirstChildOfClass("UIStroke")
-        if stroke then
-                stroke.Color = isSelected and Color3.fromRGB(185, 255, 205) or Color3.fromRGB(120, 40, 40)
-                stroke.Transparency = isSelected and 0 or 0.2
-        end
+	local stroke = button:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = isSelected and Color3.fromRGB(185, 255, 205) or Color3.fromRGB(120, 40, 40)
+		stroke.Transparency = isSelected and 0 or 0.2
+	end
 
-        local gradient = button:FindFirstChild("SelectionGradient")
-        if gradient and gradient:IsA("UIGradient") then
-                gradient.Color = isSelected and mapButtonSelectedGradient or mapButtonDefaultGradient
-        end
+	local gradient = button:FindFirstChild("SelectionGradient")
+	if gradient and gradient:IsA("UIGradient") then
+		gradient.Color = isSelected and mapButtonSelectedGradient or mapButtonDefaultGradient
+	end
 
-        local icon = button:FindFirstChild("SelectionIcon")
-        if icon and icon:IsA("ImageLabel") then
-                icon.Visible = isSelected
-                icon.ImageTransparency = isSelected and 0 or 0.35
-        end
+	local icon = button:FindFirstChild("SelectionIcon")
+	if icon and icon:IsA("ImageLabel") then
+		icon.Visible = isSelected
+		icon.ImageTransparency = isSelected and 0 or 0.35
+	end
 
-        local scale = button:FindFirstChild("SelectionScale")
-        if scale and scale:IsA("UIScale") then
-                TweenService:Create(scale, selectionTweenInfo, {Scale = isSelected and 1.05 or 1}):Play()
-        end
+	local scale = button:FindFirstChild("SelectionScale")
+	if scale and scale:IsA("UIScale") then
+		TweenService:Create(scale, selectionTweenInfo, {Scale = isSelected and 1.05 or 1}):Play()
+	end
 end
 
 local function updateDifficultyButtonVisual(button: TextButton, isSelected: boolean)
-        applySelectionVisual(button, isSelected)
+	applySelectionVisual(button, isSelected)
 end
 
 local function refreshDifficultyStatusLabel()
-        if difficultyStatusLabel then
-                if selectedDifficulty then
-                        difficultyStatusLabel.Text = string.format("Locked to %d", selectedDifficulty)
-                        difficultyStatusLabel.TextColor3 = Color3.fromRGB(255, 235, 160)
-                else
-                        difficultyStatusLabel.Text = "Random"
-                        difficultyStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
-                end
-        end
+	if difficultyStatusLabel then
+		if selectedDifficulty then
+			difficultyStatusLabel.Text = string.format("Locked to %d", selectedDifficulty)
+			difficultyStatusLabel.TextColor3 = Color3.fromRGB(255, 235, 160)
+		else
+			difficultyStatusLabel.Text = "Random"
+			difficultyStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+		end
+	end
 end
 
 local function setSelectedDifficulty(level: number?)
-        selectedDifficulty = level
-        for value, button in difficultyButtons do
-                updateDifficultyButtonVisual(button, value == selectedDifficulty)
-        end
-        refreshDifficultyStatusLabel()
+	selectedDifficulty = level
+	for value, button in difficultyButtons do
+		updateDifficultyButtonVisual(button, value == selectedDifficulty)
+	end
+	refreshDifficultyStatusLabel()
 end
 
 local difficultyContainer = Instance.new("Frame")
@@ -541,7 +541,7 @@ difficultyHeader.Size = UDim2.new(0.5, -10, 0, 20)
 difficultyHeader.Position = UDim2.new(0, 0, 0, 0)
 difficultyHeader.BackgroundTransparency = 1
 difficultyHeader.Font = Enum.Font.GothamBold
-difficultyHeader.Text = "🎚️ Difficulty Override"
+difficultyHeader.Text = "??? Difficulty Override"
 difficultyHeader.TextColor3 = Color3.fromRGB(245, 245, 255)
 difficultyHeader.TextSize = 16
 difficultyHeader.TextXAlignment = Enum.TextXAlignment.Left
@@ -579,55 +579,55 @@ difficultyLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 difficultyLayout.Parent = difficultyButtonFrame
 
 local function createDifficultyButton(level: number, layoutOrder: number)
-        local button = Instance.new("TextButton")
-        button.Name = string.format("Difficulty%d", level)
-        button.LayoutOrder = layoutOrder
-        button.Size = UDim2.new(0, 0, 1, 0)
-        button.BackgroundColor3 = mapButtonDefaultColor
-        button.AutoButtonColor = false
-        button.Font = Enum.Font.GothamBold
-        button.Text = string.format("%d", level)
-        button.TextColor3 = mapButtonTextColor
-        button.TextSize = 16
-        button.ZIndex = 6
-        button.Parent = difficultyButtonFrame
+	local button = Instance.new("TextButton")
+	button.Name = string.format("Difficulty%d", level)
+	button.LayoutOrder = layoutOrder
+	button.Size = UDim2.new(0, 0, 1, 0)
+	button.BackgroundColor3 = mapButtonDefaultColor
+	button.AutoButtonColor = false
+	button.Font = Enum.Font.GothamBold
+	button.Text = string.format("%d", level)
+	button.TextColor3 = mapButtonTextColor
+	button.TextSize = 16
+	button.ZIndex = 6
+	button.Parent = difficultyButtonFrame
 
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
-        corner.Parent = button
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = button
 
-        local stroke = Instance.new("UIStroke")
-        stroke.Thickness = 1.5
-        stroke.Color = Color3.fromRGB(150, 160, 210)
-        stroke.Transparency = 0.3
-        stroke.Parent = button
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1.5
+	stroke.Color = Color3.fromRGB(150, 160, 210)
+	stroke.Transparency = 0.3
+	stroke.Parent = button
 
-        local gradient = Instance.new("UIGradient")
-        gradient.Name = "SelectionGradient"
-        gradient.Color = mapButtonDefaultGradient
-        gradient.Rotation = 90
-        gradient.Parent = button
+	local gradient = Instance.new("UIGradient")
+	gradient.Name = "SelectionGradient"
+	gradient.Color = mapButtonDefaultGradient
+	gradient.Rotation = 90
+	gradient.Parent = button
 
-        local scale = Instance.new("UIScale")
-        scale.Name = "SelectionScale"
-        scale.Parent = button
+	local scale = Instance.new("UIScale")
+	scale.Name = "SelectionScale"
+	scale.Parent = button
 
-        difficultyButtons[level] = button
-        updateDifficultyButtonVisual(button, false)
+	difficultyButtons[level] = button
+	updateDifficultyButtonVisual(button, false)
 
-        button.Activated:Connect(function()
-                if selectedDifficulty == level then
-                        setSelectedDifficulty(nil)
-                else
-                        setSelectedDifficulty(level)
-                end
-        end)
+	button.Activated:Connect(function()
+		if selectedDifficulty == level then
+			setSelectedDifficulty(nil)
+		else
+			setSelectedDifficulty(level)
+		end
+	end)
 
-        return button
+	return button
 end
 
 for index = 1, 6 do
-        createDifficultyButton(index, index)
+	createDifficultyButton(index, index)
 end
 
 local randomDifficultyButton = Instance.new("TextButton")
@@ -637,7 +637,7 @@ randomDifficultyButton.Size = UDim2.new(0, 0, 1, 0)
 randomDifficultyButton.BackgroundColor3 = Color3.fromRGB(74, 87, 120)
 randomDifficultyButton.AutoButtonColor = false
 randomDifficultyButton.Font = Enum.Font.GothamSemibold
-randomDifficultyButton.Text = "🎲 Random"
+randomDifficultyButton.Text = "?? Random"
 randomDifficultyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 randomDifficultyButton.TextSize = 15
 randomDifficultyButton.ZIndex = 6
@@ -654,7 +654,7 @@ randomStroke.Transparency = 0.35
 randomStroke.Parent = randomDifficultyButton
 
 randomDifficultyButton.Activated:Connect(function()
-        setSelectedDifficulty(nil)
+	setSelectedDifficulty(nil)
 end)
 
 setSelectedDifficulty(nil)
@@ -727,8 +727,8 @@ local function createActionButton(name: string, text: string): TextButton
 	return button
 end
 
-local startButton = createActionButton("StartButton", "🚀 Start Match")
-local cancelButton = createActionButton("CancelButton", "❌ Cancel")
+local startButton = createActionButton("StartButton", "?? Start Match")
+local cancelButton = createActionButton("CancelButton", "? Cancel")
 
 local startButtonDefaultColor = startButton.BackgroundColor3
 local startButtonDisabledColor = Color3.fromRGB(70, 80, 110)
@@ -795,7 +795,7 @@ local function showMessage(text: string, color: Color3?)
 end
 
 local function updateMapButtonVisual(button: TextButton, isSelected: boolean)
-        applySelectionVisual(button, isSelected)
+	applySelectionVisual(button, isSelected)
 end
 
 local function selectMap(mapId: string)
