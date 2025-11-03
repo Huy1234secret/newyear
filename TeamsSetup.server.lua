@@ -362,38 +362,59 @@ do
 		end
 	end
 
-	local function pirateApocalypseAdjustCharacterCollision(character: Model?, enabled: boolean)
-		if not character then
-			return
-		end
-		for _, part in character:GetDescendants() do
-			if part:IsA("BasePart") then
-				if part:GetAttribute("OrigCollide") == nil then
-					part:SetAttribute("OrigCollide", part.CanCollide)
-				end
-				if enabled then
-					local oc = part:GetAttribute("OrigCollide")
-					if oc ~= nil then
-						part.CanCollide = oc
-					else
-						part.CanCollide = true
-					end
-				else
-					part.CanCollide = false
-				end
-			end
-		end
+        local function pirateApocalypseAdjustCharacterCollision(character: Model?, enabled: boolean)
+                if not character then
+                        return
+                end
 
-		for _, part in character:GetDescendants() do
-			if part:IsA("BasePart") then
-				part.CanCollide = enabled
-				part.CanTouch = enabled
-				part.CanQuery = enabled
-			elseif part:IsA("Decal") or part:IsA("Texture") then
-				part.Transparency = if enabled then part.Transparency else 1
-			end
-		end
-	end
+                for _, descendant in character:GetDescendants() do
+                        if descendant:IsA("BasePart") then
+                                if descendant:GetAttribute("OrigCollide") == nil then
+                                        descendant:SetAttribute("OrigCollide", descendant.CanCollide)
+                                end
+                                if descendant:GetAttribute("OrigCanQuery") == nil then
+                                        descendant:SetAttribute("OrigCanQuery", descendant.CanQuery)
+                                end
+                                if descendant:GetAttribute("OrigCanTouch") == nil then
+                                        descendant:SetAttribute("OrigCanTouch", descendant.CanTouch)
+                                end
+
+                                if enabled then
+                                        local originalCollide = descendant:GetAttribute("OrigCollide")
+                                        if originalCollide ~= nil then
+                                                descendant.CanCollide = originalCollide
+                                        end
+
+                                        local originalQuery = descendant:GetAttribute("OrigCanQuery")
+                                        if originalQuery ~= nil then
+                                                descendant.CanQuery = originalQuery
+                                        end
+
+                                        local originalTouch = descendant:GetAttribute("OrigCanTouch")
+                                        if originalTouch ~= nil then
+                                                descendant.CanTouch = originalTouch
+                                        end
+                                else
+                                        descendant.CanCollide = false
+                                        descendant.CanQuery = false
+                                        descendant.CanTouch = false
+                                end
+                        elseif descendant:IsA("Decal") or descendant:IsA("Texture") then
+                                if descendant:GetAttribute("OrigTrans") == nil then
+                                        descendant:SetAttribute("OrigTrans", descendant.Transparency)
+                                end
+
+                                if enabled then
+                                        local originalTransparency = descendant:GetAttribute("OrigTrans")
+                                        if originalTransparency ~= nil then
+                                                descendant.Transparency = originalTransparency
+                                        end
+                                else
+                                        descendant.Transparency = 1
+                                end
+                        end
+                end
+        end
 
 	function pirateApocalypseSetGhostVisual(record: ParticipantRecord, isGhost: boolean)
 		local player = record.player
@@ -3289,7 +3310,7 @@ do
 				state.completed = false
 				state.currentWave = 0
 				state.pendingSpawns = 0
-				state.spawnPoints = pirateApocalypseCollectSpawnPoints(mapModel and mapModel:FindFirstChild("ZombieSpawn"))
+                                state.spawnPoints = pirateApocalypseResolveSpawnPoints(mapModel)
 				pirateApocalypseUnlockRewards(state, 0)
 				pirateApocalypseBroadcastHearts(state)
 				pirateApocalypseSendStatus({phase = "ApocalypseReady", totalWaves = #PIRATE_APOCALYPSE_WAVES})
