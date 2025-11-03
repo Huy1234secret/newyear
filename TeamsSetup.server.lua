@@ -4907,18 +4907,26 @@ do
 		table.clear(lobbyConnections)
 	end
 
-	local function refreshLobbyParts()
-		table.clear(lobbyParts)
-		if not currentLobbyModel then
-			return
-		end
+        local function refreshLobbyParts()
+                table.clear(lobbyParts)
+                if not currentLobbyModel then
+                        return
+                end
 
-		for _, child in currentLobbyModel:GetChildren() do
-			if child:IsA("BasePart") and child.Name == "Part" then
-				table.insert(lobbyParts, child)
-			end
-		end
-	end
+                local function registerPart(instance: Instance)
+                        if instance:IsA("BasePart") then
+                                table.insert(lobbyParts, instance)
+                        end
+                end
+
+                if currentLobbyModel:IsA("BasePart") then
+                        registerPart(currentLobbyModel)
+                end
+
+                for _, descendant in currentLobbyModel:GetDescendants() do
+                        registerPart(descendant)
+                end
+        end
 
 	local function setLobbyModel(model: Model?)
 		currentLobbyModel = model
@@ -4929,18 +4937,18 @@ do
 			return
 		end
 
-		lobbyConnections[#lobbyConnections + 1] = model.ChildAdded:Connect(function(child)
-			if child:IsA("BasePart") and child.Name == "Part" then
-				table.insert(lobbyParts, child)
-			end
-		end)
+                lobbyConnections[#lobbyConnections + 1] = model.DescendantAdded:Connect(function(descendant)
+                        if descendant:IsA("BasePart") then
+                                refreshLobbyParts()
+                        end
+                end)
 
-		lobbyConnections[#lobbyConnections + 1] = model.ChildRemoved:Connect(function(child)
-			if child:IsA("BasePart") and child.Name == "Part" then
-				refreshLobbyParts()
-			end
-		end)
-	end
+                lobbyConnections[#lobbyConnections + 1] = model.DescendantRemoving:Connect(function(descendant)
+                        if descendant:IsA("BasePart") then
+                                refreshLobbyParts()
+                        end
+                end)
+        end
 
 	setLobbyModel(Workspace:FindFirstChild("LobbySpawn") :: Model?)
 
