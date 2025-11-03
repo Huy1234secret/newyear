@@ -1044,20 +1044,20 @@ do
 		table.insert(specialEventList, definition)
 	end
 
-	local function callSpecialEventCallback(context: SpecialEventContext?, methodName: string)
-		if not context then
-			return nil
-		end
+        local function callSpecialEventCallback(context: SpecialEventContext?, methodName: string, ...)
+                if not context then
+                        return nil
+                end
 
-		local definition = context.definition
-		local callback = (definition :: any)[methodName]
-		if typeof(callback) == "function" then
-			local ok, result = pcall(callback, context)
-			if not ok then
-				warn(string.format("Special event '%s' %s error: %s", definition.id, methodName, result))
-				return nil
-			end
-			return result
+                local definition = context.definition
+                local callback = (definition :: any)[methodName]
+                if typeof(callback) == "function" then
+                        local ok, result = pcall(callback, context, ...)
+                        if not ok then
+                                warn(string.format("Special event '%s' %s error: %s", definition.id, methodName, result))
+                                return nil
+                        end
+                        return result
 		end
 
 		return nil
