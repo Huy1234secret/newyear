@@ -828,7 +828,26 @@ do
                 RightFoot = true,
         }
 
-        local function cleanupResidualRigParts(character: Model)
+        local function cleanupResidualRigParts(character: Model, humanoid: Humanoid?)
+                if not character then
+                        return
+                end
+
+                if humanoid and humanoid.Parent ~= character then
+                        humanoid = nil
+                end
+
+                humanoid = humanoid or character:FindFirstChildOfClass("Humanoid")
+                if not humanoid or humanoid.RigType ~= Enum.HumanoidRigType.R6 then
+                        return
+                end
+
+                local torso = character:FindFirstChild("Torso")
+                local rootPart = character:FindFirstChild("HumanoidRootPart")
+                if not torso or not rootPart then
+                        return
+                end
+
                 for _, descendant in ipairs(character:GetDescendants()) do
                         if descendant:IsA("BasePart") and R15_PART_NAMES[descendant.Name] then
                                 descendant:Destroy()
@@ -855,7 +874,7 @@ do
                 end
 
                 if humanoid.RigType == Enum.HumanoidRigType.R6 then
-                        cleanupResidualRigParts(character)
+                        cleanupResidualRigParts(character, humanoid)
                         return
                 end
 
@@ -879,7 +898,7 @@ do
                 end
 
                 task.defer(function()
-                        cleanupResidualRigParts(character)
+                        cleanupResidualRigParts(character, humanoid)
                 end)
         end
 
