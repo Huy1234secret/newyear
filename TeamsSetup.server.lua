@@ -121,94 +121,94 @@ do
 		return matched
 	end
 
-        local TARGET_ZOMBIE_SPAWN_MODEL_NAME = "ZombieSpawn"
-        local TARGET_ZOMBIE_SPAWN_PART_NAMES = {
-                Part = true,
-                SpawnLocation = true,
-        }
+	local TARGET_ZOMBIE_SPAWN_MODEL_NAME = "ZombieSpawn"
+	local TARGET_ZOMBIE_SPAWN_PART_NAMES = {
+		Part = true,
+		SpawnLocation = true,
+	}
 
-        local function pirateApocalypseCollectSpawnPoints(container: Instance?, onlyTargetParts: boolean?): {BasePart}
-                local points: {BasePart} = {}
-                if not container then
-                        return points
-                end
+	local function pirateApocalypseCollectSpawnPoints(container: Instance?, onlyTargetParts: boolean?): {BasePart}
+		local points: {BasePart} = {}
+		if not container then
+			return points
+		end
 
-                local function consider(instance: Instance)
-                        if not instance:IsA("BasePart") then
-                                return
-                        end
+		local function consider(instance: Instance)
+			if not instance:IsA("BasePart") then
+				return
+			end
 
-                        if onlyTargetParts and not TARGET_ZOMBIE_SPAWN_PART_NAMES[instance.Name] then
-                                return
-                        end
+			if onlyTargetParts and not TARGET_ZOMBIE_SPAWN_PART_NAMES[instance.Name] then
+				return
+			end
 
-                        table.insert(points, instance)
-                end
+			table.insert(points, instance)
+		end
 
-                consider(container)
+		consider(container)
 
-                for _, child in container:GetDescendants() do
-                        consider(child)
-                end
+		for _, child in container:GetDescendants() do
+			consider(child)
+		end
 
-                return points
-        end
+		return points
+	end
 
-        local ZOMBIE_SPAWN_CONTAINER_NAMES = {"ZombieSpawn", "ZombieSpawns", "ZombieSpawnPoints"}
+	local ZOMBIE_SPAWN_CONTAINER_NAMES = {"ZombieSpawn", "ZombieSpawns", "ZombieSpawnPoints"}
 
-        local function pirateApocalypseResolveSpawnPoints(mapModel: Model?): {BasePart}
-                local resolved: {BasePart} = {}
-                local seen: {[BasePart]: boolean} = {}
+	local function pirateApocalypseResolveSpawnPoints(mapModel: Model?): {BasePart}
+		local resolved: {BasePart} = {}
+		local seen: {[BasePart]: boolean} = {}
 
-                if not mapModel then
-                        return resolved
-                end
+		if not mapModel then
+			return resolved
+		end
 
-                local function addFrom(instance: Instance?, onlyTargetParts: boolean?)
-                        if not instance then
-                                return
-                        end
+		local function addFrom(instance: Instance?, onlyTargetParts: boolean?)
+			if not instance then
+				return
+			end
 
-                        for _, part in ipairs(pirateApocalypseCollectSpawnPoints(instance, onlyTargetParts)) do
-                                if not seen[part] then
-                                        seen[part] = true
-                                        table.insert(resolved, part)
-                                end
-                        end
-                end
+			for _, part in ipairs(pirateApocalypseCollectSpawnPoints(instance, onlyTargetParts)) do
+				if not seen[part] then
+					seen[part] = true
+					table.insert(resolved, part)
+				end
+			end
+		end
 
-                local zombieSpawnModel = mapModel:FindFirstChild(TARGET_ZOMBIE_SPAWN_MODEL_NAME)
-                if (not zombieSpawnModel or not zombieSpawnModel:IsA("Model")) then
-                        zombieSpawnModel = mapModel:FindFirstChild(TARGET_ZOMBIE_SPAWN_MODEL_NAME, true)
-                end
+		local zombieSpawnModel = mapModel:FindFirstChild(TARGET_ZOMBIE_SPAWN_MODEL_NAME)
+		if (not zombieSpawnModel or not zombieSpawnModel:IsA("Model")) then
+			zombieSpawnModel = mapModel:FindFirstChild(TARGET_ZOMBIE_SPAWN_MODEL_NAME, true)
+		end
 
-                if zombieSpawnModel and zombieSpawnModel:IsA("Model") then
-                        addFrom(zombieSpawnModel, false)
-                end
+		if zombieSpawnModel and zombieSpawnModel:IsA("Model") then
+			addFrom(zombieSpawnModel, false)
+		end
 
-                for _, containerName in ipairs(ZOMBIE_SPAWN_CONTAINER_NAMES) do
-                        local container = mapModel:FindFirstChild(containerName)
-                        if not container then
-                                container = mapModel:FindFirstChild(containerName, true)
-                        end
-                        local onlyTargetParts = containerName ~= TARGET_ZOMBIE_SPAWN_MODEL_NAME
-                        addFrom(container, onlyTargetParts)
-                end
+		for _, containerName in ipairs(ZOMBIE_SPAWN_CONTAINER_NAMES) do
+			local container = mapModel:FindFirstChild(containerName)
+			if not container then
+				container = mapModel:FindFirstChild(containerName, true)
+			end
+			local onlyTargetParts = containerName ~= TARGET_ZOMBIE_SPAWN_MODEL_NAME
+			addFrom(container, onlyTargetParts)
+		end
 
-                if #resolved == 0 then
-                        for _, descendant in mapModel:GetDescendants() do
-                                if descendant:IsA("BasePart") then
-                                        local loweredName = string.lower(descendant.Name)
-                                        if string.find(loweredName, "zombie") and string.find(loweredName, "spawn") then
-                                                local onlyTargetParts = descendant.Parent and descendant.Parent:IsA("Model") and descendant.Parent.Name == TARGET_ZOMBIE_SPAWN_MODEL_NAME
-                                                addFrom(descendant, onlyTargetParts)
-                                        end
-                                end
-                        end
-                end
+		if #resolved == 0 then
+			for _, descendant in mapModel:GetDescendants() do
+				if descendant:IsA("BasePart") then
+					local loweredName = string.lower(descendant.Name)
+					if string.find(loweredName, "zombie") and string.find(loweredName, "spawn") then
+						local onlyTargetParts = descendant.Parent and descendant.Parent:IsA("Model") and descendant.Parent.Name == TARGET_ZOMBIE_SPAWN_MODEL_NAME
+						addFrom(descendant, onlyTargetParts)
+					end
+				end
+			end
+		end
 
-                return resolved
-        end
+		return resolved
+	end
 
 	function pirateApocalypseAssignTeam(player: Player, team: Team?)
 		if not player then
@@ -261,90 +261,90 @@ do
 		end
 	end
 
-        local PIRATE_APOCALYPSE_ZOMBIE_FOLDER_NAME = "PirateApocalypseZombies"
+	local PIRATE_APOCALYPSE_ZOMBIE_FOLDER_NAME = "PirateApocalypseZombies"
 
-        local function pirateApocalypseResolveZombieFolder(): Folder?
-                local folder = ReplicatedStorage:FindFirstChild("Zombies")
-                if not folder then
-                        local ok, result = pcall(function()
-                                return ReplicatedStorage:WaitForChild("Zombies", 5)
-                        end)
-                        if ok then
-                                folder = result
-                        end
-                end
+	local function pirateApocalypseResolveZombieFolder(): Folder?
+		local folder = ReplicatedStorage:FindFirstChild("Zombies")
+		if not folder then
+			local ok, result = pcall(function()
+				return ReplicatedStorage:WaitForChild("Zombies", 5)
+			end)
+			if ok then
+				folder = result
+			end
+		end
 
-                if folder and folder:IsA("Folder") then
-                        return folder
-                end
+		if folder and folder:IsA("Folder") then
+			return folder
+		end
 
-                return nil
-        end
+		return nil
+	end
 
-        local function pirateApocalypseEnsureZombieParentFolder(state: {[string]: any}): Folder
-                local folder = state.zombieParentFolder
-                if folder and folder.Parent then
-                        return folder
-                end
+	local function pirateApocalypseEnsureZombieParentFolder(state: {[string]: any}): Folder
+		local folder = state.zombieParentFolder
+		if folder and folder.Parent then
+			return folder
+		end
 
-                local existing = Workspace:FindFirstChild(PIRATE_APOCALYPSE_ZOMBIE_FOLDER_NAME)
-                if not existing or not existing:IsA("Folder") then
-                        existing = Instance.new("Folder")
-                        existing.Name = PIRATE_APOCALYPSE_ZOMBIE_FOLDER_NAME
-                        existing.Parent = Workspace
-                end
+		local existing = Workspace:FindFirstChild(PIRATE_APOCALYPSE_ZOMBIE_FOLDER_NAME)
+		if not existing or not existing:IsA("Folder") then
+			existing = Instance.new("Folder")
+			existing.Name = PIRATE_APOCALYPSE_ZOMBIE_FOLDER_NAME
+			existing.Parent = Workspace
+		end
 
-                state.zombieParentFolder = existing
-                return existing
-        end
+		state.zombieParentFolder = existing
+		return existing
+	end
 
-        function pirateApocalypseEnsureState(context: SpecialEventContext, mapModel: Model?): {[string]: any}
-                local state = context.state.PirateApocalypse
-                local spawnPoints = pirateApocalypseResolveSpawnPoints(mapModel)
-                if state then
-                        if mapModel then
-                                state.spawnPoints = spawnPoints
-                        end
+	function pirateApocalypseEnsureState(context: SpecialEventContext, mapModel: Model?): {[string]: any}
+		local state = context.state.PirateApocalypse
+		local spawnPoints = pirateApocalypseResolveSpawnPoints(mapModel)
+		if state then
+			if mapModel then
+				state.spawnPoints = spawnPoints
+			end
 
-                        if not state.zombieFolder or not state.zombieFolder.Parent then
-                                state.zombieFolder = pirateApocalypseResolveZombieFolder()
-                        end
+			if not state.zombieFolder or not state.zombieFolder.Parent then
+				state.zombieFolder = pirateApocalypseResolveZombieFolder()
+			end
 
-                        if not state.gearFolder or not state.gearFolder.Parent then
-                                state.gearFolder = ReplicatedStorage:FindFirstChild("SurvivalGear")
-                        end
+			if not state.gearFolder or not state.gearFolder.Parent then
+				state.gearFolder = ReplicatedStorage:FindFirstChild("SurvivalGear")
+			end
 
-                        pirateApocalypseEnsureZombieParentFolder(state)
+			pirateApocalypseEnsureZombieParentFolder(state)
 
-                        return state
-                end
+			return state
+		end
 
-                state = {
-                        roundId = context.roundId,
-                        hearts = {},
-                        ghostPlayers = {},
-                        playerStatus = {},
+		state = {
+			roundId = context.roundId,
+			hearts = {},
+			ghostPlayers = {},
+			playerStatus = {},
 			unlockedGear = {},
 			gearCache = {},
-                        zombieCache = {},
-                        activeZombies = {},
-                        pendingSpawns = 0,
-                        running = false,
-                        completed = false,
-                        currentWave = 0,
-                        spawnPoints = spawnPoints,
-                        zombieFolder = pirateApocalypseResolveZombieFolder(),
-                        gearFolder = ReplicatedStorage:FindFirstChild("SurvivalGear"),
-                        zombieParentFolder = nil,
-                        zombieConnections = {},
-                        random = Random.new(),
-                }
+			zombieCache = {},
+			activeZombies = {},
+			pendingSpawns = 0,
+			running = false,
+			completed = false,
+			currentWave = 0,
+			spawnPoints = spawnPoints,
+			zombieFolder = pirateApocalypseResolveZombieFolder(),
+			gearFolder = ReplicatedStorage:FindFirstChild("SurvivalGear"),
+			zombieParentFolder = nil,
+			zombieConnections = {},
+			random = Random.new(),
+		}
 
-                pirateApocalypseEnsureZombieParentFolder(state)
+		pirateApocalypseEnsureZombieParentFolder(state)
 
-                context.state.PirateApocalypse = state
-                return state
-        end
+		context.state.PirateApocalypse = state
+		return state
+	end
 
 	function pirateApocalypseUnlockRewards(state: {[string]: any}, waveNumber: number)
 		local rewards = PIRATE_APOCALYPSE_GEAR_REWARDS[waveNumber]
@@ -433,59 +433,59 @@ do
 		end
 	end
 
-        local function pirateApocalypseAdjustCharacterCollision(character: Model?, enabled: boolean)
-                if not character then
-                        return
-                end
+	local function pirateApocalypseAdjustCharacterCollision(character: Model?, enabled: boolean)
+		if not character then
+			return
+		end
 
-                for _, descendant in character:GetDescendants() do
-                        if descendant:IsA("BasePart") then
-                                if descendant:GetAttribute("OrigCollide") == nil then
-                                        descendant:SetAttribute("OrigCollide", descendant.CanCollide)
-                                end
-                                if descendant:GetAttribute("OrigCanQuery") == nil then
-                                        descendant:SetAttribute("OrigCanQuery", descendant.CanQuery)
-                                end
-                                if descendant:GetAttribute("OrigCanTouch") == nil then
-                                        descendant:SetAttribute("OrigCanTouch", descendant.CanTouch)
-                                end
+		for _, descendant in character:GetDescendants() do
+			if descendant:IsA("BasePart") then
+				if descendant:GetAttribute("OrigCollide") == nil then
+					descendant:SetAttribute("OrigCollide", descendant.CanCollide)
+				end
+				if descendant:GetAttribute("OrigCanQuery") == nil then
+					descendant:SetAttribute("OrigCanQuery", descendant.CanQuery)
+				end
+				if descendant:GetAttribute("OrigCanTouch") == nil then
+					descendant:SetAttribute("OrigCanTouch", descendant.CanTouch)
+				end
 
-                                if enabled then
-                                        local originalCollide = descendant:GetAttribute("OrigCollide")
-                                        if originalCollide ~= nil then
-                                                descendant.CanCollide = originalCollide
-                                        end
+				if enabled then
+					local originalCollide = descendant:GetAttribute("OrigCollide")
+					if originalCollide ~= nil then
+						descendant.CanCollide = originalCollide
+					end
 
-                                        local originalQuery = descendant:GetAttribute("OrigCanQuery")
-                                        if originalQuery ~= nil then
-                                                descendant.CanQuery = originalQuery
-                                        end
+					local originalQuery = descendant:GetAttribute("OrigCanQuery")
+					if originalQuery ~= nil then
+						descendant.CanQuery = originalQuery
+					end
 
-                                        local originalTouch = descendant:GetAttribute("OrigCanTouch")
-                                        if originalTouch ~= nil then
-                                                descendant.CanTouch = originalTouch
-                                        end
-                                else
-                                        descendant.CanCollide = false
-                                        descendant.CanQuery = false
-                                        descendant.CanTouch = false
-                                end
-                        elseif descendant:IsA("Decal") or descendant:IsA("Texture") then
-                                if descendant:GetAttribute("OrigTrans") == nil then
-                                        descendant:SetAttribute("OrigTrans", descendant.Transparency)
-                                end
+					local originalTouch = descendant:GetAttribute("OrigCanTouch")
+					if originalTouch ~= nil then
+						descendant.CanTouch = originalTouch
+					end
+				else
+					descendant.CanCollide = false
+					descendant.CanQuery = false
+					descendant.CanTouch = false
+				end
+			elseif descendant:IsA("Decal") or descendant:IsA("Texture") then
+				if descendant:GetAttribute("OrigTrans") == nil then
+					descendant:SetAttribute("OrigTrans", descendant.Transparency)
+				end
 
-                                if enabled then
-                                        local originalTransparency = descendant:GetAttribute("OrigTrans")
-                                        if originalTransparency ~= nil then
-                                                descendant.Transparency = originalTransparency
-                                        end
-                                else
-                                        descendant.Transparency = 1
-                                end
-                        end
-                end
-        end
+				if enabled then
+					local originalTransparency = descendant:GetAttribute("OrigTrans")
+					if originalTransparency ~= nil then
+						descendant.Transparency = originalTransparency
+					end
+				else
+					descendant.Transparency = 1
+				end
+			end
+		end
+	end
 
 	function pirateApocalypseSetGhostVisual(record: ParticipantRecord, isGhost: boolean)
 		local player = record.player
@@ -626,22 +626,22 @@ do
 		end)
 	end
 
-        local function pirateApocalypseClearZombieTracking(state: {[string]: any})
-                for zombie in pairs(state.activeZombies) do
-                        state.activeZombies[zombie] = nil
-                end
-                pirateApocalypseDisconnectConnections(state.zombieConnections)
-                state.zombieConnections = {}
+	local function pirateApocalypseClearZombieTracking(state: {[string]: any})
+		for zombie in pairs(state.activeZombies) do
+			state.activeZombies[zombie] = nil
+		end
+		pirateApocalypseDisconnectConnections(state.zombieConnections)
+		state.zombieConnections = {}
 
-                local parentFolder = state.zombieParentFolder
-                if parentFolder and parentFolder.Parent then
-                        for _, child in ipairs(parentFolder:GetChildren()) do
-                                if child:GetAttribute("PVPGenerated") then
-                                        child:Destroy()
-                                end
-                        end
-                end
-        end
+		local parentFolder = state.zombieParentFolder
+		if parentFolder and parentFolder.Parent then
+			for _, child in ipairs(parentFolder:GetChildren()) do
+				if child:GetAttribute("PVPGenerated") then
+					child:Destroy()
+				end
+			end
+		end
+	end
 
 	function pirateApocalypseStartWave(context: SpecialEventContext, state: {[string]: any}, waveNumber: number)
 		-- Allow starting during prep; just ensure round id matches
@@ -684,26 +684,26 @@ do
 						state.random = random
 						local index = random:NextInteger(1, #spawnPoints)
 						local spawnPart = spawnPoints[index]
-                                                local zombieFolder = state.zombieFolder
-                                                if not zombieFolder or not zombieFolder.Parent then
-                                                        zombieFolder = pirateApocalypseResolveZombieFolder()
-                                                        state.zombieFolder = zombieFolder
-                                                end
+						local zombieFolder = state.zombieFolder
+						if not zombieFolder or not zombieFolder.Parent then
+							zombieFolder = pirateApocalypseResolveZombieFolder()
+							state.zombieFolder = zombieFolder
+						end
 
-                                                local template = pirateApocalypseGetTemplate(state.zombieCache, zombieFolder, spawnInfo.name or "")
-                                                if template and spawnPart then
-                                                        local zombieClone = template:Clone()
-                                                        zombieClone:SetAttribute("PVPGenerated", true)
-                                                        local zombieParent = pirateApocalypseEnsureZombieParentFolder(state)
-                                                        if zombieClone:IsA("Model") then
-                                                                zombieClone:PivotTo(spawnPart.CFrame)
-                                                                zombieClone.Parent = zombieParent
-                                                        else
-                                                                zombieClone.Parent = zombieParent
-                                                                if zombieClone:IsA("BasePart") then
-                                                                        zombieClone.CFrame = spawnPart.CFrame
-                                                                end
-                                                        end
+						local template = pirateApocalypseGetTemplate(state.zombieCache, zombieFolder, spawnInfo.name or "")
+						if template and spawnPart then
+							local zombieClone = template:Clone()
+							zombieClone:SetAttribute("PVPGenerated", true)
+							local zombieParent = pirateApocalypseEnsureZombieParentFolder(state)
+							if zombieClone:IsA("Model") then
+								zombieClone:PivotTo(spawnPart.CFrame)
+								zombieClone.Parent = zombieParent
+							else
+								zombieClone.Parent = zombieParent
+								if zombieClone:IsA("BasePart") then
+									zombieClone.CFrame = spawnPart.CFrame
+								end
+							end
 
 							state.activeZombies[zombieClone] = true
 
@@ -920,56 +920,56 @@ do
 		return false
 	end
 
-        local R15_PART_NAMES = {
-                UpperTorso = true,
-                LowerTorso = true,
-                LeftUpperArm = true,
-                LeftLowerArm = true,
-                LeftHand = true,
-                RightUpperArm = true,
-                RightLowerArm = true,
-                RightHand = true,
-                LeftUpperLeg = true,
-                LeftLowerLeg = true,
-                LeftFoot = true,
-                RightUpperLeg = true,
-                RightLowerLeg = true,
-                RightFoot = true,
-        }
+	local R15_PART_NAMES = {
+		UpperTorso = true,
+		LowerTorso = true,
+		LeftUpperArm = true,
+		LeftLowerArm = true,
+		LeftHand = true,
+		RightUpperArm = true,
+		RightLowerArm = true,
+		RightHand = true,
+		LeftUpperLeg = true,
+		LeftLowerLeg = true,
+		LeftFoot = true,
+		RightUpperLeg = true,
+		RightLowerLeg = true,
+		RightFoot = true,
+	}
 
-        local function cleanupResidualRigParts(character: Model, humanoid: Humanoid?)
-                if not character then
-                        return
-                end
+	local function cleanupResidualRigParts(character: Model, humanoid: Humanoid?)
+		if not character then
+			return
+		end
 
-                if humanoid and humanoid.Parent ~= character then
-                        humanoid = nil
-                end
+		if humanoid and humanoid.Parent ~= character then
+			humanoid = nil
+		end
 
-                humanoid = humanoid or character:FindFirstChildOfClass("Humanoid")
-                if not humanoid or humanoid.RigType ~= Enum.HumanoidRigType.R6 then
-                        return
-                end
+		humanoid = humanoid or character:FindFirstChildOfClass("Humanoid")
+		if not humanoid or humanoid.RigType ~= Enum.HumanoidRigType.R6 then
+			return
+		end
 
-                local torso = character:FindFirstChild("Torso")
-                local rootPart = character:FindFirstChild("HumanoidRootPart")
-                if not torso or not rootPart then
-                        return
-                end
+		local torso = character:FindFirstChild("Torso")
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+		if not torso or not rootPart then
+			return
+		end
 
-                for _, descendant in ipairs(character:GetDescendants()) do
-                        if descendant:IsA("BasePart") and R15_PART_NAMES[descendant.Name] then
-                                descendant:Destroy()
-                        end
-                end
-        end
+		for _, descendant in ipairs(character:GetDescendants()) do
+			if descendant:IsA("BasePart") and R15_PART_NAMES[descendant.Name] then
+				descendant:Destroy()
+			end
+		end
+	end
 
-        local function ensureRigIsR6(player: Player, character: Model)
-                local humanoid = character:FindFirstChildOfClass("Humanoid")
-                if not humanoid then
-                        local existing = character:FindFirstChild("Humanoid")
-                        if existing and existing:IsA("Humanoid") then
-                                humanoid = existing
+	local function ensureRigIsR6(player: Player, character: Model)
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if not humanoid then
+			local existing = character:FindFirstChild("Humanoid")
+			if existing and existing:IsA("Humanoid") then
+				humanoid = existing
 			else
 				local waitResult = character:WaitForChild("Humanoid", HUMANOID_WAIT_TIMEOUT)
 				if waitResult and waitResult:IsA("Humanoid") then
@@ -978,17 +978,17 @@ do
 			end
 		end
 
-                if not humanoid then
-                        return
-                end
+		if not humanoid then
+			return
+		end
 
-                if humanoid.RigType == Enum.HumanoidRigType.R6 then
-                        cleanupResidualRigParts(character, humanoid)
-                        return
-                end
+		if humanoid.RigType == Enum.HumanoidRigType.R6 then
+			cleanupResidualRigParts(character, humanoid)
+			return
+		end
 
-                local description: HumanoidDescription? = nil
-                local success, result = pcall(function()
+		local description: HumanoidDescription? = nil
+		local success, result = pcall(function()
 			return Players:GetHumanoidDescriptionFromUserId(player.UserId)
 		end)
 
@@ -996,20 +996,20 @@ do
 			description = result
 		end
 
-                if description then
-                        pcall(function()
-                                humanoid:ApplyDescription(description :: HumanoidDescription, Enum.HumanoidRigType.R6)
-                        end)
-                else
-                        pcall(function()
-                                humanoid.RigType = Enum.HumanoidRigType.R6
-                        end)
-                end
+		if description then
+			pcall(function()
+				humanoid:ApplyDescription(description :: HumanoidDescription, Enum.HumanoidRigType.R6)
+			end)
+		else
+			pcall(function()
+				humanoid.RigType = Enum.HumanoidRigType.R6
+			end)
+		end
 
-                task.defer(function()
-                        cleanupResidualRigParts(character, humanoid)
-                end)
-        end
+		task.defer(function()
+			cleanupResidualRigParts(character, humanoid)
+		end)
+	end
 
 	type MusicCycleSound = {
 		id: string | number,
@@ -1267,20 +1267,20 @@ do
 		table.insert(specialEventList, definition)
 	end
 
-        local function callSpecialEventCallback(context: SpecialEventContext?, methodName: string, ...)
-                if not context then
-                        return nil
-                end
+	local function callSpecialEventCallback(context: SpecialEventContext?, methodName: string, ...)
+		if not context then
+			return nil
+		end
 
-                local definition = context.definition
-                local callback = (definition :: any)[methodName]
-                if typeof(callback) == "function" then
-                        local ok, result = pcall(callback, context, ...)
-                        if not ok then
-                                warn(string.format("Special event '%s' %s error: %s", definition.id, methodName, result))
-                                return nil
-                        end
-                        return result
+		local definition = context.definition
+		local callback = (definition :: any)[methodName]
+		if typeof(callback) == "function" then
+			local ok, result = pcall(callback, context, ...)
+			if not ok then
+				warn(string.format("Special event '%s' %s error: %s", definition.id, methodName, result))
+				return nil
+			end
+			return result
 		end
 
 		return nil
@@ -3005,261 +3005,245 @@ do
 					playTagSound(record)
 				end
 
-                                local function broadcastCompletion(winner: ParticipantRecord?)
-                                        local payload: {[string]: any} = {
-                                                action = "HotTouchStatus",
-                                                state = "Complete",
-                                        }
+				local function broadcastCompletion(winner: ParticipantRecord?)
+					local payload: {[string]: any} = {
+						action = "HotTouchStatus",
+						state = "Complete",
+					}
 
-                                        if winner and winner.player then
-                                                local player = winner.player
-                                                payload.userId = player.UserId
-                                                payload.name = player.Name
-                                                payload.displayName = player.DisplayName
-                                        end
-
-                                        sendStatusUpdate(payload)
-
-                                        sendStatusUpdate({
-                                                action = "MatchMessage",
-                                                text = "Survive",
-                                        })
-                                end
-
-                                local function clearConnections()
-						for _, conn in pairs(hotState.connections) do
-							conn:Disconnect()
-						end
-						table.clear(hotState.connections)
+					if winner and winner.player then
+						local player = winner.player
+						payload.userId = player.UserId
+						payload.name = player.Name
+						payload.displayName = player.DisplayName
 					end
 
-					local function applyHolderMovement(record: ParticipantRecord, active: boolean)
-						local character = record.player.Character
-						if not character then
-							return
+					sendStatusUpdate(payload)
+
+					sendStatusUpdate({
+						action = "MatchMessage",
+						text = "Survive",
+					})
+				end
+
+				local function clearConnections()
+					for _, conn in pairs(hotState.connections) do
+						conn:Disconnect()
+					end
+					table.clear(hotState.connections)
+				end
+
+				local function applyHolderMovement(record: ParticipantRecord, active: boolean)
+					local character = record.player.Character
+					if not character then
+						return
+					end
+
+					local humanoid = record.humanoid or character:FindFirstChildOfClass("Humanoid")
+					if not humanoid then
+						return
+					end
+
+					record.humanoid = humanoid
+
+					if active then
+						if record.eventData.HotTouchOriginalWalk == nil then
+							record.eventData.HotTouchOriginalWalk = humanoid.WalkSpeed
 						end
 
-						local humanoid = record.humanoid or character:FindFirstChildOfClass("Humanoid")
-						if not humanoid then
-							return
-						end
+						local bonusAmount = hotState.speedBonus or 0
 
-						record.humanoid = humanoid
-
-						if active then
-							if record.eventData.HotTouchOriginalWalk == nil then
-								record.eventData.HotTouchOriginalWalk = humanoid.WalkSpeed
-							end
-
-							local bonusAmount = hotState.speedBonus or 0
-
-							if record.eventData.HotTouchHadSprintBonus == nil then
-								local existingBonus = humanoid:GetAttribute("SprintSpeedBonus")
-								if typeof(existingBonus) == "number" then
-									record.eventData.HotTouchSprintBonus = existingBonus
-									record.eventData.HotTouchHadSprintBonus = true
-								else
-									record.eventData.HotTouchSprintBonus = nil
-									record.eventData.HotTouchHadSprintBonus = false
-									existingBonus = 0
-								end
-
-								local bonusValue = if typeof(existingBonus) == "number" then existingBonus else 0
-								humanoid:SetAttribute("SprintSpeedBonus", bonusValue + bonusAmount)
+						if record.eventData.HotTouchHadSprintBonus == nil then
+							local existingBonus = humanoid:GetAttribute("SprintSpeedBonus")
+							if typeof(existingBonus) == "number" then
+								record.eventData.HotTouchSprintBonus = existingBonus
+								record.eventData.HotTouchHadSprintBonus = true
 							else
-								local storedBonus = record.eventData.HotTouchSprintBonus
-								local baseValue = if typeof(storedBonus) == "number" then storedBonus else 0
-								humanoid:SetAttribute("SprintSpeedBonus", baseValue + bonusAmount)
+								record.eventData.HotTouchSprintBonus = nil
+								record.eventData.HotTouchHadSprintBonus = false
+								existingBonus = 0
 							end
 
-							local baseline = record.eventData.HotTouchOriginalWalk or humanoid.WalkSpeed
-							humanoid.WalkSpeed = baseline + bonusAmount
+							local bonusValue = if typeof(existingBonus) == "number" then existingBonus else 0
+							humanoid:SetAttribute("SprintSpeedBonus", bonusValue + bonusAmount)
 						else
-							if record.eventData.HotTouchOriginalWalk ~= nil then
-								humanoid.WalkSpeed = record.eventData.HotTouchOriginalWalk
-							end
-							record.eventData.HotTouchOriginalWalk = nil
-
-							local hadBonus = record.eventData.HotTouchHadSprintBonus
-							local originalBonus = record.eventData.HotTouchSprintBonus
-							if hadBonus then
-								humanoid:SetAttribute("SprintSpeedBonus", originalBonus)
-							else
-								humanoid:SetAttribute("SprintSpeedBonus", nil)
-							end
-							record.eventData.HotTouchHadSprintBonus = nil
-							record.eventData.HotTouchSprintBonus = nil
+							local storedBonus = record.eventData.HotTouchSprintBonus
+							local baseValue = if typeof(storedBonus) == "number" then storedBonus else 0
+							humanoid:SetAttribute("SprintSpeedBonus", baseValue + bonusAmount)
 						end
+
+						local baseline = record.eventData.HotTouchOriginalWalk or humanoid.WalkSpeed
+						humanoid.WalkSpeed = baseline + bonusAmount
+					else
+						if record.eventData.HotTouchOriginalWalk ~= nil then
+							humanoid.WalkSpeed = record.eventData.HotTouchOriginalWalk
+						end
+						record.eventData.HotTouchOriginalWalk = nil
+
+						local hadBonus = record.eventData.HotTouchHadSprintBonus
+						local originalBonus = record.eventData.HotTouchSprintBonus
+						if hadBonus then
+							humanoid:SetAttribute("SprintSpeedBonus", originalBonus)
+						else
+							humanoid:SetAttribute("SprintSpeedBonus", nil)
+						end
+						record.eventData.HotTouchHadSprintBonus = nil
+						record.eventData.HotTouchSprintBonus = nil
+					end
+				end
+
+				local function updateHolderVisual(record: ParticipantRecord?, active: boolean)
+					if not record then
+						return
 					end
 
-					local function updateHolderVisual(record: ParticipantRecord?, active: boolean)
-						if not record then
-							return
-						end
+					local character = record.player.Character
+					if not character then
+						return
+					end
 
-						local character = record.player.Character
-						if not character then
-							return
-						end
+					applyHolderMovement(record, active)
 
-						applyHolderMovement(record, active)
-
-						if active then
-							local highlight = character:FindFirstChild("HotTouchHighlight") :: Highlight?
-							if not highlight then
-								highlight = Instance.new("Highlight")
-								highlight.Name = "HotTouchHighlight"
-								highlight.FillColor = Color3.fromRGB(255, 0, 0)
-								highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
-								highlight.FillTransparency = 1
-								highlight.OutlineTransparency = 0
-								highlight.Parent = character
-							end
+					if active then
+						local highlight = character:FindFirstChild("HotTouchHighlight") :: Highlight?
+						if not highlight then
+							highlight = Instance.new("Highlight")
+							highlight.Name = "HotTouchHighlight"
+							highlight.FillColor = Color3.fromRGB(255, 0, 0)
+							highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
 							highlight.FillTransparency = 1
 							highlight.OutlineTransparency = 0
-							highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
-						else
-							local highlight = character:FindFirstChild("HotTouchHighlight")
-							if highlight then
-								highlight:Destroy()
-							end
+							highlight.Parent = character
 						end
-
-						local head = character:FindFirstChild("Head")
-						local existingBillboard = character:FindFirstChild("HotTouchBillboard")
-						if active then
-							local billboard = if existingBillboard and existingBillboard:IsA("BillboardGui") then existingBillboard else Instance.new("BillboardGui")
-							billboard.Name = "HotTouchBillboard"
-							billboard.Size = UDim2.new(0, 80, 0, 40)
-							billboard.StudsOffset = Vector3.new(0, 3, 0)
-							billboard.AlwaysOnTop = true
-							billboard.MaxDistance = 500
-							billboard.Parent = head or character
-
-							local label = billboard:FindFirstChild("Label") :: TextLabel?
-							if not label then
-								label = Instance.new("TextLabel")
-								label.Name = "Label"
-								label.Size = UDim2.new(1, 0, 1, 0)
-								label.BackgroundTransparency = 1
-								label.TextColor3 = Color3.fromRGB(255, 255, 255)
-								label.TextStrokeTransparency = 0
-								label.Font = Enum.Font.GothamBold
-								label.TextScaled = true
-								label.Parent = billboard
-							end
-
-							label.Text = tostring(hotState.timer)
-						elseif existingBillboard then
-							existingBillboard:Destroy()
+						highlight.FillTransparency = 1
+						highlight.OutlineTransparency = 0
+						highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+					else
+						local highlight = character:FindFirstChild("HotTouchHighlight")
+						if highlight then
+							highlight:Destroy()
 						end
 					end
 
-					local function updateTimerVisual()
-						local holder = hotState.holder
-						if not holder then
-							return
+					local head = character:FindFirstChild("Head")
+					local existingBillboard = character:FindFirstChild("HotTouchBillboard")
+					if active then
+						local billboard = if existingBillboard and existingBillboard:IsA("BillboardGui") then existingBillboard else Instance.new("BillboardGui")
+						billboard.Name = "HotTouchBillboard"
+						billboard.Size = UDim2.new(0, 80, 0, 40)
+						billboard.StudsOffset = Vector3.new(0, 3, 0)
+						billboard.AlwaysOnTop = true
+						billboard.MaxDistance = 500
+						billboard.Parent = head or character
+
+						local label = billboard:FindFirstChild("Label") :: TextLabel?
+						if not label then
+							label = Instance.new("TextLabel")
+							label.Name = "Label"
+							label.Size = UDim2.new(1, 0, 1, 0)
+							label.BackgroundTransparency = 1
+							label.TextColor3 = Color3.fromRGB(255, 255, 255)
+							label.TextStrokeTransparency = 0
+							label.Font = Enum.Font.GothamBold
+							label.TextScaled = true
+							label.Parent = billboard
 						end
 
-						local character = holder.player.Character
-						if not character then
-							return
-						end
+						label.Text = tostring(hotState.timer)
+					elseif existingBillboard then
+						existingBillboard:Destroy()
+					end
+				end
 
-						local billboard = character:FindFirstChild("HotTouchBillboard")
-						if billboard and billboard:IsA("BillboardGui") then
-							local label = billboard:FindFirstChild("Label")
-							if label and label:IsA("TextLabel") then
-								label.Text = tostring(math.max(0, math.floor(hotState.timer)))
+				local function updateTimerVisual()
+					local holder = hotState.holder
+					if not holder then
+						return
+					end
+
+					local character = holder.player.Character
+					if not character then
+						return
+					end
+
+					local billboard = character:FindFirstChild("HotTouchBillboard")
+					if billboard and billboard:IsA("BillboardGui") then
+						local label = billboard:FindFirstChild("Label")
+						if label and label:IsA("TextLabel") then
+							label.Text = tostring(math.max(0, math.floor(hotState.timer)))
+							local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
+							local ratio = math.clamp(hotState.timer / maxTimer, 0, 1)
+							local color = Color3.fromRGB(255, 255 * ratio, 255 * ratio)
+							label.TextColor3 = color
+						end
+					end
+				end
+
+				local function detachHolder(record: ParticipantRecord?)
+					if record then
+						updateHolderVisual(record, false)
+					end
+					clearConnections()
+				end
+
+				local function attachHolderConnections(record: ParticipantRecord)
+					clearConnections()
+					local character = record.player.Character
+					if not character then
+						return
+					end
+
+					for _, descendant in character:GetDescendants() do
+						if descendant:IsA("BasePart") then
+							local basePart = descendant
+							if not basePart.CanTouch then
+								basePart.CanTouch = true
+							end
+							hotState.connections[#hotState.connections + 1] = basePart.Touched:Connect(function(hit)
+								if not hotState.running or context.roundId ~= currentRoundId then
+									return
+								end
+
+								if hotState.holder ~= record then
+									return
+								end
+
+								if not hit or not hit.Parent then
+									return
+								end
+
+								local otherCharacter = hit:FindFirstAncestorOfClass("Model")
+								if not otherCharacter then
+									return
+								end
+
+								local otherPlayer = Players:GetPlayerFromCharacter(otherCharacter)
+								if not otherPlayer or otherPlayer == record.player then
+									return
+								end
+
+								local targetRecord = getParticipantFromPlayer(otherPlayer)
+								if not targetRecord or not isPlayerInNeutralState(targetRecord.player) then
+									return
+								end
+
 								local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
-								local ratio = math.clamp(hotState.timer / maxTimer, 0, 1)
-								local color = Color3.fromRGB(255, 255 * ratio, 255 * ratio)
-								label.TextColor3 = color
-							end
-						end
-					end
-
-					local function detachHolder(record: ParticipantRecord?)
-						if record then
-							updateHolderVisual(record, false)
-						end
-						clearConnections()
-					end
-
-					local function attachHolderConnections(record: ParticipantRecord)
-						clearConnections()
-						local character = record.player.Character
-						if not character then
-							return
-						end
-
-						for _, descendant in character:GetDescendants() do
-							if descendant:IsA("BasePart") then
-								local basePart = descendant
-								if not basePart.CanTouch then
-									basePart.CanTouch = true
-								end
-								hotState.connections[#hotState.connections + 1] = basePart.Touched:Connect(function(hit)
-									if not hotState.running or context.roundId ~= currentRoundId then
-										return
+								hotState.timer = math.min(hotState.timer + 5, maxTimer)
+								setParticipantFrozen(targetRecord, true)
+								task.delay(2, function()
+									if context.roundId == currentRoundId and roundInProgress then
+										setParticipantFrozen(targetRecord, false)
 									end
-
-									if hotState.holder ~= record then
-										return
-									end
-
-									if not hit or not hit.Parent then
-										return
-									end
-
-									local otherCharacter = hit:FindFirstAncestorOfClass("Model")
-									if not otherCharacter then
-										return
-									end
-
-									local otherPlayer = Players:GetPlayerFromCharacter(otherCharacter)
-									if not otherPlayer or otherPlayer == record.player then
-										return
-									end
-
-									local targetRecord = getParticipantFromPlayer(otherPlayer)
-									if not targetRecord or not isPlayerInNeutralState(targetRecord.player) then
-										return
-									end
-
-									local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
-									hotState.timer = math.min(hotState.timer + 5, maxTimer)
-									setParticipantFrozen(targetRecord, true)
-									task.delay(2, function()
-										if context.roundId == currentRoundId and roundInProgress then
-											setParticipantFrozen(targetRecord, false)
-										end
-									end)
-
-									setHolder(targetRecord, false)
 								end)
-							end
+
+								setHolder(targetRecord, false)
+							end)
 						end
 					end
+				end
 
-					local function setHolder(newRecord: ParticipantRecord?, resetTimer: boolean)
-						if newRecord == hotState.holder then
-							if newRecord then
-								if resetTimer then
-									hotState.timer = hotState.initialTimer or 30
-								end
-								updateHolderVisual(newRecord, true)
-								updateTimerVisual()
-								attachHolderConnections(newRecord)
-								broadcastHolder(newRecord)
-							else
-								broadcastSelecting()
-							end
-							return
-						end
-
-						detachHolder(hotState.holder)
-						hotState.holder = newRecord
+				local function setHolder(newRecord: ParticipantRecord?, resetTimer: boolean)
+					if newRecord == hotState.holder then
 						if newRecord then
 							if resetTimer then
 								hotState.timer = hotState.initialTimer or 30
@@ -3271,118 +3255,134 @@ do
 						else
 							broadcastSelecting()
 						end
+						return
 					end
 
-					hotState.setHolder = setHolder
-					hotState.detachHolder = detachHolder
-
-					local function selectNextHolder()
-						local candidates = {}
-						for _, record in ipairs(getNeutralParticipantRecords()) do
-							local humanoid = record.humanoid
-							if not humanoid or humanoid.Health <= 0 then
-								continue
-							end
-							table.insert(candidates, record)
+					detachHolder(hotState.holder)
+					hotState.holder = newRecord
+					if newRecord then
+						if resetTimer then
+							hotState.timer = hotState.initialTimer or 30
 						end
+						updateHolderVisual(newRecord, true)
+						updateTimerVisual()
+						attachHolderConnections(newRecord)
+						broadcastHolder(newRecord)
+					else
+						broadcastSelecting()
+					end
+				end
 
-						if #candidates <= 1 then
-							local winner = if #candidates == 1 then candidates[1] else nil
-							setHolder(nil, false)
-							hotState.running = false
-							broadcastCompletion(winner)
-							return
+				hotState.setHolder = setHolder
+				hotState.detachHolder = detachHolder
+
+				local function selectNextHolder()
+					local candidates = {}
+					for _, record in ipairs(getNeutralParticipantRecords()) do
+						local humanoid = record.humanoid
+						if not humanoid or humanoid.Health <= 0 then
+							continue
 						end
-
-						local rng = Random.new()
-						local chosen = candidates[rng:NextInteger(1, #candidates)]
-						setHolder(chosen, true)
+						table.insert(candidates, record)
 					end
 
-					broadcastSelecting()
-					selectNextHolder()
-
-					task.spawn(function()
-						while hotState.running and roundInProgress and context.roundId == currentRoundId do
-							if not hotState.holder then
-								task.wait(1)
-								selectNextHolder()
-								continue
-							end
-
-							hotState.timer -= 1
-							updateTimerVisual()
-
-							if hotState.timer <= 0 then
-								local holder = hotState.holder
-								if holder and holder.humanoid then
-									local rootPart = holder.humanoid.RootPart or (holder.player.Character and holder.player.Character:FindFirstChild("HumanoidRootPart"))
-									if rootPart then
-										local explosion = Instance.new("Explosion")
-										explosion.BlastRadius = 15
-										explosion.BlastPressure = 600000
-										explosion.Position = rootPart.Position
-										explosion.Parent = Workspace
-									end
-									holder.humanoid.Health = 0
-								end
-
-								selectNextHolder()
-							end
-
-							task.wait(1)
-						end
-					end)
-
-					hotState.cleanup = function()
+					if #candidates <= 1 then
+						local winner = if #candidates == 1 then candidates[1] else nil
+						setHolder(nil, false)
 						hotState.running = false
-						detachHolder(hotState.holder)
-						hotState.holder = nil
-						sendStatusUpdate({
-							action = "HotTouchStatus",
-							state = "Clear",
-						})
-					end
-				end,
-				onParticipantEliminated = function(context, record)
-					local state = context.state.HotTouch
-					if not state then
+						broadcastCompletion(winner)
 						return
 					end
 
-					if state.holder == record then
-						if state.setHolder then
-							state.setHolder(nil, false)
-						else
-							state.holder = nil
+					local rng = Random.new()
+					local chosen = candidates[rng:NextInteger(1, #candidates)]
+					setHolder(chosen, true)
+				end
+
+				broadcastSelecting()
+				selectNextHolder()
+
+				task.spawn(function()
+					while hotState.running and roundInProgress and context.roundId == currentRoundId do
+						if not hotState.holder then
+							task.wait(1)
+							selectNextHolder()
+							continue
 						end
-					end
-				end,
-				onParticipantCleanup = function(context, record)
-					local state = context.state.HotTouch
-					if not state then
-						return
-					end
 
-					if state.holder == record then
-						if state.setHolder then
-							state.setHolder(nil, false)
-						else
-							state.holder = nil
+						hotState.timer -= 1
+						updateTimerVisual()
+
+						if hotState.timer <= 0 then
+							local holder = hotState.holder
+							if holder and holder.humanoid then
+								local rootPart = holder.humanoid.RootPart or (holder.player.Character and holder.player.Character:FindFirstChild("HumanoidRootPart"))
+								if rootPart then
+									local explosion = Instance.new("Explosion")
+									explosion.BlastRadius = 15
+									explosion.BlastPressure = 600000
+									explosion.Position = rootPart.Position
+									explosion.Parent = Workspace
+								end
+								holder.humanoid.Health = 0
+							end
+
+							selectNextHolder()
 						end
-					end
-				end,
-				onRoundEnded = function(context)
-					local state = context.state.HotTouch
-					if not state then
-						return
-					end
 
-					if state.cleanup then
-						state.cleanup()
+						task.wait(1)
 					end
-					context.state.HotTouch = nil
-				end,
+				end)
+
+				hotState.cleanup = function()
+					hotState.running = false
+					detachHolder(hotState.holder)
+					hotState.holder = nil
+					sendStatusUpdate({
+						action = "HotTouchStatus",
+						state = "Clear",
+					})
+				end
+			end,
+			onParticipantEliminated = function(context, record)
+				local state = context.state.HotTouch
+				if not state then
+					return
+				end
+
+				if state.holder == record then
+					if state.setHolder then
+						state.setHolder(nil, false)
+					else
+						state.holder = nil
+					end
+				end
+			end,
+			onParticipantCleanup = function(context, record)
+				local state = context.state.HotTouch
+				if not state then
+					return
+				end
+
+				if state.holder == record then
+					if state.setHolder then
+						state.setHolder(nil, false)
+					else
+						state.holder = nil
+					end
+				end
+			end,
+			onRoundEnded = function(context)
+				local state = context.state.HotTouch
+				if not state then
+					return
+				end
+
+				if state.cleanup then
+					state.cleanup()
+				end
+				context.state.HotTouch = nil
+			end,
 		})
 
 		registerSpecialEvent({
@@ -3398,7 +3398,7 @@ do
 				state.completed = false
 				state.currentWave = 0
 				state.pendingSpawns = 0
-                                state.spawnPoints = pirateApocalypseResolveSpawnPoints(mapModel)
+				state.spawnPoints = pirateApocalypseResolveSpawnPoints(mapModel)
 				pirateApocalypseUnlockRewards(state, 0)
 				pirateApocalypseBroadcastHearts(state)
 				pirateApocalypseSendStatus({phase = "ApocalypseReady", totalWaves = #PIRATE_APOCALYPSE_WAVES})
@@ -5035,95 +5035,95 @@ do
 		table.clear(lobbyConnections)
 	end
 
-        -- Certain lobby models include kill bricks or other hazards alongside decorative
-        -- geometry. Filtering by keyword helps avoid teleporting players onto those parts.
-        local HAZARD_KEYWORDS = {
-                kill = true,
-                lava = true,
-                damage = true,
-                acid = true,
-        }
+	-- Certain lobby models include kill bricks or other hazards alongside decorative
+	-- geometry. Filtering by keyword helps avoid teleporting players onto those parts.
+	local HAZARD_KEYWORDS = {
+		kill = true,
+		lava = true,
+		damage = true,
+		acid = true,
+	}
 
-        local function isPreferredLobbySpawnPart(part: BasePart): boolean
-                if part:GetAttribute("LobbySpawnPoint") then
-                        return true
-                end
+	local function isPreferredLobbySpawnPart(part: BasePart): boolean
+		if part:GetAttribute("LobbySpawnPoint") then
+			return true
+		end
 
-                if part:IsA("SpawnLocation") then
-                        return true
-                end
+		if part:IsA("SpawnLocation") then
+			return true
+		end
 
-                local lowerName = string.lower(part.Name)
-                return string.find(lowerName, "spawn") ~= nil
-        end
+		local lowerName = string.lower(part.Name)
+		return string.find(lowerName, "spawn") ~= nil
+	end
 
-        local function isValidLobbySpawnPart(part: BasePart, preferred: boolean): boolean
-                if not part.CanCollide then
-                        return false
-                end
+	local function isValidLobbySpawnPart(part: BasePart, preferred: boolean): boolean
+		if not part.CanCollide then
+			return false
+		end
 
-                if part.Size.Magnitude <= 0 then
-                        return false
-                end
+		if part.Size.Magnitude <= 0 then
+			return false
+		end
 
-                if part:GetAttribute("LobbySpawnExcluded") then
-                        return false
-                end
+		if part:GetAttribute("LobbySpawnExcluded") then
+			return false
+		end
 
-                if not preferred and part.Transparency >= 1 then
-                        return false
-                end
+		if not preferred and part.Transparency >= 1 then
+			return false
+		end
 
-                local lowerName = string.lower(part.Name)
-                for keyword in pairs(HAZARD_KEYWORDS) do
-                        if string.find(lowerName, keyword, 1, true) then
-                                return false
-                        end
-                end
+		local lowerName = string.lower(part.Name)
+		for keyword in pairs(HAZARD_KEYWORDS) do
+			if string.find(lowerName, keyword, 1, true) then
+				return false
+			end
+		end
 
-                return true
-        end
+		return true
+	end
 
-        local function refreshLobbyParts()
-                table.clear(lobbyParts)
-                if not currentLobbyModel then
-                        return
-                end
+	local function refreshLobbyParts()
+		table.clear(lobbyParts)
+		if not currentLobbyModel then
+			return
+		end
 
-                local preferredParts: {BasePart} = {}
-                local fallbackParts: {BasePart} = {}
+		local preferredParts: {BasePart} = {}
+		local fallbackParts: {BasePart} = {}
 
-                local function registerPart(instance: Instance)
-                        if not instance:IsA("BasePart") then
-                                return
-                        end
+		local function registerPart(instance: Instance)
+			if not instance:IsA("BasePart") then
+				return
+			end
 
-                        local part = instance :: BasePart
-                        local isPreferred = isPreferredLobbySpawnPart(part)
-                        if not isValidLobbySpawnPart(part, isPreferred) then
-                                return
-                        end
+			local part = instance :: BasePart
+			local isPreferred = isPreferredLobbySpawnPart(part)
+			if not isValidLobbySpawnPart(part, isPreferred) then
+				return
+			end
 
-                        if isPreferred then
-                                table.insert(preferredParts, part)
-                        else
-                                table.insert(fallbackParts, part)
-                        end
-                end
+			if isPreferred then
+				table.insert(preferredParts, part)
+			else
+				table.insert(fallbackParts, part)
+			end
+		end
 
-                if currentLobbyModel:IsA("BasePart") then
-                        registerPart(currentLobbyModel)
-                end
+		if currentLobbyModel:IsA("BasePart") then
+			registerPart(currentLobbyModel)
+		end
 
-                for _, descendant in currentLobbyModel:GetDescendants() do
-                        registerPart(descendant)
-                end
+		for _, descendant in currentLobbyModel:GetDescendants() do
+			registerPart(descendant)
+		end
 
-                local source = if #preferredParts > 0 then preferredParts else fallbackParts
-                for _, part in ipairs(source) do
-                        table.insert(lobbyParts, part)
-                end
-        end
+		local source = if #preferredParts > 0 then preferredParts else fallbackParts
+		for _, part in ipairs(source) do
+			table.insert(lobbyParts, part)
+		end
+	end
 
 	local function setLobbyModel(model: Model?)
 		currentLobbyModel = model
@@ -5134,18 +5134,18 @@ do
 			return
 		end
 
-                lobbyConnections[#lobbyConnections + 1] = model.DescendantAdded:Connect(function(descendant)
-                        if descendant:IsA("BasePart") then
-                                refreshLobbyParts()
-                        end
-                end)
+		lobbyConnections[#lobbyConnections + 1] = model.DescendantAdded:Connect(function(descendant)
+			if descendant:IsA("BasePart") then
+				refreshLobbyParts()
+			end
+		end)
 
-                lobbyConnections[#lobbyConnections + 1] = model.DescendantRemoving:Connect(function(descendant)
-                        if descendant:IsA("BasePart") then
-                                refreshLobbyParts()
-                        end
-                end)
-        end
+		lobbyConnections[#lobbyConnections + 1] = model.DescendantRemoving:Connect(function(descendant)
+			if descendant:IsA("BasePart") then
+				refreshLobbyParts()
+			end
+		end)
+	end
 
 	setLobbyModel(Workspace:FindFirstChild("LobbySpawn") :: Model?)
 
@@ -5258,41 +5258,41 @@ do
 		onPlayerAdded(player)
 	end
 
-        startRoundRemote.OnServerEvent:Connect(function(player, payload)
-                if not isGameOwner(player) then
-                        return
-                end
+	startRoundRemote.OnServerEvent:Connect(function(player, payload)
+		if not isGameOwner(player) then
+			return
+		end
 
-                local mapId: string? = nil
-                local eventId: string? = nil
-                local difficultyOverride: number? = nil
+		local mapId: string? = nil
+		local eventId: string? = nil
+		local difficultyOverride: number? = nil
 
-                if typeof(payload) == "table" then
-                        mapId = payload.mapId or payload.modelName or payload.id
-                        local eventValue = payload.eventId or payload.event
-                        if typeof(eventValue) == "string" then
-                                eventId = eventValue
-                        end
+		if typeof(payload) == "table" then
+			mapId = payload.mapId or payload.modelName or payload.id
+			local eventValue = payload.eventId or payload.event
+			if typeof(eventValue) == "string" then
+				eventId = eventValue
+			end
 
-                        local difficultyValue = payload.difficulty or payload.difficultyOverride
-                        local numericDifficulty = tonumber(difficultyValue)
-                        if numericDifficulty then
-                                local floored = math.floor(numericDifficulty)
-                                if floored >= 1 then
-                                        difficultyOverride = floored
-                                end
-                        end
-                elseif typeof(payload) == "string" then
-                        mapId = payload
-                end
+			local difficultyValue = payload.difficulty or payload.difficultyOverride
+			local numericDifficulty = tonumber(difficultyValue)
+			if numericDifficulty then
+				local floored = math.floor(numericDifficulty)
+				if floored >= 1 then
+					difficultyOverride = floored
+				end
+			end
+		elseif typeof(payload) == "string" then
+			mapId = payload
+		end
 
-                if typeof(mapId) ~= "string" then
-                        sendRoundState("Error", {
-                                message = "Select a map before starting the round.",
-                        })
-                        return
-                end
+		if typeof(mapId) ~= "string" then
+			sendRoundState("Error", {
+				message = "Select a map before starting the round.",
+			})
+			return
+		end
 
-                startRound(player, mapId, eventId, difficultyOverride)
-        end)
+		startRound(player, mapId, eventId, difficultyOverride)
+	end)
 end
