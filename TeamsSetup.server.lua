@@ -3599,16 +3599,19 @@ do
 							end
 							if not targetHumanoid or targetHumanoid.Health <= 0 then return end
 							local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
+							-- Increase timer by 5 seconds (do not exceed maxTimer)
 							hotState.timer = math.min(hotState.timer + 5, maxTimer)
-							-- Freeze the tagged player immediately, then unfreeze them after 3 seconds
+							-- Unfreeze the current holder so they can run once the timer is passed on
+							setParticipantFrozen(record, false)
+							-- Transfer holder to the target without resetting timer
+							setHolder(targetRecord, false)
+							-- Freeze the new holder for 3 seconds; after the delay, unfreeze them if round still active
 							setParticipantFrozen(targetRecord, true)
 							task.delay(3, function()
 								if context.roundId == currentRoundId and roundInProgress then
 									setParticipantFrozen(targetRecord, false)
 								end
 							end)
-							-- Transfer the holder status to the tagged participant without resetting the timer
-							setHolder(targetRecord, false)
 						end)
 					end
 
@@ -3662,17 +3665,19 @@ do
 								end
 
 								local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
+								-- Increase timer by 5 seconds, capping at maxTimer
 								hotState.timer = math.min(hotState.timer + 5, maxTimer)
-								-- Freeze the tagged player immediately, then unfreeze them after 3 seconds
+								-- Unfreeze the current holder so they can run once the timer is passed on
+								setParticipantFrozen(record, false)
+								-- Transfer the holder status to the tagged participant without resetting the timer
+								setHolder(targetRecord, false)
+								-- Freeze the new holder for 3 seconds, then unfreeze them when the delay ends
 								setParticipantFrozen(targetRecord, true)
 								task.delay(3, function()
 									if context.roundId == currentRoundId and roundInProgress then
 										setParticipantFrozen(targetRecord, false)
 									end
 								end)
-
-								-- Transfer the holder status to the tagged participant without resetting the timer
-								setHolder(targetRecord, false)
 							end)
 						end
 					end
@@ -3685,8 +3690,7 @@ do
 								hotState.timer = hotState.initialTimer or 30
 							end
 							updateHolderVisual(newRecord, true)
-							-- Always update target highlights for the current holder so they can see potential targets
-							updateTargetHighlights(newRecord, true)
+							-- Update target highlights for the current holder so they can see potential targets
 							updateTargetHighlights(newRecord, true)
 							updateTimerVisual()
 							attachHolderConnections(newRecord)
