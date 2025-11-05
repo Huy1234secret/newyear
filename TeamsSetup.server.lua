@@ -3572,8 +3572,8 @@ do
 							local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
 							hotState.timer = math.min(hotState.timer + 5, maxTimer)
 							setParticipantFrozen(targetRecord, true)
-							-- Freeze the tagged player for 3 seconds instead of 2
-							task.delay(3, function()
+                            -- Freeze the tagged player for 3 seconds instead of 2
+                            task.delay(3, function()
 								if context.roundId == currentRoundId and roundInProgress then
 									setParticipantFrozen(targetRecord, false)
 								end
@@ -3619,8 +3619,8 @@ do
 								local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
 								hotState.timer = math.min(hotState.timer + 5, maxTimer)
 								setParticipantFrozen(targetRecord, true)
-								-- Freeze the tagged player for 3 seconds instead of 2
-								task.delay(3, function()
+                            -- Freeze the tagged player for 3 seconds instead of 2
+                            task.delay(3, function()
 									if context.roundId == currentRoundId and roundInProgress then
 										setParticipantFrozen(targetRecord, false)
 									end
