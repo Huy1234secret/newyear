@@ -3269,32 +3269,32 @@ do
 				end
 
 				local function broadcastCompletion(winner: ParticipantRecord?)
-					local payload: {[string]: any} = {
-						action = "HotTouchStatus",
-						state = "Complete",
-					}
+						local payload: {[string]: any} = {
+							action = "HotTouchStatus",
+							state = "Complete",
+						}
 
-					if winner and winner.player then
-						local player = winner.player
-						payload.userId = player.UserId
-						payload.name = player.Name
-						payload.displayName = player.DisplayName
+						if winner and winner.player then
+							local player = winner.player
+							payload.userId = player.UserId
+							payload.name = player.Name
+							payload.displayName = player.DisplayName
+						end
+
+						sendStatusUpdate(payload)
+
+						-- When the event completes, display the winner's name to everyone. If there is no winner, fall back to a generic message.
+						local message
+						if winner and winner.player then
+							message = "Winner: " .. tostring(winner.player.Name)
+						else
+							message = "No winner"
+						end
+						sendStatusUpdate({
+							action = "MatchMessage",
+							text = message,
+						})
 					end
-
-					sendStatusUpdate(payload)
-
-					-- When the event completes, display the winner's name to everyone. If there is no winner, fall back to a generic message.
-					local message
-					if winner and winner.player then
-						message = "Winner: " .. tostring(winner.player.Name)
-					else
-						message = "No winner"
-					end
-					sendStatusUpdate({
-						action = "MatchMessage",
-						text = message,
-					})
-				end
 
 				local function clearConnections()
 					for _, conn in pairs(hotState.connections) do
@@ -3496,40 +3496,40 @@ do
 						return
 					end
 
-					-- Find and update any HotTouchBillboard instances on the character or its descendants
-					local secondsRemaining = math.max(0, math.floor(hotState.timer))
-					local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
-					local ratio = math.clamp(hotState.timer / maxTimer, 0, 1)
-					local color = Color3.fromRGB(255, 255 * ratio, 255 * ratio)
-					-- Update all billboard labels (both visible head label and root label)
-					for _, descendant in ipairs(character:GetDescendants()) do
-						if descendant:IsA("BillboardGui") and descendant.Name == "HotTouchBillboard" then
-							-- There can be two different label names: 'Label' and 'HotTouchLabel'
-							local label1 = descendant:FindFirstChild("Label")
-							if label1 and label1:IsA("TextLabel") then
-								label1.Text = tostring(secondsRemaining)
-								label1.TextColor3 = color
-							end
-							local label2 = descendant:FindFirstChild("HotTouchLabel")
-							if label2 and label2:IsA("TextLabel") then
-								label2.Text = tostring(secondsRemaining)
-								label2.TextColor3 = color
-							end
-						end
-					end
-					-- Ensure and update the holder-head billboard (root label) so it exists for remote UI
-					local _, headLabel = ensureTimerBillboard(holder)
-					if headLabel then
-						headLabel.Text = tostring(secondsRemaining)
-					end
-					-- Broadcast to clients so ScreenGui can update
-					sendStatusUpdate({
-						action = "HotTouchTimer",
-						seconds = secondsRemaining,
-						remaining = secondsRemaining,
-						time = secondsRemaining,
-						holderUserId = holder.player.UserId,
-					})
+                    -- Find and update any HotTouchBillboard instances on the character or its descendants
+                    local secondsRemaining = math.max(0, math.floor(hotState.timer))
+                    local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
+                    local ratio = math.clamp(hotState.timer / maxTimer, 0, 1)
+                    local color = Color3.fromRGB(255, 255 * ratio, 255 * ratio)
+                    -- Update all billboard labels (both visible head label and root label)
+                    for _, descendant in ipairs(character:GetDescendants()) do
+                        if descendant:IsA("BillboardGui") and descendant.Name == "HotTouchBillboard" then
+                            -- There can be two different label names: 'Label' and 'HotTouchLabel'
+                            local label1 = descendant:FindFirstChild("Label")
+                            if label1 and label1:IsA("TextLabel") then
+                                label1.Text = tostring(secondsRemaining)
+                                label1.TextColor3 = color
+                            end
+                            local label2 = descendant:FindFirstChild("HotTouchLabel")
+                            if label2 and label2:IsA("TextLabel") then
+                                label2.Text = tostring(secondsRemaining)
+                                label2.TextColor3 = color
+                            end
+                        end
+                    end
+                    -- Ensure and update the holder-head billboard (root label) so it exists for remote UI
+                    local _, headLabel = ensureTimerBillboard(holder)
+                    if headLabel then
+                        headLabel.Text = tostring(secondsRemaining)
+                    end
+                    -- Broadcast to clients so ScreenGui can update
+                    sendStatusUpdate({
+                        action = "HotTouchTimer",
+                        seconds = secondsRemaining,
+                        remaining = secondsRemaining,
+                        time = secondsRemaining,
+                        holderUserId = holder.player.UserId,
+                    })
 				end
 
 				local function detachHolder(record: ParticipantRecord?)
@@ -3582,36 +3582,36 @@ do
 							if not otherCharacter then return end
 							local otherPlayer = Players:GetPlayerFromCharacter(otherCharacter)
 							if not otherPlayer or otherPlayer == record.player then return end
-							local targetRecord = getParticipantFromPlayer(otherPlayer)
-							-- Only proceed if there's a valid target that isn't the holder
-							if not targetRecord or targetRecord == hotState.holder then return end
-							-- Resolve the target's humanoid on demand; don't rely on targetRecord.humanoid being prepopulated
-							local targetHumanoid = targetRecord.humanoid
-							if not targetHumanoid then
-								local targetChar = targetRecord.player and targetRecord.player.Character
-								if targetChar then
-									targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
-									-- Cache it on the record so subsequent checks succeed
-									if targetHumanoid then
-										targetRecord.humanoid = targetHumanoid
-									end
-								end
-							end
-							if not targetHumanoid or targetHumanoid.Health <= 0 then return end
-							local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
-							-- Increase timer by 5 seconds (do not exceed maxTimer)
-							hotState.timer = math.min(hotState.timer + 5, maxTimer)
-							-- Unfreeze the current holder so they can run once the timer is passed on
-							setParticipantFrozen(record, false)
-							-- Transfer holder to the target without resetting timer
-							setHolder(targetRecord, false)
-							-- Freeze the new holder for 3 seconds; after the delay, unfreeze them if round still active
-							setParticipantFrozen(targetRecord, true)
-							task.delay(3, function()
-								if context.roundId == currentRoundId and roundInProgress then
-									setParticipantFrozen(targetRecord, false)
-								end
-							end)
+                            local targetRecord = getParticipantFromPlayer(otherPlayer)
+                            -- Only proceed if there's a valid target that isn't the holder
+                            if not targetRecord or targetRecord == hotState.holder then return end
+                            -- Resolve the target's humanoid on demand; don't rely on targetRecord.humanoid being prepopulated
+                            local targetHumanoid = targetRecord.humanoid
+                            if not targetHumanoid then
+                                local targetChar = targetRecord.player and targetRecord.player.Character
+                                if targetChar then
+                                    targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
+                                    -- Cache it on the record so subsequent checks succeed
+                                    if targetHumanoid then
+                                        targetRecord.humanoid = targetHumanoid
+                                    end
+                                end
+                            end
+                            if not targetHumanoid or targetHumanoid.Health <= 0 then return end
+                            local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
+                            -- Increase timer by 5 seconds (do not exceed maxTimer)
+                            hotState.timer = math.min(hotState.timer + 5, maxTimer)
+                            -- Unfreeze the current holder so they can run once the timer is passed on
+                            setParticipantFrozen(record, false)
+                            -- Transfer holder to the target without resetting timer
+                            setHolder(targetRecord, false)
+                            -- Freeze the new holder for 3 seconds; after the delay, unfreeze them if round still active
+                            setParticipantFrozen(targetRecord, true)
+                            task.delay(3, function()
+                                if context.roundId == currentRoundId and roundInProgress then
+                                    setParticipantFrozen(targetRecord, false)
+                                end
+                            end)
 						end)
 					end
 
@@ -3644,57 +3644,57 @@ do
 									return
 								end
 
-								local targetRecord = getParticipantFromPlayer(otherPlayer)
-								-- Only proceed if there's a valid target that isn't the current holder
-								if not targetRecord or targetRecord == hotState.holder then
-									return
-								end
-								-- Resolve the target's humanoid on demand; don't rely on targetRecord.humanoid being prepopulated
-								local targetHumanoid = targetRecord.humanoid
-								if not targetHumanoid then
-									local targetChar = targetRecord.player and targetRecord.player.Character
-									if targetChar then
-										targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
-										if targetHumanoid then
-											targetRecord.humanoid = targetHumanoid
-										end
-									end
-								end
-								if not targetHumanoid or targetHumanoid.Health <= 0 then
-									return
-								end
+                                local targetRecord = getParticipantFromPlayer(otherPlayer)
+                                -- Only proceed if there's a valid target that isn't the current holder
+                                if not targetRecord or targetRecord == hotState.holder then
+                                    return
+                                end
+                                -- Resolve the target's humanoid on demand; don't rely on targetRecord.humanoid being prepopulated
+                                local targetHumanoid = targetRecord.humanoid
+                                if not targetHumanoid then
+                                    local targetChar = targetRecord.player and targetRecord.player.Character
+                                    if targetChar then
+                                        targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
+                                        if targetHumanoid then
+                                            targetRecord.humanoid = targetHumanoid
+                                        end
+                                    end
+                                end
+                                if not targetHumanoid or targetHumanoid.Health <= 0 then
+                                    return
+                                end
 
-								local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
-								-- Increase timer by 5 seconds, capping at maxTimer
-								hotState.timer = math.min(hotState.timer + 5, maxTimer)
-								-- Unfreeze the current holder so they can run once the timer is passed on
-								setParticipantFrozen(record, false)
-								-- Transfer the holder status to the tagged participant without resetting the timer
-								setHolder(targetRecord, false)
-								-- Freeze the new holder for 3 seconds, then unfreeze them when the delay ends
-								setParticipantFrozen(targetRecord, true)
-								task.delay(3, function()
-									if context.roundId == currentRoundId and roundInProgress then
-										setParticipantFrozen(targetRecord, false)
-									end
-								end)
+                                local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
+                                -- Increase timer by 5 seconds, capping at maxTimer
+                                hotState.timer = math.min(hotState.timer + 5, maxTimer)
+                                -- Unfreeze the current holder so they can run once the timer is passed on
+                                setParticipantFrozen(record, false)
+                                -- Transfer the holder status to the tagged participant without resetting the timer
+                                setHolder(targetRecord, false)
+                                -- Freeze the new holder for 3 seconds, then unfreeze them when the delay ends
+                                setParticipantFrozen(targetRecord, true)
+                                task.delay(3, function()
+                                    if context.roundId == currentRoundId and roundInProgress then
+                                        setParticipantFrozen(targetRecord, false)
+                                    end
+                                end)
 							end)
 						end
 					end
 				end
 
 				local function setHolder(newRecord: ParticipantRecord?, resetTimer: boolean)
-					if newRecord == hotState.holder then
+				if newRecord == hotState.holder then
 						if newRecord then
 							if resetTimer then
 								hotState.timer = hotState.initialTimer or 30
 							end
-							updateHolderVisual(newRecord, true)
-							-- Update target highlights for the current holder so they can see potential targets
-							updateTargetHighlights(newRecord, true)
-							updateTimerVisual()
-							attachHolderConnections(newRecord)
-							broadcastHolder(newRecord)
+                            updateHolderVisual(newRecord, true)
+                            -- Update target highlights for the current holder so they can see potential targets
+                            updateTargetHighlights(newRecord, true)
+                            updateTimerVisual()
+                            attachHolderConnections(newRecord)
+                            broadcastHolder(newRecord)
 						else
 							broadcastSelecting()
 							pvpDebug("[HotTouch] selecting next holder...")
@@ -3703,22 +3703,22 @@ do
 					end
 
 					detachHolder(hotState.holder)
-					hotState.holder = newRecord
-					pvpDebug("[HotTouch] holder=%s reset=%s", tostring(newRecord and newRecord.player and newRecord.player.Name), tostring(resetTimer))
-					if newRecord then
-						if resetTimer then
-							hotState.timer = hotState.initialTimer or 30
+						hotState.holder = newRecord
+						pvpDebug("[HotTouch] holder=%s reset=%s", tostring(newRecord and newRecord.player and newRecord.player.Name), tostring(resetTimer))
+						if newRecord then
+							if resetTimer then
+								hotState.timer = hotState.initialTimer or 30
+							end
+							updateHolderVisual(newRecord, true)
+							-- Update target highlights for a new holder so they see all targets
+							updateTargetHighlights(newRecord, true)
+							updateTimerVisual()
+							attachHolderConnections(newRecord)
+							broadcastHolder(newRecord)
+						else
+							broadcastSelecting()
 						end
-						updateHolderVisual(newRecord, true)
-						-- Update target highlights for a new holder so they see all targets
-						updateTargetHighlights(newRecord, true)
-						updateTimerVisual()
-						attachHolderConnections(newRecord)
-						broadcastHolder(newRecord)
-					else
-						broadcastSelecting()
 					end
-				end
 
 				hotState.setHolder = setHolder
 				hotState.detachHolder = detachHolder
