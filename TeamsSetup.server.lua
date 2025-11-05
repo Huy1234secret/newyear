@@ -3211,6 +3211,12 @@ do
 				}
 				state.HotTouch = hotState
 
+				-- Broadcast the 'Survive' message to all players as soon as the event starts
+				sendStatusUpdate({
+					action = "MatchMessage",
+					text = "Survive",
+				})
+
 				forEachActiveParticipant(function(_, participant)
 					clearPVPTools(participant.player)
 				end)
@@ -3487,10 +3493,14 @@ do
 					if billboard and billboard:IsA("BillboardGui") then
 						local label = billboard:FindFirstChild("Label")
 						if label and label:IsA("TextLabel") then
+							-- Compute seconds remaining once to avoid undefined variables
+							local secondsRemaining = math.max(0, math.floor(hotState.timer))
 							-- Ensure and update the holder-head billboard every tick
 							local _, headLabel = ensureTimerBillboard(holder)
-							if headLabel then headLabel.Text = tostring(seconds) end
-							label.Text = tostring(math.max(0, math.floor(hotState.timer)))
+							if headLabel then
+								headLabel.Text = tostring(secondsRemaining)
+							end
+							label.Text = tostring(secondsRemaining)
 							local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
 							local ratio = math.clamp(hotState.timer / maxTimer, 0, 1)
 							local color = Color3.fromRGB(255, 255 * ratio, 255 * ratio)
@@ -3498,9 +3508,9 @@ do
 							-- Also broadcast to clients so ScreenGui can update
 							sendStatusUpdate({
 								action = "HotTouchTimer",
-								seconds = math.max(0, math.floor(hotState.timer)),
-								remaining = math.max(0, math.floor(hotState.timer)),
-								time = math.max(0, math.floor(hotState.timer)),
+								seconds = secondsRemaining,
+								remaining = secondsRemaining,
+								time = secondsRemaining,
 								holderUserId = holder.player.UserId,
 							})
 						end
@@ -3562,7 +3572,8 @@ do
 							local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
 							hotState.timer = math.min(hotState.timer + 5, maxTimer)
 							setParticipantFrozen(targetRecord, true)
-							task.delay(2, function()
+							-- Freeze the tagged player for 3 seconds instead of 2
+							task.delay(3, function()
 								if context.roundId == currentRoundId and roundInProgress then
 									setParticipantFrozen(targetRecord, false)
 								end
@@ -3608,7 +3619,8 @@ do
 								local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
 								hotState.timer = math.min(hotState.timer + 5, maxTimer)
 								setParticipantFrozen(targetRecord, true)
-								task.delay(2, function()
+								-- Freeze the tagged player for 3 seconds instead of 2
+								task.delay(3, function()
 									if context.roundId == currentRoundId and roundInProgress then
 										setParticipantFrozen(targetRecord, false)
 									end
@@ -5703,35 +5715,3 @@ do
 		startRound(player, mapId, eventId, difficultyOverride)
 	end)
 end
--- Hot Potato Fix
-local function onHotPotatoTouch(hit)
-	if hit and hit.Parent and hit.Parent:FindFirstChild("Humanoid") then
-		-- Trigger the Hot Potato event (example: start countdown or trigger effect)
-		-- Replace this comment with actual logic to trigger hot potato
-		print("Hot Potato touched by " .. hit.Parent.Name)
-	end
-end
-
--- Example bomb part where Hot Potato is supposed to be applied
-local hotPotato = game.Workspace:WaitForChild("HotPotato") -- Ensure the object is named correctly
-hotPotato.Touched:Connect(onHotPotatoTouch)
-
--- Raining Bomb Fix
-local function onBombTouch(hit)
-	if hit and hit:IsA("BasePart") then
-		-- Start ticking or countdown for the bomb when it touches a part
-		-- Replace this with the actual bomb logic
-		print("Bomb touched and ticking starts!")
-	end
-end
-
-local function fixBombPhysics(bomb)
-	bomb.CanCollide = true
-	bomb.Anchored = false  -- Ensure it falls properly and interacts with other parts
-	bomb.Massless = false   -- Avoid unwanted behavior with physics
-end
-
--- Example bomb part where Raining Bomb mechanics apply
-local bomb = game.Workspace:WaitForChild("Bomb")  -- Ensure the bomb is named correctly
-bomb.Touched:Connect(onBombTouch)
-fixBombPhysics(bomb)
