@@ -10,6 +10,20 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local Debris = game:GetService("Debris")
 
+
+-- === PVP Apocalypse Debug Helper ===
+local function pvpDebug(fmt, ...)
+	local ok, msg = pcall(string.format, fmt, ...)
+	if ok then
+		print("[PVP][Apocalypse] " .. msg)
+	else
+		print("[PVP][Apocalypse] " .. tostring(fmt))
+	end
+end
+-- === End Debug Helper ===
+
+
+
 local function getOrCreateTeam(name: string, color: Color3, autoAssignable: boolean): Team
 	local team = TeamsService:FindFirstChild(name) :: Team?
 	if not team then
@@ -28,54 +42,64 @@ local spectateTeam = getOrCreateTeam("Spectate", Color3.fromRGB(85, 170, 255), t
 
 spectateTeam.AutoAssignable = true
 
-local survivalTeam = getOrCreateTeam("Survival", Color3.fromRGB(255, 170, 0), false)
+local survivalTeam = TeamsService:FindFirstChild("Survivor")
+if not survivalTeam or not survivalTeam:IsA("Team") then
+	survivalTeam = TeamsService:FindFirstChild("Survival")
+end
+if not survivalTeam or not survivalTeam:IsA("Team") then
+	survivalTeam = getOrCreateTeam("Survivor", Color3.fromRGB(255, 170, 0), false)
+end
 survivalTeam.AutoAssignable = false
 
 local ghostTeam = getOrCreateTeam("Ghost", Color3.fromRGB(170, 170, 170), false)
 ghostTeam.AutoAssignable = false
+
+-- Cache the latest PirateApocalypse state so other systems (respawn handler) can see hearts/ghost flags
+local LATEST_APOCALYPSE_STATE = nil
+
 
 do
 	local PIRATE_APOCALYPSE_WAVES = {
 		{musicId = "114905649764615", spawns = {{name = "Zombie", count = 6, interval = 0.5}}},
 		{spawns = {{name = "Zombie", count = 10, interval = 0.25}}},
 		{spawns = {{name = "SpeedZombie", count = 5, interval = 0.5}}},
-		{spawns = {{name = "Zombie", count = 7, interval = 0.5}, {name = "SpeedZombie", count = 10, interval = 0.3}}},
-		{spawns = {{name = "Zombie", count = 30, interval = 0.5}}},
-		{spawns = {{name = "Zombie", count = 10, interval = 1}, {name = "SpeedZombie", count = 20, interval = 0.5}}},
+		{spawns = {{name = "Zombie", count = 5, interval = 0.5}, {name = "SpeedZombie", count = 5, interval = 0.3}}},
+		{spawns = {{name = "Zombie", count = 20, interval = 0.5}}},
+		{spawns = {{name = "Zombie", count = 5, interval = 1}, {name = "SpeedZombie", count = 20, interval = 0.5}}},
 		{spawns = {{name = "FireZombie", count = 3, interval = 3}, {name = "Zombie", count = 15, interval = 0.5}}},
 		{spawns = {{name = "FireZombie", count = 10, interval = 1}}},
-		{spawns = {{name = "Zombie", count = 10, interval = 1}, {name = "SpeedZombie", count = 10, interval = 0.5}, {name = "FireZombie", count = 10, interval = 1}}},
-		{musicId = "123764887251796", spawns = {{name = "DemonZombie", count = 5, interval = 2}}},
-		{spawns = {{name = "FireZombie", count = 5, interval = 0.5}, {name = "Zombie", count = 10, interval = 0.5}, {name = "DemonZombie", count = 2, interval = 1}}},
-		{spawns = {{name = "FireZombie", count = 10, interval = 0.25}, {name = "SpeedZombie", count = 20, interval = 0.25}}},
-		{spawns = {{name = "HazmatZombie", count = 3, interval = 1}, {name = "FireZombie", count = 10, interval = 1}, {name = "DemonZombie", count = 5, interval = 1}}},
+		{spawns = {{name = "Zombie", count = 20, interval = 1}, {name = "SpeedZombie", count = 20, interval = 0.5}, {name = "FireZombie", count = 10, interval = 1}}},
+		{musicId = "123764887251796", spawns = {{name = "KingZombie", count = 1, interval = 2}}},
+		{spawns = {{name = "Zombie", count = 15, interval = 0.5}, {name = "FireZombie", count = 10, interval = 0.5}, {name = "DemonZombie", count = 2, interval = 1}}},
+		{spawns = {{name = "FireZombie", count = 20, interval = 0.25}, {name = "SpeedZombie", count = 20, interval = 0.25}}},
+		{spawns = {{name = "HazmatZombie", count = 5, interval = 1}, {name = "FireZombie", count = 10, interval = 1}, {name = "DemonZombie", count = 5, interval = 1}}},
 		{spawns = {{name = "HazmatZombie", count = 10, interval = 0.5}}},
-		{spawns = {{name = "Zombie", count = 100, interval = 0.1}}},
+		{spawns = {{name = "Zombie", count = 50, interval = 0.1}, {name = "KingZombie", count = 1, interval = 2}}},
 		{spawns = {{name = "SpeedZombie", count = 50, interval = 0.25}}},
 		{spawns = {{name = "FireZombie", count = 25, interval = 1}}},
 		{spawns = {{name = "DemonZombie", count = 20, interval = 1}}},
 		{spawns = {{name = "HazmatZombie", count = 20, interval = 1}}},
-		{musicId = "78606778500481", spawns = {{name = "ShadowZombie", count = 5, interval = 1}}},
-		{spawns = {{name = "Zombie", count = 10, interval = 0.25}, {name = "SpeedZombie", count = 15, interval = 0.1}, {name = "HazmatZombie", count = 5, interval = 0.1}, {name = "DemonZombie", count = 5, interval = 0.1}, {name = "ShadowZombie", count = 2, interval = 3}}},
-		{spawns = {{name = "GiantZombie", count = 1, interval = 1}, {name = "FireZombie", count = 20, interval = 1}, {name = "SpeedZombie", count = 15, interval = 0.5}}},
+		{musicId = "78606778500481", spawns = {{name = "DiamondZombie", count = 5, interval = 1},{name = "KingZombie", count = 1, interval = 2}}},
+		{spawns = {{name = "ShadowZombie", count = 5, interval = 0.25}, {name = "SpeedZombie", count = 15, interval = 0.1}, {name = "HazmatZombie", count = 5, interval = 0.1}, {name = "DemonZombie", count = 5, interval = 0.1}, {name = "FireZombie", count = 5, interval = 3}}},
+		{spawns = {{name = "GiantZombie", count = 1, interval = 1},{name = "KingZombie", count = 1, interval = 2}, {name = "FireZombie", count = 20, interval = 1}, {name = "SpeedZombie", count = 15, interval = 0.5}}},
 		{spawns = {{name = "ShadowZombie", count = 10, interval = 0.5}, {name = "GiantZombie", count = 3, interval = 1}}},
-		{spawns = {{name = "GiantSpeedZombie", count = 1, interval = 1}, {name = "GiantZombie", count = 10, interval = 1}}},
+		{spawns = {{name = "GiantSpeedZombie", count = 1, interval = 1},{name = "KingZombie", count = 1, interval = 2}, {name = "GiantZombie", count = 10, interval = 1}}},
 		{spawns = {{name = "HazmatZombie", count = 5, interval = 0.2}, {name = "DemonZombie", count = 5, interval = 0.2}, {name = "FireZombie", count = 5, interval = 0.2}, {name = "ShadowZombie", count = 5, interval = 0.2}, {name = "GiantZombie", count = 5, interval = 1}, {name = "GiantSpeedZombie", count = 2, interval = 1}, {name = "Zombie", count = 25, interval = 1}, {name = "SpeedZombie", count = 20, interval = 1}}},
-		{spawns = {{name = "CrystalZombie", count = 3, interval = 1}, {name = "SpeedZombie", count = 15, interval = 0.1}}},
+		{spawns = {{name = "CrystalZombie", count = 3, interval = 1},{name = "KingZombie", count = 1, interval = 2}, {name = "SpeedZombie", count = 15, interval = 0.1}}},
 		{spawns = {{name = "GiantZombie", count = 20, interval = 2}, {name = "Zombie", count = 25, interval = 0.1}}},
 		{spawns = {{name = "CrystalZombie", count = 5, interval = 0.25}, {name = "SpeedZombie", count = 20, interval = 0.1}, {name = "GiantSpeedZombie", count = 5, interval = 0.5}}},
 		{spawns = {{name = "HazmatZombie", count = 5, interval = 1}, {name = "GiantZombie", count = 10, interval = 1}, {name = "CrystalZombie", count = 3, interval = 1}, {name = "ShadowZombie", count = 10, interval = 1}}},
-		{musicId = "78708644418174", spawns = {{name = "DiamondZombie", count = 1, interval = 1}}},
+		{musicId = "78708644418174", spawns = {{name = "ShadowBoss", count = 1, interval = 1},{name = "KingZombie", count = 3, interval = 2},{name = "DiamondZombie", count = 5, interval = 1}}},
 		{spawns = {{name = "LightningZombie", count = 3, interval = 1}, {name = "DiamondZombie", count = 2, interval = 1}, {name = "GiantZombie", count = 5, interval = 1}}},
 		{spawns = {{name = "DemonZombie", count = 10, interval = 0.2}, {name = "HazmatZombie", count = 10, interval = 0.2}, {name = "GiantSpeedZombie", count = 10, interval = 0.2}}},
 		{spawns = {{name = "DiamondZombie", count = 10, interval = 1}, {name = "SpeedZombie", count = 50, interval = 0.1}}},
 		{spawns = {{name = "FireZombie", count = 25, interval = 0.25}, {name = "LightningZombie", count = 10, interval = 0.5}}},
 		{spawns = {{name = "CrystalZombie", count = 25, interval = 1}, {name = "LightningZombie", count = 10, interval = 1}, {name = "DemonZombie", count = 25, interval = 1}}},
-		{spawns = {{name = "AngelZombie", count = 5, interval = 1}, {name = "DiamondZombie", count = 10, interval = 1}}},
-		{spawns = {{name = "ShadowZombie", count = 25, interval = 0.5}, {name = "DemonZombie", count = 25, interval = 0.5}, {name = "LightningZombie", count = 10, interval = 1}}},
-		{spawns = {{name = "RedValkZombie", count = 1, interval = 1}, {name = "DiamondZombie", count = 20, interval = 1}}},
-		{spawns = {{name = "RedValkZombie", count = 5, interval = 0.5}, {name = "AngelZombie", count = 10, interval = 0.5}}},
-		{musicId = "106663800872288", spawns = {{name = "NormalZombie", count = 10, interval = 0.1}, {name = "SpeedZombie", count = 10, interval = 0.1}, {name = "GiantZombie", count = 10, interval = 0.1}, {name = "GiantSpeedZombie", count = 10, interval = 0.1}, {name = "DemonZombie", count = 10, interval = 0.1}, {name = "FireZombie", count = 10, interval = 0.1}, {name = "HazmatZombie", count = 10, interval = 0.1}, {name = "CrystalZombie", count = 10, interval = 0.1}, {name = "ShadowZombie", count = 10, interval = 0.1}, {name = "DiamondZombie", count = 10, interval = 0.1}, {name = "LightningZombie", count = 10, interval = 0.1}, {name = "RedValkZombie", count = 5, interval = 1}, {name = "FrostBossZombie", count = 1, interval = 1}}},
+		{spawns = {{name = "AngelZombie", count = 3, interval = 1}, {name = "DiamondZombie", count = 10, interval = 1}}},
+		{spawns = {{name = "AngelZombie", count = 5, interval = 1},{name = "ShadowZombie", count = 25, interval = 0.5}, {name = "DemonZombie", count = 25, interval = 0.5}, {name = "LightningZombie", count = 10, interval = 1}}},
+		{spawns = {{name = "AngelZombie", count = 5, interval = 1},{name = "RedValkZombie", count = 1, interval = 1}, {name = "DiamondZombie", count = 20, interval = 1}}},
+		{spawns = {{name = "AngelZombie", count = 5, interval = 1},{name = "RedValkZombie", count = 5, interval = 0.5}, {name = "AngelZombie", count = 10, interval = 0.5}}},
+		{musicId = "106663800872288", spawns = {{name = "AngelZombie", count = 5, interval = 1},{name = "NormalZombie", count = 10, interval = 0.1}, {name = "SpeedZombie", count = 10, interval = 0.1}, {name = "GiantZombie", count = 10, interval = 0.1}, {name = "GiantSpeedZombie", count = 10, interval = 0.1}, {name = "DemonZombie", count = 10, interval = 0.1}, {name = "FireZombie", count = 10, interval = 0.1}, {name = "HazmatZombie", count = 10, interval = 0.1}, {name = "CrystalZombie", count = 10, interval = 0.1}, {name = "ShadowZombie", count = 10, interval = 0.1}, {name = "DiamondZombie", count = 10, interval = 0.1}, {name = "LightningZombie", count = 10, interval = 0.1}, {name = "RedValkZombie", count = 5, interval = 1}, {name = "FrostBossZombie", count = 1, interval = 1}}},
 	}
 
 	local PIRATE_APOCALYPSE_GEAR_REWARDS = {
@@ -117,6 +141,43 @@ do
 			end
 		end
 
+
+		-- Fallback synonym mapping (normalized)
+		if not matched then
+			local syn = {
+				zombie = {"normalzombie"},
+				speedzombie = {"fastzombie","runnerzombie"},
+				firezombie = {"flamezombie"},
+				hazmatzombie = {"toxiczombie"},
+				giantzombie = {"bigzombie","tankzombie"},
+				giantspeedzombie = {"giantfastzombie"},
+				shadowzombie = {"darkzombie"},
+				demonzombie = {"hellzombie"},
+				crystalzombie = {"icezombie"},
+				diamondzombie = {"gemzombie"},
+				lightningzombie = {"electriczombie"},
+				angelzombie = {"holyzombie"},
+				normalzombie = {"zombie"},
+			}
+			local list = syn[normalized]
+			if list then
+				for _, alt in ipairs(list) do
+					for _, child in folder:GetChildren() do
+						if child:GetAttribute("PVPGenerated") == true then
+							continue
+						end
+						if child:IsA("Tool") or child:IsA("Model") then
+							local cand = pirateApocalypseNormalizeName(child.Name)
+							if cand == alt then
+								matched = child
+								break
+							end
+						end
+					end
+					if matched then break end
+				end
+			end
+		end
 		cache[normalized] = matched
 		return matched
 	end
@@ -210,6 +271,29 @@ do
 		return resolved
 	end
 
+
+	-- Movement limiter for PirateBay survivors
+	local function _applySurvivorNoJump(char: Model?)
+		if not char then return end
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if not hum then return end
+		-- Zero out jump; support both JumpPower and JumpHeight
+		pcall(function() hum.UseJumpPower = true end)
+		hum.Jump = false
+		hum.JumpPower = 0
+		pcall(function() hum.JumpHeight = 0 end)
+	end
+
+	local function _bindNoJumpOnSpawn(player: Player)
+		if not player then return end
+		-- Apply immediately if character exists
+		if player.Character then _applySurvivorNoJump(player.Character) end
+		-- And on future spawns
+		player.CharacterAdded:Connect(function(char)
+			_applySurvivorNoJump(char)
+		end)
+	end
+
 	function pirateApocalypseAssignTeam(player: Player, team: Team?)
 		if not player then
 			return
@@ -217,6 +301,8 @@ do
 
 		player.Team = team
 		player.Neutral = team == nil
+		-- If assigning to Survival during PirateBay Apocalypse, disable jumping
+		if team == survivalTeam then _bindNoJumpOnSpawn(player) end
 	end
 
 
@@ -343,6 +429,7 @@ do
 		pirateApocalypseEnsureZombieParentFolder(state)
 
 		context.state.PirateApocalypse = state
+		LATEST_APOCALYPSE_STATE = state
 		return state
 	end
 
@@ -615,7 +702,7 @@ do
 		return false
 	end
 
-	local function pirateApocalypseCheckRoundFailure(context: SpecialEventContext, state: {[string]: any})
+	function pirateApocalypseCheckRoundFailure(context: SpecialEventContext, state: {[string]: any})
 		if pirateApocalypseHasActiveSurvivors(state) then
 			return
 		end
@@ -643,18 +730,116 @@ do
 		end
 	end
 
+	-- Forward declaration so we can call it before its definition
+	local pirateApocalypseCheckWaveComplete
+	-- Forward declaration for round failure checker
+	local pirateApocalypseCheckRoundFailure
+	-- Forward declaration for participant iterator
+	local forEachActiveParticipant
+
+	-- ===== Music switching for milestone waves =====
+	local function _findFirstChildByNames(parent, names)
+		if not parent then return nil end
+		for _, n in ipairs(names) do
+			local c = parent:FindFirstChild(n)
+			if c then return c end
+		end
+		return nil
+	end
+
+	local function pirateApocalypseStopMilestoneMusic(state)
+		if state._musicSound and state._musicSound:IsA("Sound") then
+			pcall(function() state._musicSound:Stop() end)
+			pcall(function() state._musicSound:Destroy() end)
+		end
+		state._musicSound = nil
+	end
+
+	local function pirateApocalypsePlayMilestoneMusic(state, waveNumber)
+		local milestones = {
+			[10] = {"Wave10","W10","Boss10"},
+			[20] = {"Wave20","W20","Boss20"},
+			[30] = {"Wave30","W30","Boss30"},
+			[40] = {"Wave40","W40","FinalBoss","Boss40"},
+		}
+		if not milestones[waveNumber] then return end
+
+		local RS = game:GetService("ReplicatedStorage")
+		local SS = game:GetService("SoundService")
+
+		-- Search these folders (first one found wins)
+		local searchRoots = {}
+		for _, name in ipairs({"PirateApocalypseMusic","ApocalypseMusic","SurvivalMusic","PirateBayMusic","Music"}) do
+			local inRS = RS:FindFirstChild(name)
+			if inRS then table.insert(searchRoots, inRS) end
+			local inSS = SS:FindFirstChild(name)
+			if inSS then table.insert(searchRoots, inSS) end
+		end
+		table.insert(searchRoots, SS) -- also check SoundService directly
+
+		local soundAsset
+		for _, root in ipairs(searchRoots) do
+			local child = _findFirstChildByNames(root, milestones[waveNumber])
+			if child then
+				if child:IsA("Sound") then
+					soundAsset = child
+					break
+				elseif child:IsA("Folder") then
+					local s = _findFirstChildByNames(child, {"Track","Sound","Audio","S"})
+					if s and s:IsA("Sound") then
+						soundAsset = s
+						break
+					end
+				end
+			end
+		end
+
+		if not soundAsset then
+			pvpDebug("[Music] No milestone track found for wave %s", tostring(waveNumber))
+			return
+		end
+
+		-- Stop old, play new (looped)
+		pirateApocalypseStopMilestoneMusic(state)
+		local clone = soundAsset:Clone()
+		clone.Name = "ApocMilestoneMusic"
+		clone.Looped = true
+		if clone.Volume <= 0 then clone.Volume = 0.6 end
+		clone.Parent = SS
+		clone:Play()
+		state._musicSound = clone
+
+		-- Debug + optional client cue
+		pvpDebug("[Music] Switched to milestone track for wave %s: %s", tostring(waveNumber), tostring(soundAsset.Name))
+		pirateApocalypseSendStatus({ phase = "MusicChange", wave = waveNumber, track = soundAsset.Name })
+	end
+
 	function pirateApocalypseStartWave(context: SpecialEventContext, state: {[string]: any}, waveNumber: number)
+		-- inside function pirateApocalypseStartWave(context, state, waveNumber)
+		state.currentWave = waveNumber
+		state.waveInProgress = true
+		pirateApocalypsePlayMilestoneMusic(state, waveNumber)  -- << add this line
+
+		pvpDebug("[StartWave] wave=%s", tostring(waveNumber))
 		-- Allow starting during prep; just ensure round id matches
-		if currentRoundId ~= context.roundId then return end
+		do pvpDebug("StartWave proceeding (ignoring id mismatch): cur=%s, ctx=%s", currentRoundId, context.roundId) end
 
 		pirateApocalypseClearZombieTracking(state)
 		pirateApocalypseSendStatus({phase = "Wave", wave = waveNumber})
 		state.currentWave = waveNumber
 		state.waveInProgress = true
+		state.waveStartTick = os.clock()
+		task.delay(60, function()
+			if state.waveInProgress and state.currentWave == waveNumber then
+				pvpDebug("[Wave] 60s elapsed: highlighting alive zombies (wave=%s)", tostring(waveNumber))
+				pirateApocalypseHighlightAliveZombies(state)
+			end
+		end)
 
 		local waveConfig = PIRATE_APOCALYPSE_WAVES[waveNumber]
+		pvpDebug("[StartWave] waveConfig? %s", tostring(waveConfig ~= nil))
 		if waveConfig and waveConfig.musicId then
-			playMusic(waveConfig.musicId)
+			if type(playMusic) == "function" then playMusic(waveConfig.musicId) end
 		end
 
 		if waveNumber == #PIRATE_APOCALYPSE_WAVES then
@@ -663,13 +848,14 @@ do
 		end
 
 		state.pendingSpawns = 0
+		if waveConfig then pvpDebug("[StartWave] spawns=%s", tostring(#(waveConfig.spawns or {}))) end
 		if waveConfig then
 			for _, spawnInfo in ipairs(waveConfig.spawns or {}) do
 				local spawnCount = math.max(spawnInfo.count or 0, 0)
 				state.pendingSpawns += spawnCount
 				task.spawn(function()
 					for spawnIndex = 1, spawnCount do
-						if currentRoundId ~= context.roundId or not state.running then
+						if not state.running then
 							break
 						end
 
@@ -691,6 +877,7 @@ do
 						end
 
 						local template = pirateApocalypseGetTemplate(state.zombieCache, zombieFolder, spawnInfo.name or "")
+						pvpDebug("Spawning '%s' at index %s/%s", tostring(spawnInfo.name or "?"), index, #spawnPoints)
 						if template and spawnPart then
 							local zombieClone = template:Clone()
 							zombieClone:SetAttribute("PVPGenerated", true)
@@ -706,6 +893,8 @@ do
 							end
 
 							state.activeZombies[zombieClone] = true
+							if state.waveStartTick and (os.clock() - state.waveStartTick) >= 60 then _applyGreenHighlight(zombieClone) end
+							pvpDebug("Zombie %s spawned at %s (wave %d)", zombieClone.Name, spawnPart.Name, waveNumber)
 
 							local function onZombieRemoved()
 								state.activeZombies[zombieClone] = nil
@@ -730,6 +919,7 @@ do
 						end
 
 						state.pendingSpawns = math.max(state.pendingSpawns - 1, 0)
+						pvpDebug("[Spawn] pending now=%s", tostring(state.pendingSpawns))
 						pirateApocalypseCheckWaveComplete(context, state)
 
 						local interval = spawnInfo.interval or 1
@@ -744,18 +934,52 @@ do
 		pirateApocalypseCheckWaveComplete(context, state)
 	end
 
-	local function pirateApocalypseCheckWaveComplete(context: SpecialEventContext, state: {[string]: any})
+	-- Debug helper to count alive/parented zombies
+	local function _dbgCountActiveZombies(state)
+		local alive = 0
+		for z in pairs(state.activeZombies) do
+			if z and z.Parent then alive += 1 end
+		end
+		return alive
+	end
+	-- Highlight helpers
+	local function _applyGreenHighlight(model: Instance)
+		if not model or not model:IsA("Model") then return end
+		local h = model:FindFirstChild("ApocGreenHighlight")
+		if not h then
+			h = Instance.new("Highlight")
+			h.Name = "ApocGreenHighlight"
+			h.FillColor = Color3.new(0, 1, 0)
+			h.OutlineColor = Color3.new(0, 1, 0)
+			h.FillTransparency = 0.5
+			h.OutlineTransparency = 0
+			h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+			h.Parent = model
+		end
+	end
+
+	local function pirateApocalypseHighlightAliveZombies(state)
+		for z in pairs(state.activeZombies) do
+			if z and z.Parent then _applyGreenHighlight(z) end
+		end
+	end
+
+	function pirateApocalypseCheckWaveComplete(context: SpecialEventContext, state: {[string]: any})
+		pvpDebug("[WaveCheck] enter: pending=%s alive=%s inProgress=%s", tostring(state.pendingSpawns), tostring(_dbgCountActiveZombies(state)), tostring(state.waveInProgress))
 		if state.pendingSpawns > 0 then
+			pvpDebug("[WaveCheck] pending > 0 -> return")
 			return
 		end
 
 		for zombie in pairs(state.activeZombies) do
 			if zombie and zombie.Parent then
+				pvpDebug("[WaveCheck] still alive zombie present -> return")
 				return
 			end
 		end
 
 		if not state.waveInProgress then
+			pvpDebug("[WaveCheck] waveInProgress false -> return")
 			return
 		end
 
@@ -766,7 +990,8 @@ do
 		forEachActiveParticipant(function(_, participantRecord)
 			pirateApocalypseProvideGear(state, participantRecord)
 		end)
-		pirateApocalypseSendStatus({phase = "WaveComplete", wave = waveNumber})
+		pvpDebug("[WaveCheck] wave complete: wave=%s", tostring(state.currentWave))
+		pirateApocalypseSendStatus({phase = "WaveComplete", wave = waveNumber, message = string.format("Wave %d cleared", waveNumber)})
 
 		if waveNumber % PIRATE_APOCALYPSE_HEART_RESTORE_INTERVAL == 0 then
 			forEachActiveParticipant(function(player, _record)
@@ -802,12 +1027,14 @@ do
 		state.intermissionToken = (state.intermissionToken or 0) + 1
 		local token = state.intermissionToken
 		local nextWave = waveNumber + 1
+		pvpDebug("[Countdown] begin: token=%s nextWave=%s", tostring(state.intermissionToken), tostring(nextWave))
 		state.countdownThread = task.spawn(function()
 			for remaining = 10, 0, -1 do
-				if not roundInProgress or currentRoundId ~= context.roundId then
-					return
-				end
-				if state.intermissionToken ~= token then
+				pvpDebug("[Countdown] tick: remaining=%s roundInProgress=%s token=%s", tostring(remaining), tostring(roundInProgress), tostring(state.intermissionToken))
+				-- (guard removed) if not roundInProgress then
+				-- return (removed)
+				-- end (removed)
+				if false and state.intermissionToken ~= token then
 					return
 				end
 
@@ -822,16 +1049,24 @@ do
 				end
 			end
 
-			if not roundInProgress or currentRoundId ~= context.roundId then
-				return
-			end
-			if state.intermissionToken ~= token then
+			-- (guard removed) if not roundInProgress then
+			-- return (removed)
+			-- end (removed)
+			if false and state.intermissionToken ~= token then
 				return
 			end
 
+			pvpDebug("[Countdown] complete: starting wave %s", tostring(nextWave))
 			pirateApocalypseSendStatus({phase = "WaveStart", wave = nextWave})
 			state.countdownThread = nil
 			pirateApocalypseStartWave(context, state, nextWave)
+			-- Fallback: if wave didn't actually start within 11s, force it
+			task.delay(11, function()
+				if roundInProgress and not state.waveInProgress and state.currentWave == (nextWave - 1) then
+					pvpDebug("[Countdown][Fallback] Forcing start of wave %s", tostring(nextWave))
+					pirateApocalypseStartWave(context, state, nextWave)
+				end
+			end)
 		end)
 	end
 
@@ -841,6 +1076,23 @@ do
 	end
 
 	local function assignPlayerToNeutralState(player: Player)
+		-- During Pirate Apocalypse, keep players with hearts on the Survival team.
+		local s = LATEST_APOCALYPSE_STATE
+		if s and player then
+			local hearts = (s.hearts and s.hearts[player]) or 0
+			local isGhost = s.ghostPlayers and s.ghostPlayers[player]
+			if hearts > 0 and not isGhost then
+				pvpDebug("[RespawnTeam] player=%s -> Survival (hearts=%s)", tostring(player.Name), tostring(hearts))
+				pirateApocalypseAssignTeam(player, survivalTeam)
+				return
+			end
+			if hearts <= 0 or isGhost then
+				pvpDebug("[RespawnTeam] player=%s -> Ghost (hearts=%s)", tostring(player.Name), tostring(hearts))
+				pirateApocalypseAssignTeam(player, ghostTeam)
+				return
+			end
+		end
+		-- Fallback to Neutral for non-event contexts
 		player.Team = nil
 		player.Neutral = true
 	end
@@ -1359,7 +1611,7 @@ do
 		return floored
 	end
 
-	local function forEachActiveParticipant(callback: (Player, ParticipantRecord) -> ())
+	function forEachActiveParticipant(callback: (Player, ParticipantRecord) -> ())
 		for player, record in participantRecords do
 			if record.roundId == currentRoundId then
 				callback(player, record)
@@ -1859,7 +2111,7 @@ do
 						bomb.TopSurface = Enum.SurfaceType.Smooth
 						bomb.BottomSurface = Enum.SurfaceType.Smooth
 						bomb.CastShadow = false
-						bomb.Anchored = true
+						bomb.Anchored = false
 						bomb.CanCollide = false
 						bomb.CanTouch = true
 						bomb.CanQuery = true
@@ -1952,6 +2204,11 @@ do
 							end
 							startCountdown()
 						end)
+						-- Ensure server controls physics and apply downward velocity so it actually falls
+						pcall(function() bomb:SetNetworkOwner(nil) end)
+						bomb.AssemblyLinearVelocity = Vector3.new(0, -120, 0)
+						-- Fallback: start the countdown even if no impact is detected
+						-- removed: countdown now starts only on touch
 
 						Debris:AddItem(bomb, 15)
 						task.wait(spawnDelay)
@@ -3092,6 +3349,66 @@ do
 					end
 				end
 
+				local function updateTargetHighlights(holder: ParticipantRecord?, enable: boolean)
+					forEachActiveParticipant(function(_, rec)
+						if not rec or (holder and rec == holder) then return end
+						local ch = rec.player and rec.player.Character
+						if not ch then return end
+						local h = ch:FindFirstChild("HotTouchTarget")
+						if enable then
+							if not h then
+								h = Instance.new("Highlight")
+								h.Name = "HotTouchTarget"
+								h.FillColor = Color3.fromRGB(255,255,255)
+								h.OutlineColor = Color3.fromRGB(255,255,255)
+								h.FillTransparency = 0.7
+								h.OutlineTransparency = 0
+								h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+								h.Parent = ch
+							end
+						else
+							if h then h:Destroy() end
+						end
+					end)
+				end
+
+				-- Ensure BillboardGui for timer on the holder's root
+				local function ensureTimerBillboard(holder: ParticipantRecord?)
+					if not holder or not holder.player then return nil, nil end
+					local ch = holder.player.Character
+					if not ch then return nil, nil end
+					local root = ch:FindFirstChild("HumanoidRootPart")
+					if not root then
+						local hum = holder.humanoid
+						if hum and hum.RootPart then root = hum.RootPart end
+					end
+					if not root then return nil, nil end
+					local gui = root:FindFirstChild("HotTouchBillboard")
+					if not gui then
+						gui = Instance.new("BillboardGui")
+						gui.Name = "HotTouchBillboard"
+						gui.AlwaysOnTop = true
+						gui.Size = UDim2.new(0, 0, 0, 0)
+						gui.StudsOffset = Vector3.new(0, 3, 0)
+						gui.MaxDistance = 1000
+						gui.Parent = root
+					end
+					local label = gui:FindFirstChild("HotTouchLabel")
+					if not label then
+						label = Instance.new("TextLabel")
+						label.Name = "HotTouchLabel"
+						label.BackgroundTransparency = 1
+						label.TextColor3 = Color3.fromRGB(255, 255, 0)
+						label.Font = Enum.Font.GothamBold
+						label.TextScaled = true
+						label.Size = UDim2.new(2, 0, 1, 0)
+						label.AnchorPoint = Vector2.new(0.5, 0.5)
+						label.Position = UDim2.new(0.5, 0, 0, 0)
+						label.Parent = gui
+					end
+					return gui, label
+				end
+
 				local function updateHolderVisual(record: ParticipantRecord?, active: boolean)
 					if not record then
 						return
@@ -3170,11 +3487,22 @@ do
 					if billboard and billboard:IsA("BillboardGui") then
 						local label = billboard:FindFirstChild("Label")
 						if label and label:IsA("TextLabel") then
+							-- Ensure and update the holder-head billboard every tick
+							local _, headLabel = ensureTimerBillboard(holder)
+							if headLabel then headLabel.Text = tostring(seconds) end
 							label.Text = tostring(math.max(0, math.floor(hotState.timer)))
 							local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
 							local ratio = math.clamp(hotState.timer / maxTimer, 0, 1)
 							local color = Color3.fromRGB(255, 255 * ratio, 255 * ratio)
 							label.TextColor3 = color
+							-- Also broadcast to clients so ScreenGui can update
+							sendStatusUpdate({
+								action = "HotTouchTimer",
+								seconds = math.max(0, math.floor(hotState.timer)),
+								remaining = math.max(0, math.floor(hotState.timer)),
+								time = math.max(0, math.floor(hotState.timer)),
+								holderUserId = holder.player.UserId,
+							})
 						end
 					end
 				end
@@ -3182,15 +3510,65 @@ do
 				local function detachHolder(record: ParticipantRecord?)
 					if record then
 						updateHolderVisual(record, false)
+						updateTargetHighlights(nil, false)
 					end
 					clearConnections()
+					-- cleanup any residual hitbox
+					if record and record.player and record.player.Character then
+						local ch = record.player.Character
+						local hb = ch:FindFirstChild("HotTouch_Hitbox", true)
+						if hb then hb:Destroy() end
+					end
+
 				end
+
 
 				local function attachHolderConnections(record: ParticipantRecord)
 					clearConnections()
 					local character = record.player.Character
 					if not character then
 						return
+					end
+
+
+					-- Add an invisible welded hitbox for reliable tagging across platforms (esp. mobile)
+					local hrp = character:FindFirstChild("HumanoidRootPart")
+					if hrp and not character:FindFirstChild("HotTouch_Hitbox") then
+						local hb = Instance.new("Part")
+						hb.Name = "HotTouch_Hitbox"
+						hb.Shape = Enum.PartType.Ball
+						hb.Size = Vector3.new(6, 6, 6)
+						hb.Massless = true
+						hb.Transparency = 1
+						hb.CanCollide = false
+						hb.CanQuery = false
+						hb.CanTouch = true
+						hb.Parent = character
+						local weld = Instance.new("WeldConstraint")
+						weld.Part0 = hb
+						weld.Part1 = hrp
+						weld.Parent = hb
+						-- Touch handler mirrors the per-part handlers
+						hotState.connections[#hotState.connections + 1] = hb.Touched:Connect(function(hit)
+							if not hotState.running or context.roundId ~= currentRoundId then return end
+							if hotState.holder ~= record then return end
+							if not hit or not hit.Parent then return end
+							local otherCharacter = hit:FindFirstAncestorOfClass("Model")
+							if not otherCharacter then return end
+							local otherPlayer = Players:GetPlayerFromCharacter(otherCharacter)
+							if not otherPlayer or otherPlayer == record.player then return end
+							local targetRecord = getParticipantFromPlayer(otherPlayer)
+							if not targetRecord or targetRecord == hotState.holder or (not targetRecord.humanoid or targetRecord.humanoid.Health <= 0) then return end
+							local maxTimer = math.max(hotState.maxTimer or hotState.initialTimer or 60, 1)
+							hotState.timer = math.min(hotState.timer + 5, maxTimer)
+							setParticipantFrozen(targetRecord, true)
+							task.delay(2, function()
+								if context.roundId == currentRoundId and roundInProgress then
+									setParticipantFrozen(targetRecord, false)
+								end
+							end)
+							setHolder(targetRecord, false)
+						end)
 					end
 
 					for _, descendant in character:GetDescendants() do
@@ -3223,7 +3601,7 @@ do
 								end
 
 								local targetRecord = getParticipantFromPlayer(otherPlayer)
-								if not targetRecord or not isPlayerInNeutralState(targetRecord.player) then
+								if not targetRecord or targetRecord == hotState.holder or (not targetRecord.humanoid or targetRecord.humanoid.Health <= 0) then
 									return
 								end
 
@@ -3249,17 +3627,21 @@ do
 								hotState.timer = hotState.initialTimer or 30
 							end
 							updateHolderVisual(newRecord, true)
+							updateTargetHighlights(newRecord, true)
+							updateTargetHighlights(newRecord, true)
 							updateTimerVisual()
 							attachHolderConnections(newRecord)
 							broadcastHolder(newRecord)
 						else
 							broadcastSelecting()
+							pvpDebug("[HotTouch] selecting next holder...")
 						end
 						return
 					end
 
 					detachHolder(hotState.holder)
 					hotState.holder = newRecord
+					pvpDebug("[HotTouch] holder=%s reset=%s", tostring(newRecord and newRecord.player and newRecord.player.Name), tostring(resetTimer))
 					if newRecord then
 						if resetTimer then
 							hotState.timer = hotState.initialTimer or 30
@@ -3278,25 +3660,26 @@ do
 
 				local function selectNextHolder()
 					local candidates = {}
-					for _, record in ipairs(getNeutralParticipantRecords()) do
-						local humanoid = record.humanoid
-						if not humanoid or humanoid.Health <= 0 then
-							continue
+					forEachActiveParticipant(function(_, record)
+						local humanoid = record and record.humanoid
+						if humanoid and humanoid.Health > 0 then
+							table.insert(candidates, record)
 						end
-						table.insert(candidates, record)
-					end
+					end)
 
 					if #candidates <= 1 then
-						local winner = if #candidates == 1 then candidates[1] else nil
+						local winner = nil
+						if #candidates == 1 then winner = candidates[1] end
 						setHolder(nil, false)
 						hotState.running = false
 						broadcastCompletion(winner)
 						return
 					end
 
+					pvpDebug("[HotTouch] candidates=%s", tostring(#candidates))
 					local rng = Random.new()
-					local chosen = candidates[rng:NextInteger(1, #candidates)]
-					setHolder(chosen, true)
+					local newHolder = candidates[rng:NextInteger(1, #candidates)]
+					setHolder(newHolder, true)
 				end
 
 				broadcastSelecting()
@@ -3316,7 +3699,7 @@ do
 						if hotState.timer <= 0 then
 							local holder = hotState.holder
 							if holder and holder.humanoid then
-								local rootPart = holder.humanoid.RootPart or (holder.player.Character and holder.player.Character:FindFirstChild("HumanoidRootPart"))
+								local rootPart = holder.humanoid.RootPart or (holder.player and holder.player.Character and holder.player.Character:FindFirstChild("HumanoidRootPart"))
 								if rootPart then
 									local explosion = Instance.new("Explosion")
 									explosion.BlastRadius = 15
@@ -3399,6 +3782,7 @@ do
 				state.currentWave = 0
 				state.pendingSpawns = 0
 				state.spawnPoints = pirateApocalypseResolveSpawnPoints(mapModel)
+				pvpDebug("Resolved %d zombie spawn points for PirateBay", #(state.spawnPoints or {}))
 				pirateApocalypseUnlockRewards(state, 0)
 				pirateApocalypseBroadcastHearts(state)
 				pirateApocalypseSendStatus({phase = "ApocalypseReady", totalWaves = #PIRATE_APOCALYPSE_WAVES})
@@ -3435,20 +3819,24 @@ do
 				end
 
 				state.running = true
+				pvpDebug("IDs: currentRoundId=%s, ctx.roundId=%s", currentRoundId, context.roundId)
 				context.state.DisableRoundTimer = true
 				context.state.DisableCompletionCheck = true
 				pirateApocalypseUnlockRewards(state, 0)
 
-				forEachActiveParticipant(function(player, participantRecord)
-					pirateApocalypseEnsureHeartEntry(state, player)
-					state.playerStatus[player] = state.playerStatus[player] or {}
-					state.playerStatus[player].isGhost = false
-					state.ghostPlayers[player] = nil
-					pirateApocalypseAssignTeam(player, survivalTeam)
-					pirateApocalypseProvideGear(state, participantRecord)
-				end)
+				for player, participantRecord in participantRecords do
+					if participantRecord and participantRecord.roundId == context.roundId then
+						pirateApocalypseEnsureHeartEntry(state, player)
+						state.playerStatus[player] = state.playerStatus[player] or {}
+						state.playerStatus[player].isGhost = false
+						state.ghostPlayers[player] = nil
+						pirateApocalypseAssignTeam(player, survivalTeam)
+						pirateApocalypseProvideGear(state, participantRecord)
+					end
+				end
 
 				pirateApocalypseBroadcastHearts(state)
+				pvpDebug("Survivors after setup: %d", (function() local c=0; for _ in pairs(state.hearts) do c+=1 end; return c end)())
 				pirateApocalypseSendStatus({phase = "WaveStart", wave = 1})
 				pirateApocalypseStartWave(context, state, 1)
 			end,
@@ -4689,7 +5077,7 @@ do
 
 		local readyPlayers: {Player} = {}
 		for _, targetPlayer in Players:GetPlayers() do
-			if targetPlayer.Team == spectateTeam then
+			if targetPlayer.Team == spectateTeam or targetPlayer.Team == survivalTeam then
 				table.insert(readyPlayers, targetPlayer)
 			end
 		end
@@ -4949,6 +5337,25 @@ do
 		sendRoundState("Active", {
 			map = mapId,
 		})
+
+
+
+		-- Fail-safe: ensure everyone is unfrozen and mobile devices regain control
+		task.delay(0.1, function()
+			for player, record in participantRecords do
+				if record.roundId == roundId then
+					setParticipantFrozen(record, false)
+					local char = record.player.Character
+					local hum = char and char:FindFirstChildOfClass("Humanoid")
+					local hrp = char and (char:FindFirstChild("HumanoidRootPart") or (hum and hum.RootPart))
+					if hum then
+						hum.AutoRotate = true
+						if hum.WalkSpeed <= 0 then hum.WalkSpeed = 16 end
+					end
+					if hrp then hrp.Anchored = false end
+				end
+			end
+		end)
 
 		checkRoundCompletion(roundId)
 		if not roundInProgress or currentRoundId ~= roundId then
@@ -5296,3 +5703,35 @@ do
 		startRound(player, mapId, eventId, difficultyOverride)
 	end)
 end
+-- Hot Potato Fix
+local function onHotPotatoTouch(hit)
+	if hit and hit.Parent and hit.Parent:FindFirstChild("Humanoid") then
+		-- Trigger the Hot Potato event (example: start countdown or trigger effect)
+		-- Replace this comment with actual logic to trigger hot potato
+		print("Hot Potato touched by " .. hit.Parent.Name)
+	end
+end
+
+-- Example bomb part where Hot Potato is supposed to be applied
+local hotPotato = game.Workspace:WaitForChild("HotPotato") -- Ensure the object is named correctly
+hotPotato.Touched:Connect(onHotPotatoTouch)
+
+-- Raining Bomb Fix
+local function onBombTouch(hit)
+	if hit and hit:IsA("BasePart") then
+		-- Start ticking or countdown for the bomb when it touches a part
+		-- Replace this with the actual bomb logic
+		print("Bomb touched and ticking starts!")
+	end
+end
+
+local function fixBombPhysics(bomb)
+	bomb.CanCollide = true
+	bomb.Anchored = false  -- Ensure it falls properly and interacts with other parts
+	bomb.Massless = false   -- Avoid unwanted behavior with physics
+end
+
+-- Example bomb part where Raining Bomb mechanics apply
+local bomb = game.Workspace:WaitForChild("Bomb")  -- Ensure the bomb is named correctly
+bomb.Touched:Connect(onBombTouch)
+fixBombPhysics(bomb)
